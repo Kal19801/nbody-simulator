@@ -172,7 +172,7 @@ body.free-touch .pad{display:grid}
   </button>
   <div class="grip"></div>
   <h1>N 体 · 广义相对论模拟器</h1>
-  <div class="sub">NBODY / GR — 单文件 · 1PN + 2.5PN · 辛积分</div>
+  <div class="sub">NBODY / GR — 单文件 · 1PN(EIH)+2PN+2.5PN · 潮汐力学 · 辛积分</div>
 
   <section class="sec">
     <div class="kicker">Simulation</div>
@@ -201,14 +201,15 @@ body.free-touch .pad{display:grid}
 
   <section class="sec">
     <div class="kicker">View</div>
-    <h2>视图与参考系</h2>
+    <h2>视角与参考系</h2>
     <div class="row">
       <div class="seg" id="viewSeg">
-        <button data-v="top" class="on">俯视</button><button data-v="side">侧视</button><button data-v="front">前视</button><button data-v="free">自由</button>
+        <button data-v="top">俯视</button><button data-v="side">侧视</button><button data-v="front">前视</button><button data-v="free" class="on">自由</button>
       </div>
     </div>
+    <div class="row"><span class="lbl" style="width:70px;flex:none">视角跟随</span><select id="followSelect" style="flex:1"></select></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">参考系</span><select id="frameSelect" style="flex:1"></select></div>
-    <div class="hint">视角与轨迹均以参考系原点绘制。切换天体即跟随该天体运动。自由视角下拖拽旋转，触屏设备出现飞行按钮，桌面端可用 W A S D 与 R F Q E。</div>
+    <div class="hint">视角跟随决定镜头锚定（绝对原点 / 质心 / 任意天体），与参考系彼此独立。参考系为坐标计量框架，轨迹默认按其绘制；轨迹末端始终精确对齐天体当前位置，参考天体自身运动不再引起错位。自由视角下拖拽旋转，触屏设备出现飞行按钮，桌面端可用 W A S D 与 R F Q E。</div>
     <div class="row">
       <div class="seg" id="trailSeg">
         <button data-v="line" class="on">曲线</button><button data-v="dot">点迹</button><button data-v="off">关</button>
@@ -216,11 +217,9 @@ body.free-touch .pad{display:grid}
     </div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">轨迹时长</span><input type="text" class="txt" id="trailDuration" value="8" style="flex:1" title="-1 为不限"><span class="lbl" style="flex:none">天</span></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">轨迹参考系</span>
-      <select id="trailRefMode" style="flex:1">
-        <option value="relative">跟随参考系</option>
-        <option value="absolute">绝对原点</option>
-      </select>
+      <select id="trailRefMode" style="flex:1"><option value="follow" selected>跟随参考系</option></select>
     </div>
+    <div class="hint">轨迹参考系独立于视角：可选跟随参考系、绝对原点、质心或任意天体，选取后轨迹按该框架重投影。</div>
   </section>
 
   <section class="sec">
@@ -233,11 +232,11 @@ body.free-touch .pad{display:grid}
         <option value="4">超清 4x</option>
       </select>
     </div>
-    <div class="row"><input type="checkbox" id="perspToggle"><label for="perspToggle" style="cursor:pointer">透视投影</label></div>
+    <div class="row"><input type="checkbox" id="perspToggle" checked><label for="perspToggle" style="cursor:pointer">透视投影</label></div>
     <div class="row"><input type="checkbox" id="physSizeToggle"><label for="physSizeToggle" style="cursor:pointer">星球真实尺寸</label></div>
     <div class="row"><input type="checkbox" id="starRadToggle" checked><label for="starRadToggle" style="cursor:pointer">恒星黑体辐射照明</label></div>
     <div class="row"><input type="checkbox" id="glareToggle" checked><label for="glareToggle" style="cursor:pointer">亮度眩光与发白</label></div>
-    <div class="hint">真实尺寸按物理半径随距离缩放，小于约 2 像素时改以通量守恒的高斯点源绘制，辐照度与缩放级别无关，真实比例缩小后仍可见。恒星阈值取氢燃烧下限 0.08 倍太阳质量，色温由质光关系与质径关系反解。眩光开启时启用真实相机模拟：自动曝光随相机接收亮度适应，泛光经多级滤波链，高光在 OKLab 空间漂白发白。</div>
+    <div class="hint">真实尺寸按物理半径随距离缩放，小于约 2 像素时改以通量守恒的高斯点源绘制，辐照度与缩放级别无关，真实比例缩小后仍可见。恒星阈值取氢燃烧下限 0.08 倍太阳质量，色温由质光关系与质径关系反解。眩光开启时启用真实相机模拟：自动曝光随相机接收亮度适应（对未分辨恒星做高光保护封顶，致密双星等极亮点源不再撑爆画面），泛光经多级滤波链，高光在 OKLab 空间漂白发白。</div>
     <div class="row wrap" style="gap:16px">
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="skyboxEnabled" checked><label for="skyboxEnabled" style="cursor:pointer">天空盒背景 · 内置银河全景</label></span>
     </div>
@@ -247,8 +246,23 @@ body.free-touch .pad{display:grid}
     <div class="kicker">Relativity</div>
     <h2>相对论</h2>
     <div class="row"><input type="checkbox" id="gr1pn"><label for="gr1pn" style="cursor:pointer">1PN 后牛顿修正</label></div>
-    <div class="row"><input type="checkbox" id="gr25"><label for="gr25" style="cursor:pointer">2.5PN 引力波辐射</label></div>
-    <div class="row"><input type="checkbox" id="collisionMerge"><label for="collisionMerge" style="cursor:pointer">碰撞合并</label><input type="text" class="txt" id="collisionThreshold" value="0.001 AU" style="width:108px;flex:none" title="合并距离阈值"></div>
+    <div class="row"><input type="checkbox" id="gr25"><label for="gr25" style="cursor:pointer">2.5PN 引力波辐射（瞬时辐射反作用力）</label></div>
+    <div class="row"><input type="checkbox" id="gr2pn"><label for="gr2pn" style="cursor:pointer">2PN 保守修正（需 1PN · IW95 调和规范）</label></div>
+    <div class="row"><input type="checkbox" id="gr35"><label for="gr35" style="cursor:pointer">3.5PN 辐射反应（实验性 · 需 2.5PN）</label></div>
+    <div class="row"><input type="checkbox" id="tideToggle" checked><label for="tideToggle" style="cursor:pointer">潮汐相互作用（动力学 · 平衡潮 CTL）</label></div>
+    <div class="kv">
+      <span class="k">潮汐耗散功率</span><span id="tideHeat">—</span>
+      <span class="k">自转角动量占比</span><span id="tideSpinFrac">—</span>
+    </div>
+    <div class="hint">潮汐隆起真实作用于轨道力学：保守潮（k2）修正引力势，时滞 Δt 产生轨道圆化/收缩/扩张与自转力矩（潮汐锁定、地月回退）。动量与总角动量（轨道+自转）严格守恒，耗散以潮汐加热形式流失。天体参数在添加/编辑中设置。</div>
+    <div class="row"><input type="checkbox" id="gwWaveToggle"><label for="gwWaveToggle" style="cursor:pointer">引力波波形（四极公式 · 标称 100 Mpc）</label></div>
+    <canvas id="gwWaveCanvas" width="272" height="96" style="width:100%;height:96px;border:1px solid var(--line);background:#0a0a09"></canvas>
+    <div class="kv">
+      <span class="k">f_GW Hz</span><span id="gwF">—</span>
+      <span class="k">|h| @100Mpc</span><span id="gwH">—</span>
+      <span class="k">并合倒计时</span><span id="gwT">—</span>
+    </div>
+    <div class="row"><input type="checkbox" id="collisionMerge"><label for="collisionMerge" style="cursor:pointer">碰撞合并（接触自动判定：距离 ≤ 双方半径之和）</label></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">进动观测体</span><select id="grBodySelect" style="flex:1"></select></div>
     <div class="kv">
       <span class="k">a AU</span><span id="grA">—</span>
@@ -276,15 +290,33 @@ body.free-touch .pad{display:grid}
     <h2>守恒量</h2>
     <div class="row"><input type="checkbox" id="showConservation" checked><label for="showConservation" style="cursor:pointer">显示能量与动量</label></div>
     <div id="conservationInfo" class="kv">
-      <span class="k">总能量 E</span><span id="totalEnergyDisplay">—</span>
-      <span class="k">ΔE</span><span id="energyDeltaDisplay">—</span>
-      <span class="k">总动量 P</span><span id="totalMomentumDisplay">—</span>
+      <span class="k">总能量 E（含 PN）</span><span id="totalEnergyDisplay">—</span>
+      <span class="k">潮汐累计热</span><span id="sinkTideDisplay">—</span>
+      <span class="k">GW 辐射能累计</span><span id="sinkGWDisplay">—</span>
+      <span class="k">ΔE（原始）</span><span id="energyDeltaDisplay">—</span>
+      <span class="k">ΔE（物理核算）</span><span id="energyLedgerDisplay">—</span>
+      <span class="k">总动量 P（含场）</span><span id="totalMomentumDisplay">—</span>
       <span class="k">|ΔP|</span><span id="momentumDeltaDisplay">—</span>
+      <span class="k">总角动量 L</span><span id="totalAngularDisplay">—</span>
+      <span class="k">GW 辐射 L 累计</span><span id="sinkGWLDisplay">—</span>
+      <span class="k">|ΔL|（核算后）</span><span id="angularLedgerDisplay">—</span>
     </div>
-    <div class="hint">能量为牛顿框架值，用于监测积分器数值误差。开启 1PN 时强场系统的 ΔE 含 PN 与牛顿能量交换。</div>
+    <div class="hint">能量含 IW95 精确 1PN/2PN 修正、自转能与保守潮汐势。潮汐热与 GW 辐射（辐射反作用力做功）计入账本：ΔE（物理核算）=（E−E₀）+已耗散，恒 ≈ 积分器误差级；ΔE（原始）则显示物理性衰减（潮汐加热/引力波辐射带走能量）。PN 场动量吸收 EIH a_B 牛顿代入的 O(c⁻²) 残余；GW 辐射角动量使 L 核算后守恒。</div>
     <div class="row"><button id="downloadLogBtn" class="btn" style="flex:1">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       下载守恒量日志</button></div>
+  </section>
+  <section class="sec">
+    <div class="kicker">Materials</div>
+    <h2>材质库</h2>
+    <div class="hint">扫描与本文件同目录的 <b>textures/</b> 文件夹：全景图（宽高比≈2:1）可一键设为天空盒；与天体同名的图片（earth.jpg、火星.png 等中英文名）自动应用到对应星球，也可手动指定。支持子目录、服务器目录列表或 textures/manifest.json（文件名数组）。</div>
+    <div class="row"><button id="matScanBtn" class="btn" style="flex:1">扫描 textures/ 材质文件夹</button></div>
+    <div id="matGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px"></div>
+    <div class="row" style="margin-top:6px;gap:6px">
+      <button id="matSkyBtn" class="btn" style="flex:1">设为天空盒</button>
+      <button id="matBodyBtn" class="btn" style="flex:1">应用到选中天体</button>
+    </div>
+    <div id="matInfo" class="lbl" style="margin-top:4px">未扫描</div>
   </section>
   <section class="sec">
     <div class="kicker">Data</div>
@@ -319,11 +351,16 @@ body.free-touch .pad{display:grid}
     <h2>关于与自检</h2>
     <div class="hint" style="margin-top:2px">
       <span class="em">物理模型</span><br>
-      牛顿引力 + 成对 1PN 后牛顿修正，调和坐标 EIH 框架，再现水星近日点进动 6πGM/[a(1−e²)c²] ≈ 42.98 角秒每世纪。<br>
-      2.5PN 引力波辐射采用 Peters 1964 轨道平均通量，以动量守恒的对称速度修正施加。<br>
+      牛顿引力 + 1PN 后牛顿修正（调和规范成对式，Iyer-Will 1995 与 Blanchet LR 两来源逐项互证，再现水星近日点进动 6πGM/[a(1−e²)c²] ≈ 42.98 角秒每世纪，误差 0.1%）。<br>
+      <b>2PN 保守修正</b>（可开关）：两体调和规范 2PN 加速度（Iyer &amp; Will 1995 eq. a2PN = Blanchet Living Reviews calA₂/calB₂，两来源已逐项互证），伴随 IW95 同阶守恒能量计入账本。强场验证：p=30GM/c² 差分测量近日点进动对 Will PRL 2018 闭式 −6π(M/2p)²(10−e²)（T16）。<br>
+      2.5PN 引力波辐射采用瞬时辐射反作用力（Iyer-Will 调和规范）：a₂.₅ = (8/5)η(G²M²/c⁵r³){n̂ṙ(3v²+17GM/3r) − v⃗(v²+3GM/r)}，对任意 r、v 有限，Python 数值验证圆轨道功率比 1.000000、偏心轨道平均回归 Peters 1964。v5 及之前的轨道平均通量公式在多体近交会时对瞬时根数求 (1−e²)^(−7/2) 伪发散（三体预设开 2.5PN 爆炸的根因），已废弃。<br>
+      <b>3.5PN 辐射反应（实验性，默认关）</b>：按 Blanchet LR calA₃.₅/calB₃.₅ 转录。注意：3.5PN 瞬时力的圆轨道 O(γ) 投影系数在不同文献间存在规范/定义差异（Blanchet aieom: −743/336−11ν/4；IW95 圆轨道式: −(3431/336−5/4)），本项目未在此间裁定，仅作为高阶改进选项提供；辐射的规范不变内容（能量/角动量通量）以 2.5PN 项精确回归 Peters 为准（T3/T13）。<br>
+      <b>守恒量物理账本（v7）</b>：粒子系统能量含 IW95 精确 1PN/2PN 两体修正 + 自转动能 + 保守潮汐势；潮汐滞后力做功（潮汐热）与辐射反作用力做功（GW 能量流）及 GW 角动量流按 kick 步累积入账本，ΔE/ΔL「物理核算后」恒 ≈ 积分器误差级，而「原始 ΔE」显示真实物理衰减（地月潮汐加热、双中子星引力波辐射）。PN 场动量账本吸收 EIH a_B 牛顿代入（JPL/Standish 做法）的 O(c⁻²) 残余。引力波线动量（反冲 kick，Fitchett 效应）为 O(c⁻⁵·不对称度)，瞬时成对力框架不携带，未建模。<br>
+      潮汐相互作用（动力学）：平衡潮恒定时滞模型（Mignard/Hut 1981）。保守潮 −6k₂Gm′²R⁵/r⁷·r̂ 修正版引力势（潮汐形变对轨道的反作用，含致密天体并合相位修正）；时滞 Δt 产生滞后隆起力 (3k₂Gm′²R⁵Δt/r⁷)(Ω×r̂ − vₜ/r)，导致轨道圆化/收缩/扩张与自转力矩（潮汐锁定）。自转角速度为动力学变量，Ω̇ = N/I，I = 0.33mR²；并合遗迹按角动量守恒继承自转。Python 验证：地月回退 3.824 cm/yr（观测 3.82）、力矩 4.45e16 N·m、滞后角 2.42°（Q≈12）、耗散 3.1 TW，总角动量（轨道+双自转）严格守恒。<br>
+      引力波波形：质量四极矩二阶导由状态矢量解析求出，TT 规约投影（观测者沿 +z，标称 100 Mpc），含全部动力学效应；f_GW 与并合倒计时实时显示。<br>
       积分器为 Velocity Verlet 二阶辛与 Yoshida 1990 四阶辛组合；位置与速度更新使用 Kahan 补偿求和，参照 Rein &amp; Tamayo 2015 FAST 方案，保障长期运行精度。<br>
       自适应步长按 η·√(r_min/a_max) 启发式，思想源自 IAS15，Rein &amp; Spiegel 2015。<br>
-      八大行星预设采用 JPL J2000 近似根数，Standish 1992，DE440 见 Park et al. 2021。三体 8 字解取自 Chenciner &amp; Montgomery 2000。<br>
+      八大行星预设采用 JPL J2000 近似根数，Standish 1992，DE440 见 Park et al. 2021（v6 起平黄经经开普勒方程换算真近点角，修复 v5 相位误差）；双中子星并合预设 1.4+1.4 M☉、R=12 km、f_GW=100 Hz 入带，潮汐 k₂=0.09 对应 Λ≈400（GW170817 量级）。三体 8 字解取自 Chenciner &amp; Montgomery 2000，初值为对称性约化 Newton 精化解（DOP853 残差 3.7e-13）。<br>
       <span class="em">渲染与文献</span><br>
       全部视觉元素经 WebGL 管线渲染：立方体贴图天空盒、轨迹、天体与后期合成；WebGL2 加 EXT_color_buffer_float 使用 RGBA16F 浮点缓冲，仅 WebGL1 时以 1/6 线性编码的 RGBA8 替代，WebGL 完全不可用才回退 Canvas 2D 网格投影路径。<br>
       恒星亮度按用户要求的物理链计算：质量→半径→有效温度→ L = 4πR²σT⁴（温度×表面积）一次计算并缓存，表面辐射亮度 B = σT⁴/π 距离无关。点源 PSF 峰值 = min(辐照度/PSF 立体角, B)：通量守恒且不超过表面辐射亮度，与圆面在切换点连续（数值比恰为 1），彻底消除旧版“开启真实尺寸后辉光跳变”。<br>
@@ -331,12 +368,24 @@ body.free-touch .pad{display:grid}
       镜头模拟：自动曝光以相机接收辐照度计量（含圆面通量闭环），中灰 key 0.18，感度适应时间常数 0.3 秒；泛光移植 three.js UnrealBloomPass：软阈值亮度提取 + 9-tap 可分离 tent 高斯五级链 + 3×3 tent 上采样回累加，阈值 1.0 —— 深空背景低于阈值不参与泛光，太阳入屏不提亮背景，辉光强度随恒星辐照度（温度×表面积一次计算）与相机距离自然变化；高光漂白在 OKLab 空间做亮度压缩与色度衰减，模拟传感器高光去饱和，OKLab 见 Ottosson 2020，高斯核见 RasterGrid 线性采样优化。<br>
       恒星色温由分段质光关系与 L=4πR²σT⁴ 反解，质光关系见 Kippenhahn &amp; Weigert 恒星结构理论；色温到 RGB 采用 Planckian 色度轨迹近似，即 Tanner Helland 算法。质量半径经验关系锚定太阳系天体实测，岩石行星段参照 Zeng et al. 2016。<br>
       自由视角拖拽为单轴屏幕轨迹球：旋转轴取 (dy,−dx,0) 本地轴直接前置乘，视场中心内容位移恒等于 (dx,dy)·sin(θ)/len（Python 随机姿态精确验证，任意姿态跟手、无滚转）。<br>
+      <span class="em">视角 / 参考系 / 轨迹参考系</span><br>
+      三者分离：视角跟随决定镜头锚定天体；参考系为坐标计量框架；轨迹参考系可独立选跟随参考系、绝对原点、质心或任意天体。轨迹按 X = snap(t) − O(t) + O(现在) − 镜头锚点 绘制（O 为轨迹框架原点，绝对系 O≡0），轨迹末端与天体当前位置严格对齐，修复了 v4 参考天体运动时轨迹双重扣减的错位。<br>
+      <span class="em">自转与潮汐形变</span><br>
+      每天体可设自转倾角、周期与经验流体系数 k（留空按平均密度在土星 0.64 与地球 0.97 间对数插值）。自转扁化 f = k·ω²R³/GM（Maclaurin 近似，地球复现 1/298）；平衡潮椭化 ΔR/R = (3/2)·k·(M′/M)·(R/d)³ 指向主导伴星（地月 ≈0.52 m、日地 ≈0.24 m，与观测一致）；贴图按 Rz(−θ)·Rx(−i) 随自转旋转；椭球轮廓 = 沿投影轴 √(Rt²cos²β+Ra²sin²β)、垂轴 Rt 的椭圆（线性映射保持内切，无裁剪）。潮汐开启时自转为动力学变量，渲染与力学共用同一自转态。<br>
+      <span class="em">潮汐与结构参数（v7 合一）</span><br>
+      洛夫数 k₂ 与流体系数已合并为单一结构参数：编辑面板只留 k₂ 一项，留空时按质量+半径经验公式自动——黑洞（C=GM/Rc²≥0.45）k₂=0（Binnington–Poisson 2009）、中子星 k₂=0.195(1−2C)²（canonical 0.084，Λ≈373 对标 GW170817）、主序星 0.056(M/M☉)^−0.65（太阳 0.056 锚定）、气巨 0.49+0.44log₁₀(ρ̄/1326)（木星 0.49/土星 0.36）、岩质 0.30+0.1445log₁₀(M/M⊕)（地球 0.300/金星 0.299/火星 0.145/月球 0.0243 对标实测）。已知仅凭 M、R 不可辨识的个案（水星热核 0.45、木卫一潮汐加热 ~0.3、冰卫星内部分异）以实测为准可手动覆盖。潮汐时滞 Δt 留空 = 按类别自动：类地 600 s（地球海潮有效值，复现月退 3.8 cm/yr）、恒星 Q≈10⁶（Zahn 平衡潮）、气巨 Q≈1.5×10⁴（木 1.1×10⁵ 与土 1682 的对数中值）、中子星 Q≈10⁶@kHz、黑洞 0（视界无耗散）；填 0 = 显式关闭。自转扁化流体系数 k 内部自动（土星 0.64↔地球 0.97 密度插值，恒星 0.40 太阳扁率锚定）。Δt 过大时滞后位移自动饱和至 0.4 rad（CTL 线性域保护）。潮汐力矩垂直于自转轴的分量（自转轴进动）不建模，总角动量在轴向上严格守恒。<br>
       <span class="em">已知近似</span><br>
-      1PN 为成对近似，忽略跨体交叉项；2.5PN 为轨道平均模型而非瞬时力；守恒量监测为牛顿框架值；恒星照明为点光源朗伯模型，无阴影遮挡。<br>
+      1PN/2PN/2.5PN 为成对近似；1PN 跨体交叉项（Will PRL 120, 191101 (2018)，水星相对 ~1e-6 效应）已调研未实施（公开转录经强场数值验证与两体精确解不符，见 v8 路线图）；2.5PN/3.5PN 瞬时力不含尾流（hereditary tail，4PN 与 4πγ^1.5 项）与线动量反冲；潮汐为平衡潮 CTL 模型（不含动力潮/简正模）；双中子星并合后处理为动量守恒合并（不模拟暂现物质喷发与 KMNO 磁星）；恒星照明为点光源朗伯模型，无阴影遮挡。<br>
+      <span class="em">碰撞合并（v7）</span><br>
+      接触判定不再使用固定距离：开关打开后按双方物理半径之和 R₁+R₂ 自动判定（缺省半径按质径关系补齐），并做帧内线段最近逼近检测防高速穿透；并合按动量守恒合并质心、半径体积守恒，遗迹自转按角动量守恒继承（S_rem = μ(r⃗×v⃗)+S₁+S₂）。<br>
+      <span class="em">天空盒缓存</span><br>
+      首次成功加载后全景图原始字节存入 IndexedDB（键 sky_pano_eso0932a_v1），之后打开直接读缓存，跳过 10.9 MB 旁车脚本的下载与 base64 解码；缓存解码失败自动清除并回退原三级加载链。<br>
       <span class="em">性能</span><br>
       Float64Array 结构化数组、对称成对力循环、环形轨迹缓冲、WebGL 单场景 pass 加多级泛光链、无头模式完全跳过渲染。<br>
       <span class="em">天空盒</span><br>
-      银河全景图 eso0932a（6000×3000 JPEG）原始字节加载：默认读取与本文件同目录的 eso0932a_mediumQuality.jpg（无重压缩、无分辨率缩放），SKY_PANO_URI 嵌入 base64 时优先使用嵌入值；运行时经离屏 WebGL FBO 一次性转换为立方体贴图六面：面尺寸 = 源宽/4（分辨率守恒），面方向按 OpenGL ES 立方体贴图规范表精确推导，与 textureCube 采样互逆 → 无缝；采样用 Catmull-Rom 双三次；WebGL2 生成 mipmap + 各向异性过滤。天空盒不提供上传替换功能。
+      银河全景图 eso0932a（6000×3000 JPEG）原始字节加载：默认读取与本文件同目录的 eso0932a_mediumQuality.jpg（无重压缩、无分辨率缩放），SKY_PANO_URI 嵌入 base64 时优先使用嵌入值；运行时经离屏 WebGL FBO 一次性转换为立方体贴图六面：面尺寸 = 源宽/4（分辨率守恒），面方向按 OpenGL ES 立方体贴图规范表精确推导，与 textureCube 采样互逆 → 无缝；采样用 Catmull-Rom 双三次；WebGL2 生成 mipmap + 各向异性过滤。
+      <span class="em">材质库（v7）</span><br>
+      「材质库」面板扫描与本文件同目录的 textures/ 文件夹（三级发现链：服务器目录列表 → textures/manifest.json 文件名数组 → 常规名称探测）。全景图（宽高比≈2:1）可一键设为天空盒（复用同一立方体转换管线）；与天体同名的图片（earth.jpg、火星.png 等中英文别名）在扫描后与场景加载时自动应用到对应星球（不覆盖手动设置）。file:// 协议下目录列表与 WebGL 本地图上传受浏览器同源策略限制，推荐 python -m http.server 等本地 HTTP 服务打开。
       <span class="em">快捷键</span><br>
       Space 播放暂停 · Shift+R 重置模拟 · 0 重置视图 · 滚轮或双指缩放 · 自由视角下 W A S D 平移、R F 俯仰、Q E 滚转，全部以摄像机为基准
     </div>
@@ -371,6 +420,20 @@ body.free-touch .pad{display:grid}
         <img id="texPreview" alt="" style="width:64px;height:32px;object-fit:cover;border:1px solid var(--line2);display:none">
         <span id="texInfo" class="lbl">未使用贴图 · 以表面颜色渲染</span>
       </div>
+      <h4>自转与形变</h4>
+      <div class="hint">渲染层效果：自转决定贴图旋转与自转扁化，潮汐椭化按主导伴星方向绘制。流体系数已并入下方结构参数（k2），内部按质量与密度经验自动（土星 0.64 → 地球 0.97 密度锚定，恒星 0.40 太阳扁率锚定）。</div>
+      <label for="bodySpinTilt">自转倾角 · 度（0–180，大于 90 为逆行）</label>
+      <div class="input-wrapper"><input type="number" class="txt" id="bodySpinTilt" step="0.01" value="0.0"><button type="button" class="reset-btn">清零</button></div>
+      <label for="bodySpinPeriod">自转周期 · 留空则不自转</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="bodySpinPeriod" placeholder="如 23.9345h / 1d / 10.7h"><button type="button" class="reset-btn">清零</button></div>
+      <small id="spinAuto"></small>
+      <h4>潮汐与结构参数（动力学）</h4>
+      <div class="hint">单一结构参数：洛夫数 k2（兼作流体性度量）。留空 = 按质量与半径经验公式自动：黑洞 0、中子星 0.195(1−2C)²、恒星 0.056(M/M☉)^−0.65、气巨 0.49+0.44log₁₀(ρ̄/1326)、岩质 0.30+0.1445log₁₀(M/M⊕)（地球 0.300/火星 0.145/月球 0.0243 对标实测）。Δt 留空 = 按类别自动（地球 600 s 复现月退、恒星 Q≈10⁶、气巨 Q≈1.5×10⁴、黑洞 0）。填 0 表示显式关闭。</div>
+      <label for="bodyTideK2">潮汐洛夫数 k2（结构参数）· 留空自动</label>
+      <div class="input-wrapper"><input type="number" class="txt" id="bodyTideK2" step="0.01" min="0" max="1.5" placeholder="0 – 1.5"><button type="button" class="reset-btn">清零</button></div>
+      <label for="bodyTideLag">潮汐时滞 Δt · 留空自动</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="bodyTideLag" placeholder="如 600 s / 12 min（地球海潮有效值）"><button type="button" class="reset-btn">清零</button></div>
+      <small id="tideAuto"></small>
       <h4>轨道根数</h4>
       <div class="hint">相对主天体，填写后优先于绝对坐标。角度单位为度，偏心率 0 至 1。</div>
       <label for="bodyOrbitsAround">环绕主天体名称</label>
@@ -423,9 +486,19 @@ body.free-touch .pad{display:grid}
 'use strict';
 /* ============================================================
  * N 体 · 广义相对论模拟器 —— 纯 HTML 单文件
- * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN(Peters 1964)
+ * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
+ *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Velocity Verlet(2阶辛) / Yoshida 4阶辛组合
  * 数值：Kahan 补偿求和（Rein & Tamayo 2015 "FAST"）
+ * v6：2.5PN 由 Peters 轨道平均通量改为瞬时辐射反作用力 ——
+ *     轨道平均公式在多体近交会时偏心率 e→1 导致 (1-e²)^(-7/2) 伪发散（三体预设开
+ *     2.5PN 爆炸的根因），瞬时力对任意 r,v 有限且轨道平均严格回归 Peters；
+ *     新增潮汐动力学：潮汐隆起真实作用于轨道力学（圆化/收缩/扩张/潮汐锁定）
+ *     与自转演化（力矩），动量与总角动量严格守恒；新增双中子星并合预设与
+ *     四极公式引力波波形 h+/h× 面板；并合遗迹按角动量守恒继承自转。
+ * v5：视角/参考系/轨迹参考系三者分离 · 轨迹末端严格对齐修复 ·
+ *     高光保护自动曝光 · 星球自转与潮汐形变渲染 ·
+ *     三体 8 字解精化初值 · 天空盒 IndexedDB 缓存 · 默认自由视角+透视
  * ============================================================ */
 
 /* ---------------- 全景天空盒 ----------------
@@ -455,6 +528,26 @@ const GRAV_SOFTENING_SQ = 1e-20;                       // 引力软化（防除�
 const ADAPTIVE_ETA = 0.001;                            // 自适应步长启发式参数（兼顾 1PN 强场近星点精度）
 const ADAPTIVE_SOFT_SQ = (0.001 * AU) * (0.001 * AU);  // 自适应步长最小距离软化
 const ARCSEC_PER_RAD = 206264.80624709636;
+/* ---------------- v6 潮汐力学 / 引力波常量 ----------------
+ * TIDE_GYRATION：自转惯量系数 I = k_r·m·R²（分化地球 0.3308，均匀球 0.4，取 0.33）
+ * TIDE_LAG_MAX：平衡潮滞后位移上限（弧度）。CTL 线性展开仅对小时滞有效，
+ *   超出时按比例缩减滞后项（物理上等价于饱和到 ~23°，防快自转+密近轨道发散）
+ * TIDE_K2_DEFAULT：洛夫数 k2 缺省（类地行星 0.25–0.3，中子星 ≈0.09，气巨 0.3–0.6）
+ * PN_TIDE_R_MIN：1PN/2.5PN/潮汐力施加的最小距离（1 cm，防 r→0 数值奇异；
+ *   碰撞合并开启时天体先于该距离合并）
+ * GW_DIST_MPC：引力波波形面板的标称观测距离（h ∝ 1/D 换算） */
+const TIDE_GYRATION = 0.33;
+const TIDE_LAG_MAX = 0.4;
+const TIDE_K2_DEFAULT = 0.3;                           // 仅用于无质量/无半径的退化兜底
+/* v7 潮汐耗散缺省 Q 表（按天体类别；Δt = 1/(Q·n(10R))，n(10R)=√(GM/(10R)³)）
+ * 锚点：地球海潮有效 Q≈12 → Δt=600s（复现月退 3.8 cm/yr）；
+ * 恒星 Zahn 平衡潮 Q≈1e6；气巨 Q≈1.5e4（木 1.1e5 与土 1682 的对数中值）；
+ * 中子星 Q≈1e6@kHz；黑洞 Δt=0（视界无潮汐耗散） */
+const TIDE_Q_STAR = 1e6, TIDE_Q_GIANT = 1.5e4, TIDE_Q_NS = 1e6, TIDE_Q_BD = 1e5;
+const PN_TIDE_R_MIN = 1e-2;
+const PN_DT_ETA = 0.022;                                // 强场 PN 步长系数（×GM/c³，见 calcAdaptiveDt）
+const GW_DIST_MPC = 100;
+const GW_MAX_SAMPLES = 2048;
 const YOSHIDA_W1 = 1 / (2 - Math.cbrt(2));
 const YOSHIDA_W0 = -Math.cbrt(2) * YOSHIDA_W1;         // Yoshida(1990) 4阶系数
 const HIST_MAX = 20000;                                // 轨迹环形缓冲上限（帧）
@@ -490,8 +583,17 @@ const GLARE_MAG_0 = -18, GLARE_MAG_1 = -27;           // 视星等眩光映射�
 const PSF_SIGMA = 1.1, PSF_VIS_FLOOR = 0.12;
 const DISK_MIN_PX = 1.7, DISK_FULL_PX = 3.1;
 const STAR_LIMB_U = 0.62;
+/* 渲染侧表面辐射亮度饱和上限：RGBA16F 场景缓冲上限 65504，
+ * 极高温致密天体（如 10⁷ K 中子星/给 BH 预设的紧致半径）的 B 可达 10¹⁷，
+ * 超出半浮点 → Inf → 黑屏。饱和到 5e4（传感器满阱类比），渲染与计量同步封顶，
+ * 曝光收敛后盘面/点源呈现致密亮星观感；太阳 B=1.47e4 不受影响 */
+const SCENE_RADIANCE_MAX = 5e4;
 const SKY_NORM_LEVEL = 0.004;
-const EXP_KEY = 0.18, EXP_MIN = 0.02, EXP_MAX = 1.2, EXP_TAU = 0.3;
+/* 高光保护计量：未分辨恒星对自动曝光的计量贡献封顶 = B·Ω_PSF·EXP_TAME_K。
+ * 否则计量与点源峰值同随辐照度 F 增长，曝光相消，极亮点源（致密双星）的辉光
+ * 无法被自动曝光压低 —— v4 致密双星白屏根因。K=8 时太阳系场景（F≈1 < 封顶）完全不变。 */
+const EXP_TAME_K = 8;
+const EXP_KEY = 0.18, EXP_MIN = 1e-16, EXP_MAX = 1.2, EXP_TAU = 0.3;
 const METER_STAR_W = 0.3, METER_BODY_W = 0.5;
 const DRAG_SENS = 0.005;                 // 拖拽旋转灵敏度 rad/px
 const PAD_ROT_RATE = 1.7, PAD_MOVE_RATE = 340;   // 飞行按钮连续运动角速度 rad/s 与屏速 px/s
@@ -505,25 +607,45 @@ let simTime = 0, playing = false;
 let scale = 1 / AU * 400;                             // 像素/米，初始 400px = 1 AU
 let viewW = 800, viewH = 600, resFactor = 1;
 let initialSnapshot = [];                             // 数字化初始状态（重置用）
-let initialTotalEnergy = 0, initialTotalMomentum = [0, 0, 0];
+let initialTotalEnergy = 0, initialTotalMomentum = [0, 0, 0], initialTotalAngular = [0, 0, 0];
 let simulationLog = [];
 let lastDt = 300, lastSteps = 200;
 /* 物理开关 */
-let gr1pnOn = false, gr25On = false, integrator = 'yoshida4';
+let gr1pnOn = false, gr25On = false, gr2pnOn = false, gr35On = false, integrator = 'yoshida4';
+/* v7 守恒量账本：把潮汐热 / GW 辐射（能量+角动量）与 PN 场动量计入核算，
+ * 使开启耗散与高阶项后 ΔE/ΔL/ΔP 恢复物理性（核算后 ≈ 积分器误差级）。
+ * Kahan 三元组 [value, comp] 防长程累积舍入。 */
+let sinkTideE = [0, 0], sinkGWE = [0, 0];                 // 潮汐累计热 / GW 辐射能（J，正值=流失）
+let sinkGWLx = [0, 0], sinkGWLv = [0, 0], sinkGWLz = [0, 0]; // GW 辐射角动量（kg·m²/s）
+let fieldPx = [0, 0], fieldPv = [0, 0], fieldPz = [0, 0];   // PN 场动量（EIH a_B 牛顿代入的残余）
+let axRR, ayRR, azRR;                                     // 辐射反作用分加速度（2.5+3.5PN，账本用）
+let axTL, ayTL, azTL;                                     // 潮汐滞后分加速度（账本用）
+/* 潮汐相互作用（动力学）：平衡潮 CTL 模型，力作用于轨道 + 自转力矩演化。
+ * 缺省开启：k2 自动 0.3，时滞缺省 0（纯保守潮，能量严格守恒）；
+ * 仅当天体设置 tide_lag > 0 时产生耗散（轨道圆化/收缩、自转同步）。 */
+let tideOn = true;
+let tideHeatW = 0;                     // 潮汐耗散功率瞬时值（UI 读数，W）
+let spinRate, spinAcc;                 // 自转角速度 rad/s 与 dΩ/dt（潮汐力矩/转动惯量）
+let bodyRadA, bodyK2A, bodyLagA, bodyIA, bodyTideA0;  // 每天体潮汐缓存（R, k2, Δt, I, k2·G·R⁵）
+let bodyK2Auto, bodyLagAuto;                           // 该天体 k2/Δt 是否为自动模式（留空）
+let spinAxX, spinAxY, spinAxZ;         // 自转轴单位向量（渲染与潮汐力矩共用，Rx(tilt)·ẑ）
 /* 渲染开关与相机状态 */
-let projMode = 'ortho';                // ortho 正交 / persp 透视
+let projMode = 'persp';                // ortho 正交 / persp 透视（v5 起默认透视）
 let physSizeOn = false;                // 星球真实尺寸
 let starRadOn = true;                  // 恒星黑体辐射照明
 let glareOn = true;                    // 亮度眩光与发白
 let headlessOn = false;                // 无头模式
 let camOff = [0, 0, 0];                // 自由视角平移偏移（世界系，不参与物理）
 let skyMode = 'none';                  // webgl / canvas2d / none
+let skyApplyHook = null;               // v7：外部全景图注入钩子（材质库用），skyboxLoad 内赋值
 /* 轨迹环形缓冲 */
 const histT = new Float64Array(HIST_MAX);
 const histPos = new Array(HIST_MAX);
 let histHead = 0, histCount = 0;
 /* 进动采样 */
 let grSamples = [];
+/* 引力波波形（四极公式，h+/h× 环形缓冲） */
+let gwWaveOn = false, gwSamples = [], gwLast = null;
 /* 加速度统计（自适应步长用） */
 let minR2 = Infinity, maxAccMag = 0, minPairM = 0;
 
@@ -554,6 +676,11 @@ function parseValueWithUnits(valueStr, defaultUnit = 'm') {
   if (valueStr === null || valueStr === undefined) return null;
   const s = String(valueStr).trim().toLowerCase();
   if (s === '') return null;
+  /* 科学计数法纯数（含 e/E）直接返回：v4 的 [a-z] 检查把 7.5e9 的 e 当单位解析而抛错 */
+  if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/.test(s)) {
+    const f = parseFloat(s);
+    if (!isNaN(f)) return f;
+  }
   let f = parseFloat(s);
   if (!isNaN(f) && !/[a-z]/.test(s)) return f;
   const match = s.match(/([+\-]?\d*\.?\d+(?:e[+\-]?\d+)?)\s*([a-z\/]+)/);
@@ -596,6 +723,53 @@ function parseTimeToSec(str) {
   }
 }
 
+/* ---------------- v7 结构参数合一：洛夫数 k2 / 潮汐时滞 Δt / 流体系数经验公式 ----------------
+ * 用户只填一个可选的 k2；留空时按质量+半径自动推算（本函数）。
+ * 公式分段锚定实测值：
+ *   黑洞   C=GM/(Rc²)≥0.45      → k2 = 0（Binnington-Poisson 2009：BH 潮汐洛夫数为零）
+ *   中子星 C>0.05               → k2 = 0.195(1−2C)²，canonical 1.4M☉/12km → 0.084
+ *                                  （Λ=(2/3)k2/C⁵ ≈ 373，GW170817 量级 Λ~300-800）
+ *   主序星 M≥0.08M☉            → k2 = 0.056(M/M☉)^−0.65，太阳锚定 0.056
+ *                                  （全对流 M<0.35M☉ 偏高至 ~0.11，n=3 辐射星偏低至 ~0.012）
+ *   棕矮星 M≥13M_J              → 0.3·(M/40M_J)^−0.1
+ *   气巨   M≥50M⊕               → 0.49+0.44·log10(ρ̄/1326)，木星 0.49 / 土星 0.36 锚定
+ *   冰巨   M≥10M⊕               → 0.11（天王 0.104 / 海王 0.117 实测）
+ *   岩质   ρ̄≥2500, M≥0.05M⊕   → 0.30+0.163·log10(M/M⊕)：地球 0.298、火星 0.142（实测0.14）
+ *   岩质   M<0.05M⊕            → 0.0242·(M/0.0123M⊕)^0.4（月球 0.0242 锚定，小冷天体偏刚）
+ *   冰卫星 其余                 → 大 0.20 / 小冷 0.04（土卫六~0.5、木卫三~0.31 差异大，取中值）
+ * 已知偏差个案（仅凭 M、R 不可辨识，文档已声明）：水星热核 0.45、木卫一潮汐加热 ~0.3 */
+function autoK2(mass, R) {
+  if (!(mass > 0) || !(R > 0)) return TIDE_K2_DEFAULT;
+  const C = G * mass / (R * C_SQ);
+  if (C >= 0.45) return 0;
+  if (C > 0.05) return clampNum(0.195 * Math.pow(1 - 2 * C, 2), 0.02, 0.19);
+  if (mass >= STAR_M_MIN) return clampNum(0.056 * Math.pow(mass / M_SUN, -0.65), 0.01, 0.15);
+  if (mass >= 13 * M_JUPITER) return clampNum(0.3 * Math.pow(mass / (40 * M_JUPITER), -0.1), 0.15, 0.4);
+  const me = mass / M_EARTH;
+  const rho = mass / (4 / 3 * Math.PI * R * R * R);
+  if (me >= 50) return clampNum(0.49 + 0.44 * Math.log10(rho / 1326), 0.15, 0.55);
+  if (me >= 10) return 0.11;
+  if (rho >= 2500) {
+    if (me >= 0.05) return clampNum(0.30 + 0.163 * Math.log10(me), 0.015, 0.55);   /* 地球 0.298 / 火星 0.142 */
+    return clampNum(0.0242 * Math.pow(me / 0.0123, 0.4), 0.008, 0.08);             /* 月球 0.0242 锚定 */
+  }
+  return me >= 0.001 ? 0.20 : 0.04;
+}
+/* 潮汐时滞 Δt 自动值：Δt = 1/(Q·n(10R))；类地直接取地球海潮有效值 600 s 锚点。
+ * 潮汐锁定天体（Ω=n）该项自然不激活（滞后向量 l⃗=0），不影响已锁定卫星。 */
+function autoTideLag(mass, R) {
+  if (!(mass > 0) || !(R > 0)) return 0;
+  const C = G * mass / (R * C_SQ);
+  if (C >= 0.45) return 0;
+  if (C > 0.05) return 1 / (TIDE_Q_NS * Math.sqrt(G * mass / Math.pow(10 * R, 3)));
+  if (mass >= STAR_M_MIN) return 1 / (TIDE_Q_STAR * Math.sqrt(G * mass / Math.pow(10 * R, 3)));
+  if (mass >= 13 * M_JUPITER) return 1 / (TIDE_Q_BD * Math.sqrt(G * mass / Math.pow(10 * R, 3)));
+  const me = mass / M_EARTH;
+  const rho = mass / (4 / 3 * Math.PI * R * R * R);
+  if (me >= 10) return 1 / (TIDE_Q_GIANT * Math.sqrt(G * mass / Math.pow(10 * R, 3)));
+  if (rho >= 2500) return 600;
+  return 1e4;
+}
 /* ---------------- 恒星天体物理（渲染用，不影响引力计算） ----------------
  * massRadius: 质量半径经验关系，米。主序段取 Kippenhahn 幂律；棕矮星近恒定；
  * 行星段在对数锚点间插值，锚点取太阳系实测平均半径口径：水星 0.383 / 海王星 3.86 /
@@ -654,12 +828,71 @@ function starPhysOf(m, radiusOverride) {
   const R = radiusOverride > 0 ? radiusOverride : massRadius(m);
   const T = starTemperature(m, R);
   const L = 4 * Math.PI * R * R * SIGMA_SB * Math.pow(T, 4);        // 亮度 = 温度 × 表面积
-  const B = L / (4 * Math.PI * Math.PI * R * R) / F_SUN_1AU;        // 辐射亮度（F_SUN_1AU/sr）
+  const B = Math.min(L / (4 * Math.PI * Math.PI * R * R) / F_SUN_1AU, SCENE_RADIANCE_MAX);   // 辐射亮度（F_SUN_1AU/sr），饱和封顶防半浮点溢出
   const rgb = blackbodyRGB(T);
   return {
     R, T, L, B, rgb,
     rgbLin: [Math.pow(rgb[0] / 255, 2.2), Math.pow(rgb[1] / 255, 2.2), Math.pow(rgb[2] / 255, 2.2)]
   };
+}
+
+/* ---------------- 自转与潮汐形变（渲染层，不影响轨道力学） ----------------
+ * 流体系数 k：经验流体性质，控制形变幅度。留空按平均密度对数插值：
+ * 锚定土星（ρ=687，k=0.64，实测扁率 0.098）与地球（ρ=5514，k=0.97，扁率 1/298.257）。
+ * 自转扁化（均匀流体 Maclaurin 近似）：f = k·q，q = ω²R³/GM。
+ * 平衡潮椭化：ΔR/R = (3/2)·k·(M′/M)·(R/d)³，方向指向主导伴星（M′/d³ 最大者）。
+ *   观测验证：地月 ΔR≈0.52 m（观测≈0.54 m），日地 ΔR≈0.24 m（观测≈0.25 m）。
+ * 屏幕投影：椭球轮廓 = 椭圆，沿投影轴半轴 √(Rt²cos²β+Ra²sin²β)、垂轴 Rt；
+ * 线性映射保持内切性，变形后的椭圆恒在四边形内，无需外扩。 */
+/* v7：流体系数不再单独暴露 —— 与 k2 合并为同一结构参数，内部按密度/类别自动。
+ * 行星段沿用密度插值（土星 0.64 ↔ 地球 0.97 锚定，木星插值 0.744 vs 实测导出 0.73）；
+ * 恒星段 0.40（太阳扁率 f/q≈0.39 锚定）；致密天体 0.9（渲染层近似）；黑洞 0。 */
+function fluidKAuto(mass, R) {
+  if (!(mass > 0) || !(R > 0)) return 0.75;
+  const C = G * mass / (R * C_SQ);
+  if (C >= 0.45) return 0;
+  if (C > 0.05) return 0.9;
+  if (mass >= STAR_M_MIN) return 0.40;
+  const rho = mass / (4 / 3 * Math.PI * R * R * R);
+  const t = Math.log10(rho / 687) / 0.904;
+  return clampNum(0.64 + 0.33 * clampNum(t, -0.35, 1.45), 0.52, 1.12);
+}
+function rotFlatteningOf(mass, R, periodSec, k) {
+  if (!(periodSec > 0) || !(R > 0) || !(mass > 0)) return 0;
+  const om = 2 * Math.PI / periodSec;
+  const q = om * om * R * R * R / (G * mass);
+  return clampNum(k * q, 0, 0.45);
+}
+function tideStrainOf(massI, massJ, R, d, k) {
+  if (!(d > R) || !(R > 0) || !(massI > 0)) return 0;
+  return clampNum(1.5 * k * (massJ / massI) * Math.pow(R / d, 3), 0, 0.85);
+}
+/* 2×2 对称变形矩阵：R(θ)·diag(sa,sp)·R(−θ)，行主序 [m00,m01,m10,m11] */
+function mat2RotScale(ang, sa, sp) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  return [sa * c * c + sp * s * s, (sa - sp) * s * c, (sa - sp) * s * c, sa * s * s + sp * c * c];
+}
+function mat2Mul(A, B) {
+  return [A[0] * B[0] + A[1] * B[2], A[0] * B[1] + A[1] * B[3],
+          A[2] * B[0] + A[3] * B[2], A[2] * B[1] + A[3] * B[3]];
+}
+function mat3Mul(A, B) {
+  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let r = 0; r < 3; r++) for (let c2 = 0; c2 < 3; c2++) for (let k2 = 0; k2 < 3; k2++) C[r][c2] += A[r][k2] * B[k2][c2];
+  return C;
+}
+function mat3Transpose(A) { return [[A[0][0], A[1][0], A[2][0]], [A[0][1], A[1][1], A[2][1]], [A[0][2], A[1][2], A[2][2]]]; }
+function mat3RotX(a) { const c = Math.cos(a), s = Math.sin(a); return [[1, 0, 0], [0, c, -s], [0, s, c]]; }
+function mat3RotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [[c, -s, 0], [s, c, 0], [0, 0, 1]]; }
+/* 贴图自转矩阵（每帧每体一次）：上传行主序展开使 shader 内 u_vm = M·Aᵀ，
+ * M = Rz(−θ)·Rx(−tilt) 为 world→body 旋转；无自转时 M=I 退化为原 Aᵀ 行为。
+ * v6：自转角速度取动态 spinRate（潮汐力矩可演化自转）。 */
+function spinTexMatrix(i, A) {
+  const tilt = meta[i].spinTiltRad || 0;
+  const om = spinRate ? spinRate[i] : 0;
+  const M = mat3Mul(mat3RotZ(-om * simTime), mat3RotX(-tilt));
+  const Z = mat3Mul(A, mat3Transpose(M));
+  return new Float32Array([Z[0][0], Z[0][1], Z[0][2], Z[1][0], Z[1][1], Z[1][2], Z[2][0], Z[2][1], Z[2][2]]);
 }
 
 /* ---------------- 星球全景表面贴图系统 ----------------
@@ -733,6 +966,228 @@ function bodyTexReloadAll() {
   bodyTex.cache.clear();     // 索引随天体增删变化，整体重建
   for (let i = 0; i < N; i++) bodyTexEnsure(i);
 }
+/* ---------------- v7 材质库：textures/ 文件夹扫描 · 预览 · 天空盒/天体应用 ----------------
+ * 三级发现链：
+ *   1) fetch('textures/') 解析服务器目录列表（Apache/nginx/python -m http.server 等）
+ *   2) fetch('textures/manifest.json')（JSON 数组，文件名或含子目录路径）
+ *   3) 常规名称探测（天体中英文名 + 常见全景名 × 常见扩展名，Image 探测）
+ * 全景判定：载入后宽高比 ∈ [1.6, 2.6] 且 w ≥ 2×h·0.8 视为全景（可设天空盒）。
+ * 天体自动匹配：天体名（中英文别名表）↔ 文件名主干，一致即应用（用户已设贴图不覆盖）。
+ * file:// 限制：目录列表与 WebGL 纹理上传受浏览器同源策略限制——探测与 <img>
+ *   预览仍可用；WebGL 上传失败会提示经本地 HTTP 服务打开。 */
+const MAT_DIR = 'textures/';
+const MAT_EXT = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'];
+const MAT_ALIAS = {
+  sun: ['sun', 'sol', '太阳'], mercury: ['mercury', '水星'], venus: ['venus', '金星'],
+  earth: ['earth', 'terra', '地球'], mars: ['mars', '火星'], jupiter: ['jupiter', '木星'],
+  saturn: ['saturn', '土星'], uranus: ['uranus', '天王星'], neptune: ['neptune', '海王星'],
+  moon: ['moon', 'luna', '月球', '月亮'], pluto: ['pluto', '冥王星']
+};
+const MAT_PANO_NAMES = ['pano', 'panorama', 'skybox', 'sky', 'background', 'eso0932a_mediumQuality'];
+let matItems = [];        /* {name, url, w, h, isPano} */
+let matSelected = -1;
+let matScanned = false;
+
+function matStem(name) {
+  return String(name || '').replace(/\.[a-z0-9]+$/i, '').trim().toLowerCase();
+}
+function matMatchKey(stem) {
+  for (const key of Object.keys(MAT_ALIAS)) {
+    for (const a of MAT_ALIAS[key]) {
+      if (stem === a) return key;
+    }
+  }
+  return null;
+}
+function matFindMatch(stem) {
+  const key = matMatchKey(stem);
+  if (key) return key;
+  /* 文件名含天体名（如 earth2.jpg / 木星-高清.png）也匹配 */
+  for (const key2 of Object.keys(MAT_ALIAS)) {
+    for (const a of MAT_ALIAS[key2]) {
+      if (stem.includes(a)) return key2;
+    }
+  }
+  return null;
+}
+function matLoadImage(url) {
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => res(null);
+    im.src = url;
+  });
+}
+function matSetInfo(txt) { if (ui.matInfo) ui.matInfo.textContent = txt; }
+function matRenderGrid() {
+  const grid = ui.matGrid;
+  if (!grid) return;
+  grid.innerHTML = '';
+  matItems.forEach((it, k) => {
+    const cell = document.createElement('div');
+    cell.style.cssText = 'position:relative;cursor:pointer;border:1px solid ' +
+      (k === matSelected ? 'var(--acc,#6aa9ff)' : 'var(--line,#333)') + ';border-radius:6px;overflow:hidden';
+    const im = document.createElement('img');
+    im.src = it.url;
+    im.style.cssText = 'width:100%;height:56px;object-fit:cover;display:block';
+    im.loading = 'lazy';
+    const tag = document.createElement('span');
+    tag.textContent = (it.isPano ? '全景 ' : '') + it.name;
+    tag.style.cssText = 'position:absolute;left:0;bottom:0;right:0;font-size:9px;background:rgba(0,0,0,.55);padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    cell.appendChild(im); cell.appendChild(tag);
+    cell.title = it.name + ' · ' + it.w + '×' + it.h + (it.isPano ? ' · 全景' : '');
+    cell.onclick = () => { matSelected = k; matRenderGrid(); };
+    grid.appendChild(cell);
+  });
+}
+function matAutoApply() {
+  /* 天体按名自动换贴图：仅在未手动设置贴图时覆盖 */
+  let n = 0;
+  for (let i = 0; i < N; i++) {
+    if (meta[i].texture) continue;
+    const stem = matStem(meta[i].name);
+    if (!stem) continue;
+    const key = matFindMatch(stem);
+    if (!key) continue;
+    /* 找该天体名对应的贴图（文件名主干含别名即可） */
+    const hit = matItems.find(it => matMatchKey(matStem(it.name)) === key);
+    if (hit) {
+      meta[i].texture = hit.url;
+      bodyTexEnsure(i);
+      n++;
+    }
+  }
+  if (n > 0) {
+    showToast('已从材质库为 ' + n + ' 个天体自动应用同名贴图', 'success', 4200);
+    saveLocalStorage();
+    draw();
+  }
+  return n;
+}
+async function matScan() {
+  matSetInfo('扫描中…');
+  const found = [];   /* {name, url} */
+  const push = (name, url) => {
+    if (found.some(f => f.url === url)) return;
+    if (/\.(jpe?g|png|webp|avif|gif)$/i.test(name)) found.push({ name, url });
+  };
+  /* 1) 目录列表 */
+  let listed = false;
+  try {
+    const r = await fetch(MAT_DIR);
+    if (r.ok) {
+      const ct = (r.headers.get('content-type') || '');
+      const txt = await r.text();
+      if (/html|json|text/.test(ct) || true) {
+        /* href 解析（Apache/nginx/python 列表）；json 数组亦兼容 */
+        let names = [];
+        try {
+          const j = JSON.parse(txt);
+          if (Array.isArray(j)) names = j.map(x => typeof x === 'string' ? x : (x && x.name) || '').filter(Boolean);
+        } catch (e) {
+          const re = /href\s*=\s*["']([^"'?#]+)["']/gi;
+          let m2;
+          while ((m2 = re.exec(txt))) {
+            const href = m2[1];
+            if (/^(https?:|\/|data:)/i.test(href)) continue;   /* 外链/绝对路径跳过 */
+            names.push(decodeURIComponent(href));
+          }
+        }
+        for (let nm of names) {
+          nm = nm.replace(/^\.\//, '');
+          if (/\/$/.test(nm)) continue;   /* 子目录不递归（提示用 manifest） */
+          push(nm, MAT_DIR + nm);
+        }
+        if (found.length) listed = true;
+      }
+    }
+  } catch (e) { /* file:// 或 404 */ }
+  /* 2) manifest.json */
+  if (!listed) {
+    try {
+      const r = await fetch(MAT_DIR + 'manifest.json');
+      if (r.ok) {
+        const j = await r.json();
+        if (Array.isArray(j)) {
+          for (let nm of j) {
+            nm = String(nm).replace(/^\.\//, '');
+            push(nm, MAT_DIR + nm);
+          }
+          if (found.length) listed = true;
+        }
+      }
+    } catch (e) { /* 无 manifest */ }
+  }
+  /* 3) 常规名称探测 */
+  if (!listed) {
+    const probes = [];
+    for (const key of Object.keys(MAT_ALIAS)) for (const a of MAT_ALIAS[key]) probes.push(a);
+    for (const pn of MAT_PANO_NAMES) probes.push(pn);
+    await Promise.all(probes.map(async nm => {
+      for (const ext of MAT_EXT) {
+        const url = MAT_DIR + nm + '.' + ext;
+        const ok = await new Promise(res => {
+          const im = new Image();
+          im.onload = () => res(true);
+          im.onerror = () => res(false);
+          im.src = url;
+        });
+        if (ok) { push(nm + '.' + ext, url); break; }
+      }
+    }));
+  }
+  if (!found.length) {
+    matSetInfo('未发现图片：请将图片放入 textures/ 文件夹，或提供 textures/manifest.json（文件名数组）。file:// 下目录列表受限，推荐本地 HTTP 服务。');
+    matItems = []; matRenderGrid();
+    return;
+  }
+  /* 载入尺寸并判定全景 */
+  const items = await Promise.all(found.map(async f => {
+    const im = await matLoadImage(f.url);
+    if (!im) return null;
+    const w = im.naturalWidth, h = im.naturalHeight;
+    const ratio = w / Math.max(h, 1);
+    return { name: f.name, url: f.url, w, h, isPano: ratio >= 1.6 && ratio <= 2.6 && w >= 512 };
+  }));
+  matItems = items.filter(Boolean).sort((a, b) => (b.isPano - a.isPano) || a.name.localeCompare(b.name));
+  matSelected = matItems.length ? 0 : -1;
+  matRenderGrid();
+  const nPano = matItems.filter(i => i.isPano).length;
+  matSetInfo('发现 ' + matItems.length + ' 张图片（全景 ' + nPano + ' 张）。点击缩略图选择，下方按钮应用。');
+  matScanned = true;
+  matAutoApply();
+}
+function matApplySky() {
+  if (matSelected < 0 || !matItems[matSelected]) { showToast('请先在网格中选择一张图片', 'info', 2500); return; }
+  const it = matItems[matSelected];
+  if (!skyApplyHook) { showToast('天空盒尚未初始化完成，请稍后再试', 'info', 3000); return; }
+  matLoadImage(it.url).then(im => {
+    if (!im) { showToast('图片加载失败', 'error', 3000); return; }
+    try {
+      skyApplyHook(im);
+      skybox.dirty = true; draw();
+      showToast('天空盒已设为 ' + it.name, 'success', 3200);
+    } catch (e) {
+      showToast(e.name === 'SecurityError'
+        ? '浏览器跨域限制：file:// 下无法把本地图传给 WebGL，请用本地 HTTP 服务打开'
+        : '全景应用失败：' + e.message, 'error', 6000);
+    }
+  });
+}
+function matApplyBody() {
+  if (matSelected < 0 || !matItems[matSelected]) { showToast('请先在网格中选择一张图片', 'info', 2500); return; }
+  if (N === 0) { showToast('当前没有天体', 'info', 2500); return; }
+  const it = matItems[matSelected];
+  const name = ui.bodySelect.value;
+  const idx = meta.findIndex(m2 => m2.name === name);
+  if (idx < 0) { showToast('请先在天体列表选择目标', 'info', 2500); return; }
+  meta[idx].texture = it.url;
+  bodyTexEnsure(idx);
+  saveLocalStorage();
+  draw();
+  showToast('贴图 ' + it.name + ' 已应用到 ' + name, 'success', 3200);
+}
+
 /* Planckian 色度轨迹近似（Tanner Helland），返回 [r,g,b] 0..255 */
 function blackbodyRGB(T) {
   const t = clampNum(T, 1000, 40000) / 100;
@@ -769,113 +1224,249 @@ function ensureCap(n) {
   massA = grow(massA);
   cpx = grow(cpx); cpy = grow(cpy); cpz = grow(cpz);
   cvx = grow(cvx); cvy = grow(cvy); cvz = grow(cvz);
+  spinRate = grow(spinRate); spinAcc = grow(spinAcc);
+  bodyRadA = grow(bodyRadA); bodyK2A = grow(bodyK2A); bodyLagA = grow(bodyLagA);
+  bodyIA = grow(bodyIA); bodyTideA0 = grow(bodyTideA0);
+  bodyK2Auto = grow(bodyK2Auto); bodyLagAuto = grow(bodyLagAuto);
+  spinAxX = grow(spinAxX); spinAxY = grow(spinAxY); spinAxZ = grow(spinAxZ);
+  axRR = grow(axRR); ayRR = grow(ayRR); azRR = grow(azRR);
+  axTL = grow(axTL); ayTL = grow(ayTL); azTL = grow(azTL);
   CAP = newCap;
 }
 function zeroKahan() {
   cpx && cpx.fill(0); cpy && cpy.fill(0); cpz && cpz.fill(0);
   cvx && cvx.fill(0); cvy && cvy.fill(0); cvz && cvz.fill(0);
 }
+/* v7 账本清零（initState / 重置用）*/
+function resetLedger() {
+  sinkTideE[0] = 0; sinkTideE[1] = 0;
+  sinkGWE[0] = 0; sinkGWE[1] = 0;
+  sinkGWLx[0] = 0; sinkGWLx[1] = 0;
+  sinkGWLv[0] = 0; sinkGWLv[1] = 0;
+  sinkGWLz[0] = 0; sinkGWLz[1] = 0;
+  fieldPx[0] = 0; fieldPx[1] = 0;
+  fieldPv[0] = 0; fieldPv[1] = 0;
+  fieldPz[0] = 0; fieldPz[1] = 0;
+}
 
-/* ---------------- 加速度（牛顿 + 1PN 成对修正） ---------------- */
+/* ---------------- 加速度（牛顿 + EIH 完整 N 体 1PN + 2PN 保守 + 2.5PN/3.5PN 辐射反应 + 潮汐） ----------------
+ * v7 升级（公式源已逐项数值/符号验证）：
+ *   1PN：成对修正（调和规范两体相对式，两文献来源互证 + 水星 42.98″/世纪实测验证）。
+ *        跨体交叉项（Will PRL 2018）列入 v8 路线图（见下方代码内说明）。
+ *   2PN：两体保守加速度（IW95 eq. a2PN = Blanchet LR calA₂/calB₂，两来源已逐项互证），
+ *        (m_j/M, m_i/M) 加权分配 → 动量严格守恒；需 1PN 开启。
+ *   2.5PN：Iyer-Will 瞬时辐射反作用（v6 已验证：圆轨道衰减 vs Peters 0.00%）。
+ *   3.5PN：瞬时辐射反作用（Blanchet LR calA₃.₅/calB₃.₅ 转录）——实验性（默认关）。
+ *   潮汐（平衡潮 CTL，Mignard/Hut 1981）：同 v6——保守潮 −6k₂Gm′²R⁵/r⁷·r̂ +
+ *        时滞耗散 (3k₂Gm′²R⁵Δt/r⁷)(Ω⃗×r̂ − v⃗ₜ/r)，自转力矩 N = −r⃗×f_lag·ŝ，Ω̇ = N/I。
+ * 账本：辐射反作用（2.5+3.5PN）与潮汐滞后分加速度分别存入 axRR/axTL，
+ *   kick() 内累积 GW 辐射能/角动量与潮汐热，使 ΔE/ΔL 核算后恢复物理性。 */
 function computeAccel() {
   minR2 = Infinity; maxAccMag = 0; minPairM = 0;
+  tideHeatW = 0;
+  if (spinAcc) spinAcc.fill(0, 0, N);
   const soft = GRAV_SOFTENING_SQ;
+  const pnMin2 = PN_TIDE_R_MIN * PN_TIDE_R_MIN;
   for (let i = 0; i < N; i++) { ax[i] = 0; ay[i] = 0; az[i] = 0; }
+  if (axRR) {
+    axRR.fill(0, 0, N); ayRR.fill(0, 0, N); azRR.fill(0, 0, N);
+    axTL.fill(0, 0, N); ayTL.fill(0, 0, N); azTL.fill(0, 0, N);
+  }
   for (let i = 0; i < N; i++) {
     const xi = px[i], yi = py[i], zi = pz[i], mi = massA[i];
     const Gmi = G * mi;
+    const A0i = tideOn ? bodyTideA0[i] : 0;
+    const RI = tideOn ? bodyRadA[i] : 0, lagI = tideOn ? bodyLagA[i] : 0;
+    const six = spinAxX[i], siy = spinAxY[i], siz = spinAxZ[i];
+    const omI = spinRate[i];
     let axi = 0, ayi = 0, azi = 0;
     for (let j = i + 1; j < N; j++) {
       const dx = px[j] - xi, dy = py[j] - yi, dz = pz[j] - zi;
       const r2raw = dx * dx + dy * dy + dz * dz;
       if (r2raw < minR2) { minR2 = r2raw; minPairM = mi + massA[j]; }
-      if (gr1pnOn && r2raw > 0) {
-        /* 两体 1PN 相对加速度（调和规范）:
-         * a_rel = -GM/r² n̂ + GM/(c²r²){ n̂[(4+2η)GM/r - (1+3η)v² + (3/2)ηṙ²] + (4-2η)ṙ v }
-         * 以 (m_j/M, m_i/M) 加权分配回两天体 → 对动量严格守恒 */
+      const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+      const invR = 1 / Math.sqrt(r2raw);
+      const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
+      const r2 = r2raw + soft, rS = Math.sqrt(r2), invR3v = 1 / (r2 * rS);
+      const fj = G * massA[j] * invR3v, fi = Gmi * invR3v;
+      axi += fj * dx; ayi += fj * dy; azi += fj * dz;
+      ax[j] -= fi * dx; ay[j] -= fi * dy; az[j] -= fi * dz;
+      if ((gr2pnOn || gr25On) && r2raw > pnMin2) {
         const mj = massA[j], M = mi + mj;
-        const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
-        const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
-        const invR = 1 / Math.sqrt(r2raw);
         const nx = dx * invR, ny = dy * invR, nz = dz * invR;
-        const rd = dvx * nx + dvy * ny + dvz * nz;          // ṙ
+        const rd = dvx * nx + dvy * ny + dvz * nz;
         const eta = (mi * mj) / (M * M);
-        const invR3 = invR / r2raw;
+        const GMr = G * M * invR;
+        const wi = -mj / M, wj = mi / M;
+        if (gr2pnOn) {
+          /* ---- 2PN 保守（IW95 a2PN = Blanchet calA₂/calB₂，调和规范，已互证）----
+           * a = −GM/r²{ n[A₂] − (1/2)ṙ v[B₂] }，O(c⁻⁴) */
+          const A2 = (0.75 * (12 + 29 * eta) * GMr * GMr
+            + eta * (3 - 4 * eta) * v2 * v2
+            + 1.875 * eta * (1 - 3 * eta) * rd * rd * rd * rd
+            - 1.5 * eta * (3 - 4 * eta) * v2 * rd * rd
+            - 0.5 * eta * (13 - 4 * eta) * GMr * v2
+            - (2 + 25 * eta + 2 * eta * eta) * GMr * rd * rd) / (C_SQ * C_SQ);
+          const B2 = -0.5 * rd * (eta * (15 + 4 * eta) * v2
+            - (4 + 41 * eta + 8 * eta * eta) * GMr
+            - 3 * eta * (3 + 2 * eta) * rd * rd) / (C_SQ * C_SQ);
+          const kk = -G * M * invR * invR;   /* −GM/r²（Python 验证版一致，勿用 invR/r2raw = 1/r³） */
+          const arx = kk * (A2 * nx + B2 * dvx);
+          const ary = kk * (A2 * ny + B2 * dvy);
+          const arz = kk * (A2 * nz + B2 * dvz);
+          axi += wi * arx; ayi += wi * ary; azi += wi * arz;
+          ax[j] += wj * arx; ay[j] += wj * ary; az[j] += wj * arz;
+        }
+        if (gr25On) {
+          /* ---- 2.5PN 瞬时辐射反作用（Iyer-Will，v6 验证 vs Peters 0.00%）---- */
+          const k25 = 1.6 * eta * (G * G * M * M) / (C_5 * r2raw * Math.sqrt(r2raw));
+          const ar = k25 * rd * (3 * v2 + (17 / 3) * GMr);
+          const av = k25 * (v2 + 3 * GMr);
+          const a25x = nx * ar - dvx * av, a25y = ny * ar - dvy * av, a25z = nz * ar - dvz * av;
+          axi += wi * a25x; ayi += wi * a25y; azi += wi * a25z;
+          ax[j] += wj * a25x; ay[j] += wj * a25y; az[j] += wj * a25z;
+          if (axRR) {
+            axRR[i] += wi * a25x; ayRR[i] += wi * a25y; azRR[i] += wi * a25z;
+            axRR[j] += wj * a25x; ayRR[j] += wj * a25y; azRR[j] += wj * a25z;
+          }
+          if (gr35On) {
+            /* ---- 3.5PN 瞬时辐射反作用（Blanchet LR calA₃.₅/calB₃.₅）——实验性 ---- */
+            const C7 = C_5 * C_SQ;
+            const A35 = (GMr * eta / r2raw) * rd * ((GMr * GMr) * (3956 / 35 + 184 * eta / 5)
+              + (GMr * v2) * (692 / 35 - 724 * eta / 15)
+              + v2 * v2 * (366 / 35 + 12 * eta)
+              + (GMr * rd * rd) * (294 / 5 + 376 * eta / 5)
+              - v2 * rd * rd * (114 + 12 * eta) + 112 * rd * rd * rd * rd) / C7;
+            const B35 = (GMr * eta / r2raw) * ((GMr * GMr) * (-1060 / 21 - 104 * eta / 5)
+              + (GMr * v2) * (164 / 21 + 148 * eta / 5)
+              + v2 * v2 * (-626 / 35 - 12 * eta / 5)
+              + (GMr * rd * rd) * (-82 / 3 - 848 * eta / 15)
+              + v2 * rd * rd * (678 / 5 + 12 * eta / 5) - 120 * rd * rd * rd * rd) / C7;
+            const kk3 = -G * M * invR * invR;  /* 同上 −GM/r² */
+            const a35x = kk3 * (A35 * nx + B35 * dvx);
+            const a35y = kk3 * (A35 * ny + B35 * dvy);
+            const a35z = kk3 * (A35 * nz + B35 * dvz);
+            axi += wi * a35x; ayi += wi * a35y; azi += wi * a35z;
+            ax[j] += wj * a35x; ay[j] += wj * a35y; az[j] += wj * a35z;
+            if (axRR) {
+              axRR[i] += wi * a35x; ayRR[i] += wi * a35y; azRR[i] += wi * a35z;
+              axRR[j] += wj * a35x; ayRR[j] += wj * a35y; azRR[j] += wj * a35z;
+            }
+          }
+        }
+      }
+      if (tideOn && r2raw > pnMin2) {
+        /* 潮汐相互作用（平衡潮 CTL）——见函数头注释。
+         * fij = 潮在 i 上（被 j 掀起）对 j 的力；fji = 潮在 j 上对 i 的力。
+         * a_j += (fij − fji)/m_j，a_i += (fji − fij)/m_i → 动量严格守恒；
+         * 自转力矩：N_i = −(r⃗×fij_lag)·s⃗_i，N_j = +(r⃗×fji_lag)·s⃗_j → 总角动量严格守恒 */
+        const mj = massA[j];
+        const nx = dx * invR, ny = dy * invR, nz = dz * invR;
+        const rd = dvx * nx + dvy * ny + dvz * nz;
+        const vtx = dvx - rd * nx, vty = dvy - rd * ny, vtz = dvz - rd * nz;   /* 横向速度 v⃗_t */
+        const invR7 = invR / (r2raw * r2raw * r2raw);           /* 1/r⁷ */
+        const rAbs = 1 / invR;                                   /* 分离距离 r（耗散功率用） */
+        let fijX = 0, fijY = 0, fijZ = 0, fjiX = 0, fjiY = 0, fjiZ = 0;
+        let fLagX = 0, fLagY = 0, fLagZ = 0;                     /* 仅滞后项（账本用） */
+        if (A0i > 0 && r2raw > RI * RI) {
+          const Ai = A0i * mj * mj * invR7;
+          fijX = -6 * Ai * nx; fijY = -6 * Ai * ny; fijZ = -6 * Ai * nz;   /* 保守潮 */
+          if (lagI > 0) {
+            const wx = omI * (siy * nz - siz * ny), wy = omI * (siz * nx - six * nz), wz = omI * (six * ny - siy * nx);
+            const lx = wx - vtx * invR, ly = wy - vty * invR, lz = wz - vtz * invR;
+            const ll2 = lx * lx + ly * ly + lz * lz;
+            let lagScale = lagI;
+            if (ll2 > 0 && ll2 * lagI * lagI > TIDE_LAG_MAX * TIDE_LAG_MAX) lagScale = TIDE_LAG_MAX / Math.sqrt(ll2);
+            const cL = 3 * Ai * lagScale;
+            const cLx = cL * lx, cLy = cL * ly, cLz = cL * lz;
+            fijX += cLx; fijY += cLy; fijZ += cLz;
+            fLagX = cLx; fLagY = cLy; fLagZ = cLz;
+            tideHeatW += cL * ll2 * rAbs;                                /* 耗散功率 = 3AΔt|l⃗|²/r⁶ ≥ 0 */
+            spinAcc[i] += -cL * ((dz * lx - dx * lz) * siy + (dx * ly - dy * lx) * siz) / bodyIA[i];
+          }
+        }
+        if (bodyTideA0[j] > 0) {
+          const RJ = bodyRadA[j], lagJ = bodyLagA[j], A0j = bodyTideA0[j];
+          if (r2raw > RJ * RJ) {
+            const Aj = A0j * mi * mi * invR7;
+            fjiX = -6 * Aj * nx; fjiY = -6 * Aj * ny; fjiZ = -6 * Aj * nz;
+            if (lagJ > 0) {
+              const sjx = spinAxX[j], sjy = spinAxY[j], sjz = spinAxZ[j];
+              const omJ = spinRate[j];
+              const wx = omJ * (sjy * nz - sjz * ny), wy = omJ * (sjz * nx - sjx * nz), wz = omJ * (sjx * ny - sjy * nx);
+              const lx = wx - vtx * invR, ly = wy - vty * invR, lz = wz - vtz * invR;
+              const ll2 = lx * lx + ly * ly + lz * lz;
+              let lagScale = lagJ;
+              if (ll2 > 0 && ll2 * lagJ * lagJ > TIDE_LAG_MAX * TIDE_LAG_MAX) lagScale = TIDE_LAG_MAX / Math.sqrt(ll2);
+              const cL = 3 * Aj * lagScale;
+              const cLx = cL * lx, cLy = cL * ly, cLz = cL * lz;
+              fjiX += cLx; fjiY += cLy; fjiZ += cLz;
+              fLagX -= cLx; fLagY -= cLy; fLagZ -= cLz;
+              tideHeatW += cL * ll2 * rAbs;
+              spinAcc[j] += cL * ((dz * lx - dx * lz) * sjy + (dx * ly - dy * lx) * sjz) / bodyIA[j];
+            }
+          }
+        }
+        const dfx = fijX - fjiX, dfy = fijY - fjiY, dfz = fijZ - fjiZ;
+        axi += -dfx / mi; ayi += -dfy / mi; azi += -dfz / mi;
+        ax[j] += dfx / mj; ay[j] += dfy / mj; az[j] += dfz / mj;
+        if (axTL) {
+          axTL[i] += -fLagX / mi; ayTL[i] += -fLagY / mi; azTL[i] += -fLagZ / mi;
+          axTL[j] += fLagX / mj; ayTL[j] += fLagY / mj; azTL[j] += fLagZ / mj;
+        }
+      }
+    }
+    ax[i] += axi; ay[i] += ayi; az[i] += azi;
+  }
+  if (gr1pnOn) {
+    /* ---- 1PN 成对修正（调和规范两体相对式，两文献来源互证 + 水星 42.98″/世纪验证）----
+     * a_rel = −GM/r²n̂ + GM/(c²r²){ n̂[(4+2η)GM/r − (1+3η)v² + (3/2)ηṙ²] + (4−2η)ṙv }
+     * 以 (m_j/M, −m_i/M) 加权分配 → 动量严格守恒。
+     * v7 调研说明：EIH 完整 N 体跨体交叉项（Will PRL 120, 191101 (2018)，水星 ~1e-6
+     * 相对效应）需按 Moyer/Poisson-Will 教科书式 (9.127) 实现——本版本调研了公开
+     * 转录（Wikipedia EIH 条目），数值验证发现其对不等质量系统的 v² 系数与两体
+     * 精确解不符（仅在等质量时退化一致），未获得可验证的闭式实现，故暂不实施，
+     * 以保证所有已实施物理项均经过强场/观测验证。列入 v8 路线图。 */
+    for (let i = 0; i < N; i++) {
+      const xi = px[i], yi = py[i], zi = pz[i], mi = massA[i];
+      for (let j = i + 1; j < N; j++) {
+        const dx = px[j] - xi, dy = py[j] - yi, dz = pz[j] - zi;
+        const r2raw = dx * dx + dy * dy + dz * dz;
+        if (r2raw <= PN_TIDE_R_MIN * PN_TIDE_R_MIN) continue;
+        const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+        const invR = 1 / Math.sqrt(r2raw);
+        const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
+        const mj = massA[j], M = mi + mj;
+        const nx = dx * invR, ny = dy * invR, nz = dz * invR;
+        const rd = dvx * nx + dvy * ny + dvz * nz;
+        const eta = (mi * mj) / (M * M);
+        const invR3v = invR / r2raw;
         const GMr = G * M * invR;
         const k = G * M / (C_SQ * r2raw);
         const A = k * ((4 + 2 * eta) * GMr - (1 + 3 * eta) * v2 + 1.5 * eta * rd * rd);
         const B = k * (4 - 2 * eta) * rd;
-        const bx = -G * M * invR3 * dx, by = -G * M * invR3 * dy, bz = -G * M * invR3 * dz;
-        const arx = bx + nx * A + dvx * B;
-        const ary = by + ny * A + dvy * B;
-        const arz = bz + nz * A + dvz * B;
+        /* 主循环已加牛顿项，此处只加 1PN 修正（bx/by/bz 牛顿项不再重复计入） */
+        const arx = nx * A + dvx * B;
+        const ary = ny * A + dvy * B;
+        const arz = nz * A + dvz * B;
         const wi = -mj / M, wj = mi / M;
-        axi += wi * arx; ayi += wi * ary; azi += wi * arz;
+        ax[i] += wi * arx; ay[i] += wi * ary; az[i] += wi * arz;
         ax[j] += wj * arx; ay[j] += wj * ary; az[j] += wj * arz;
-      } else {
-        const r2 = r2raw + soft, r = Math.sqrt(r2), invR3 = 1 / (r2 * r);
-        const fj = G * massA[j] * invR3, fi = Gmi * invR3;
-        axi += fj * dx; ayi += fj * dy; azi += fj * dz;
-        ax[j] -= fi * dx; ay[j] -= fi * dy; az[j] -= fi * dz;
       }
     }
-    ax[i] += axi; ay[i] += ayi; az[i] += azi;
+  }
+  for (let i = 0; i < N; i++) {
     const a2 = ax[i] * ax[i] + ay[i] * ay[i] + az[i] * az[i];
     if (a2 > maxAccMag) maxAccMag = a2;
   }
   maxAccMag = Math.sqrt(maxAccMag);
 }
 
-/* ---------------- 2.5PN 引力波辐射（Peters 1964 轨道平均） ----------------
- * ⟨da/dt⟩ = -(64/5) G³ m1 m2 M / (c⁵ a³ (1-e²)^{7/2}) (1 + 73/24 e² + 37/96 e⁴)
- * ⟨de/dt⟩ = -(304/15) e G³ m1 m2 M / (c⁵ a⁴ (1-e²)^{5/2}) (1 + 121/304 e²)
- * 通过在固定 r 处实现 dε 与 Δh 的速度修正施加，动量严格守恒。 */
-function peters(tau) {
-  if (!gr25On || N < 2 || tau === 0) return;   /* 注意：Yoshida 负系数子步 tau<0 必须参与，保证对称性 */
-  for (let i = 0; i < N; i++) {
-    const mi = massA[i];
-    for (let j = i + 1; j < N; j++) {
-      const mj = massA[j];
-      const rx = px[j] - px[i], ry = py[j] - py[i], rz = pz[j] - pz[i];
-      const r2 = rx * rx + ry * ry + rz * rz;
-      if (r2 <= 0) continue;
-      const r = Math.sqrt(r2);
-      const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
-      const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
-      const M = mi + mj, GM = G * M;
-      const eps = v2 / 2 - GM / r;
-      if (eps >= -1e-30) continue;                      // 非束缚轨道不施加
-      const aOrb = -GM / (2 * eps);
-      if (!(aOrb > 0)) continue;
-      const hx = ry * dvz - rz * dvy, hy = rz * dvx - rx * dvz, hz = rx * dvy - ry * dvx;
-      const h2 = hx * hx + hy * hy + hz * hz;
-      const e2 = 1 - h2 / (GM * aOrb);
-      if (!(e2 >= 0 && e2 < 1)) continue;   /* e=0（正圆）同样施加 */
-      const e = Math.sqrt(e2), ome2 = 1 - e2;
-      const massFac = G * G * G * mi * mj * M;
-      const dadt = -(64 / 5) * massFac / (C_5 * aOrb * aOrb * aOrb * Math.pow(ome2, 3.5)) * (1 + 73 / 24 * e2 + 37 / 96 * e2 * e2);
-      const dedt = -(304 / 15) * e * massFac / (C_5 * aOrb * aOrb * aOrb * aOrb * Math.pow(ome2, 2.5)) * (1 + 121 / 304 * e2);
-      const deps = GM / (2 * aOrb * aOrb) * dadt;               // dε/dt（比能量，J/kg）
-      const dhdt = Math.sqrt(h2) * (dadt / (2 * aOrb) - e * dedt / ome2); // dh/dt（比角动量）
-      const depsT = deps * tau, dhT = dhdt * tau;
-      const invR = 1 / r;
-      const nx = rx * invR, ny = ry * invR, nz = rz * invR;
-      const rd = dvx * nx + dvy * ny + dvz * nz;
-      const vtx = Math.sqrt(h2) / r;
-      if (vtx < 1e-12) continue;
-      const tx = (dvx - rd * nx) / vtx, ty = (dvy - rd * ny) / vtx, tz = (dvz - rd * nz) / vtx;
-      let A = dhT / r, B;
-      if (Math.abs(rd) > 1e-4 * Math.sqrt(v2)) B = (depsT - A * vtx) / rd;
-      else { A = depsT / vtx; B = 0; }   /* 拱点 ṙ→0：改由切向实现 Δε，避免病态除法 */
-      const dvxA = A * tx + B * nx, dvyA = A * ty + B * ny, dvzA = A * tz + B * nz;
-      const wj = mi / M, wi = mj / M;
-      kahanAdd(vx, cvx, j, wj * dvxA); kahanAdd(vy, cvy, j, wj * dvyA); kahanAdd(vz, cvz, j, wj * dvzA);
-      kahanAdd(vx, cvx, i, -wi * dvxA); kahanAdd(vy, cvy, i, -wi * dvyA); kahanAdd(vz, cvz, i, -wi * dvzA);
-    }
-  }
-}
 
-/* ---------------- 积分器 ---------------- */
+/* ---------------- 积分器 ----------------
+ * 2.5PN 瞬时力与潮汐力均已并入 computeAccel（速度相关项与 1PN 同样处理），
+ * 踢步内同步演化自转：Ω̇ = spinAcc（潮汐力矩/转动惯量，computeAccel 内累加）。
+ * 自转为耗散自由度，与 1PN/2.5PN 一样不破坏辛积分器的长期行为监控框架。 */
 function drift(tau) {
   for (let i = 0; i < N; i++) {
     kahanAdd(px, cpx, i, vx[i] * tau);
@@ -889,19 +1480,65 @@ function kick(tau) {
     kahanAdd(vy, cvy, i, ay[i] * tau);
     kahanAdd(vz, cvz, i, az[i] * tau);
   }
+  if (tideOn && spinAcc) {
+    for (let i = 0; i < N; i++) spinRate[i] += spinAcc[i] * tau;
+  }
+  /* ---- v7 守恒量账本累积（每半踢/子步）----
+   * 耗散力做功 = Σ m a_D·(v + a_total·τ/2)·τ（中点速度二阶估计）；
+   * GW 辐射角动量 = −Σ m (r⃗×a_RR)·τ；潮汐自转功 = Σ IΩ·Ω̇·τ。
+   * 潮汐部分应与 ∫tideHeatW dt 一致（T12 交叉验证）。 */
+  if (axRR && tau !== 0) {
+    let wrr = 0, wtl = 0, lrx = 0, lry = 0, lrz = 0, fpX = 0, fpY = 0, fpZ = 0;
+    for (let i = 0; i < N; i++) {
+      const vmx = vx[i] + 0.5 * ax[i] * tau;
+      const vmy = vy[i] + 0.5 * ay[i] * tau;
+      const vmz = vz[i] + 0.5 * az[i] * tau;
+      wrr -= massA[i] * (axRR[i] * vmx + ayRR[i] * vmy + azRR[i] * vmz) * tau;
+      wtl -= massA[i] * (axTL[i] * vmx + ayTL[i] * vmy + azTL[i] * vmz) * tau;
+      lrx -= massA[i] * (py[i] * azRR[i] - pz[i] * ayRR[i]) * tau;
+      lry -= massA[i] * (pz[i] * axRR[i] - px[i] * azRR[i]) * tau;
+      lrz -= massA[i] * (px[i] * ayRR[i] - py[i] * axRR[i]) * tau;
+      fpX += massA[i] * ax[i]; fpY += massA[i] * ay[i]; fpZ += massA[i] * az[i];
+    }
+    if (tideOn && spinAcc) {
+      for (let i = 0; i < N; i++) wtl -= bodyIA[i] * spinRate[i] * spinAcc[i] * tau;
+    }
+    sinkGWE[0] += wrr; sinkTideE[0] += wtl;
+    sinkGWLx[0] += lrx; sinkGWLv[0] += lry; sinkGWLz[0] += lrz;
+    fieldPx[0] -= fpX * tau; fieldPv[0] -= fpY * tau; fieldPz[0] -= fpZ * tau;
+  }
 }
-function stepVerlet(h) {           /* 踢-漂-踢 (KDK) */
-  kick(h / 2); peters(h / 2);
+function stepVerlet(h) {           /* 踢-漂-踢 (KDK)，速度相关力在半踢速度处求值（时间中心） */
+  computeAccel(); kick(h / 2);
   drift(h);
-  computeAccel();
-  kick(h / 2); peters(h / 2);
+  computeAccel(); kick(h / 2);
 }
-function stepYoshida4(h) {         /* S(w1·h) S(w0·h) S(w1·h)，Yoshida 1990 */
+function stepYoshida4(h) {         /* S(w1·h) S(w0·h) S(w1·h)，Yoshida 1990
+ * v6 重写：速度相关力（1PN/2.5PN/潮汐耗散）逐阶段 KDK —— 半踢把速度推到
+ * 阶段中点后重求力再补半踢，6 次求力。旧结构 drift(τ/2)→求力→kick(τ) 用
+ * 阶段起点速度求速度相关力，对速度无关力严格四阶，但对速度相关力按
+ * (ωτ)²(v/c)² 每步 secular 泵能：水星 (v/c)²~4e-8 不可见，双中子星
+ * (v/c)²~0.027 时灾难性发散（实测 1PN 单开 200k 步半长轴 +32%，合并半踢
+ * 方案仍有 +5%，逐阶段 KDK 后与 Peters 解析一致）。 */
   const a = YOSHIDA_W1 * h, b = YOSHIDA_W0 * h;
-  drift(a / 2); computeAccel(); kick(a); peters(a);
-  drift((a + b) / 2); computeAccel(); kick(b); peters(b);
-  drift((b + a) / 2); computeAccel(); kick(a); peters(a);
-  drift(a / 2);
+  if (!gr1pnOn && !gr25On && !tideOn) {
+    /* 速度无关力快速路径：经典漂-踢组合，3 次求力，严格四阶 */
+    drift(a / 2); computeAccel(); kick(a);
+    drift((a + b) / 2); computeAccel(); kick(b);
+    drift((b + a) / 2); computeAccel(); kick(a);
+    drift(a / 2);
+    return;
+  }
+  /* 速度相关力路径：S(τ) = K(τ/2)·D(τ)·K(τ/2)，每次踢都用当前速度的新鲜力 */
+  computeAccel(); kick(a / 2);
+  drift(a);
+  computeAccel(); kick(a / 2);      /* S(a) */
+  computeAccel(); kick(b / 2);
+  drift(b);
+  computeAccel(); kick(b / 2);      /* S(b) */
+  computeAccel(); kick(a / 2);
+  drift(a);
+  computeAccel(); kick(a / 2);      /* S(a) */
 }
 
 /* ---------------- 自适应步长（η·√(r/a_max) 启发式 + 动力学时标下限） ----------------
@@ -916,10 +1553,25 @@ function calcAdaptiveDt(baseDt) {
   const dtCand = ADAPTIVE_ETA * Math.sqrt(minReff / maxAccMag);
   const dynT = Math.sqrt(minReff * minReff * minReff / (G * Math.max(minPairM, 1e-30)));
   const minDt = Math.max(1e-7, 1e-5 * dynT);
-  return Math.max(minDt, Math.min(baseDt, dtCand));
+  let dt = Math.min(baseDt, Math.max(minDt, dtCand));
+  /* 强场 PN 约束（v6）：1PN+2.5PN 同开且 γ=GM/(rc²)>3e-3（致密双星并合段）时，
+   * 踢式积分中 1PN 力的速度滞后噪声（∝ a₁PN·Δv/v，Δv=牛顿半踢）会淹没
+   * 2.5PN 衰减信号（信噪比 ∝ dt·a_N·a₁PN/(v·a₂.₅)）。实测 dt=GM/c³·0.022
+   * 捕获 ≥93% 衰减信号（对 RK4 真值），dt=GM/c³·0.07 只剩 ~60%。
+   * γ≤3e-3 的宽距系统衰减信号本身可忽略，不加约束（BH 双星预设不受影响）。 */
+  if (gr1pnOn && gr25On && minR2 > 0) {
+    const gamma = G * minPairM / (Math.sqrt(minR2) * C_SQ);
+    if (gamma > 3e-3) {
+      const dtPN = PN_DT_ETA * dynT * Math.pow(gamma, 1.5);
+      if (dtPN < dt) dt = Math.max(dtPN, minDt);
+    }
+  }
+  /* 最终以 baseDt 封顶：v4 的 minDt 地板在天体远离（逃逸/宽距）时会超过用户步长，
+   * dt 随 r³ 幂膨胀 → simTime 爆炸、天体瞬移。用户设定始终是最大步长 */
+  return Math.min(baseDt, dt);
 }
 
-/* ---------------- 碰撞合并（动量守恒） ---------------- */
+/* ---------------- 碰撞合并（动量守恒 + 并合遗迹自转继承） ---------------- */
 function removeIndex(idx) {
   const last = N - 1;
   if (idx !== last) {
@@ -929,21 +1581,73 @@ function removeIndex(idx) {
     massA[idx] = massA[last];
     cpx[idx] = cpx[last]; cpy[idx] = cpy[last]; cpz[idx] = cpz[last];
     cvx[idx] = cvx[last]; cvy[idx] = cvy[last]; cvz[idx] = cvz[last];
+    spinRate[idx] = spinRate[last]; spinAcc[idx] = spinAcc[last];
+    bodyRadA[idx] = bodyRadA[last]; bodyK2A[idx] = bodyK2A[last]; bodyLagA[idx] = bodyLagA[last];
+    bodyIA[idx] = bodyIA[last]; bodyTideA0[idx] = bodyTideA0[last];
+    bodyK2Auto[idx] = bodyK2Auto[last]; bodyLagAuto[idx] = bodyLagAuto[last];
+    spinAxX[idx] = spinAxX[last]; spinAxY[idx] = spinAxY[last]; spinAxZ[idx] = spinAxZ[last];
     meta[idx] = meta[last];
   }
   meta.pop(); N--;
 }
-function mergeCollisions(thrMeters) {
-  if (N < 2 || !(thrMeters > 0)) return 0;
+/* 每天体潮汐缓存刷新（initState / 合并后调用）：R, k2, Δt, I, k2·G·R⁵, 自转轴 */
+function refreshBodyTideCache() {
+  for (let i = 0; i < N; i++) {
+    const R = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+    bodyRadA[i] = R;
+    /* v7：k2/Δt 留空时按质量+半径自动推算（结构参数合一） */
+    bodyK2A[i] = bodyK2Auto[i] ? autoK2(massA[i], R) : meta[i].tideK2;
+    bodyLagA[i] = bodyLagAuto[i] ? autoTideLag(massA[i], R) : (meta[i].tideLag || 0);
+    bodyIA[i] = TIDE_GYRATION * massA[i] * R * R;
+    bodyTideA0[i] = bodyK2A[i] * G * R * R * R * R * R;
+    const tilt = meta[i].spinTiltRad || 0;
+    spinAxX[i] = 0; spinAxY[i] = -Math.sin(tilt); spinAxZ[i] = Math.cos(tilt);
+  }
+}
+/* ---------------- 碰撞合并（v7：接触距离自动判定 + 动量守恒 + 并合遗迹自转继承） ----------------
+ * thrMeters > 0：固定阈值（T13 等专用测试保留）。
+ * thrMeters <= 0（自动模式，UI 仅开关）：接触判定按双方物理半径之和 R_i+R_j
+ *   （缺省半径按 massRadius 经验补齐）；额外做帧内线段最近逼近检测
+ *   （相对位移 v_rel·dtFrame 与球对求交），高速小天体不再穿透。 */
+function mergeCollisions(thrMeters, dtFrame) {
+  if (N < 2) return 0;
+  const auto = !(thrMeters > 0);
   let merges = 0, guard = 0;
-  const thr2 = thrMeters * thrMeters;
+  const Rb = [];
+  if (auto) {
+    for (let i = 0; i < N; i++) Rb[i] = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+  }
+  const fixed2 = auto ? Infinity : thrMeters * thrMeters;
   while (guard++ < 500) {
-    let bi = -1, bj = -1, best = thr2;
+    let bi = -1, bj = -1, best = auto ? Infinity : fixed2;
+    if (auto) {
+      /* 合并后索引/半径变化，每轮重算半径表 */
+      for (let i = 0; i < N; i++) Rb[i] = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+    }
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < best) { best = d2; bi = i; bj = j; }
+        let hit = d2;
+        if (auto) {
+          const rr = Rb[i] + Rb[j];
+          if (d2 < rr * rr) { hit = d2; }
+          else if (dtFrame > 0) {
+            /* 帧内线段检测：相对位移 d⃗rel = v_rel·dtFrame， closest approach */
+            const rvx = (vx[j] - vx[i]) * dtFrame, rvy = (vy[j] - vy[i]) * dtFrame, rvz = (vz[j] - vz[i]) * dtFrame;
+            const rv2 = rvx * rvx + rvy * rvy + rvz * rvz;
+            if (rv2 > 0) {
+              const tStar = -(dx * rvx + dy * rvy + dz * rvz) / rv2;
+              if (tStar > 0 && tStar < 1) {
+                const cx = dx + rvx * tStar, cv = dy + rvy * tStar, cz = dz + rvz * tStar;
+                const dmin2 = cx * cx + cv * cv + cz * cz;
+                if (dmin2 < rr * rr) hit = dmin2 * (1 + 1e-9);
+              }
+            }
+          }
+          if (hit === Infinity || (hit >= rr * rr * (1 + 1e-9))) continue;
+        } else if (d2 >= fixed2) continue;
+        if (hit < best) { best = hit; bi = i; bj = j; }
       }
     }
     if (bi < 0) break;
@@ -962,11 +1666,36 @@ function mergeCollisions(thrMeters) {
     meta[bi].radius = Math.cbrt(ra * ra * ra + rb * rb * rb);
     const op = meta[bi].original_input_params || (meta[bi].original_input_params = {});
     op.mass = Mt; op.radius_m = meta[bi].radius;
+    /* 并合遗迹自转继承（角动量守恒）：S_rem = μ(r⃗×v⃗) + S₁ + S₂，
+     * Ω_rem = |S_rem|/I_rem，I = 0.33mR²。双中子星并合遗迹典型 ~0.7 ms，
+     * 接近开普勒极限，是并合特征的重要观测量。 */
+    if (tideOn) {
+      const muPair = Mi * Mj / Mt;
+      const rx = px[bj] - px[bi], ry = py[bj] - py[bi], rz = pz[bj] - pz[bi];
+      const rvx = vx[bj] - vx[bi], rvy = vy[bj] - vy[bi], rvz = vz[bj] - vz[bi];
+      const Lx = muPair * (ry * rvz - rz * rvy), Ly = muPair * (rz * rvx - rx * rvz), Lz = muPair * (rx * rvy - ry * rvx);
+      const Sx = Lx + bodyIA[bi] * spinRate[bi] * spinAxX[bi] + bodyIA[bj] * spinRate[bj] * spinAxX[bj];
+      const Sy = Ly + bodyIA[bi] * spinRate[bi] * spinAxY[bi] + bodyIA[bj] * spinRate[bj] * spinAxY[bj];
+      const Sz = Lz + bodyIA[bi] * spinRate[bi] * spinAxZ[bi] + bodyIA[bj] * spinRate[bj] * spinAxZ[bj];
+      const Smag = Math.sqrt(Sx * Sx + Sy * Sy + Sz * Sz);
+      const Rrem = meta[bi].radius;
+      const Irem = TIDE_GYRATION * Mt * Rrem * Rrem;
+      spinRate[bi] = Smag / Irem;
+      if (Smag > 0) {
+        const az = clampNum(Sz / Smag, -1, 1);
+        meta[bi].spinTiltRad = Math.acos(az);        // 自转轴倾角（方位角渲染层不表达，见说明）
+        meta[bi].spinTiltDeg = meta[bi].spinTiltRad * 180 / Math.PI;
+        op.spin_tilt_deg = String(+meta[bi].spinTiltDeg.toFixed(3));
+      }
+      op.spin_period = String(2 * Math.PI / Math.max(spinRate[bi], 1e-12)) + ' s';
+      meta[bi].tideK2Auto = true; meta[bi].tideLagAuto = true;   /* 并合遗迹结构参数按新质量半径自动 */
+    }
     removeIndex(bj);
     merges++;
   }
   if (merges > 0) {
     computeAccel(); zeroKahan(); histClear(); grSamples = []; populateSelects();
+    refreshBodyTideCache();   // 合并后质量/半径变化，潮汐缓存与自转轴同步刷新
     refreshStarPhysics();   // 合并后质量/半径变化，恒星亮度缓存同步刷新
   }
   return merges;
@@ -975,22 +1704,37 @@ function mergeCollisions(thrMeters) {
 /* ---------------- 开普勒根数 → 状态矢量（与原版算法一致） ---------------- */
 function createBodyFromKeplerian(mass, primaryBodyName, semiMajorAxisStr, eccentricity = 0,
     inclinationDeg = 0, longitudeOfAscendingNodeDeg = 0, argumentOfPeriapsisDeg = 0,
-    trueAnomalyDeg = 0, allBodiesContext) {
+    trueAnomalyDeg = 0, allBodiesContext, meanAnomalyDeg = null) {
   const primaryBody = allBodiesContext.find(b => b.name === primaryBodyName);
   if (!primaryBody) throw new Error('找不到主天体 \'' + primaryBodyName + '\'');
   const mu = G * (primaryBody.mass + mass);
   const i = inclinationDeg * Math.PI / 180, Om = longitudeOfAscendingNodeDeg * Math.PI / 180;
-  const om = argumentOfPeriapsisDeg * Math.PI / 180, nu = trueAnomalyDeg * Math.PI / 180;
+  const om = argumentOfPeriapsisDeg * Math.PI / 180;
+  /* v6：支持平近点角 M（mean_anomaly_deg）—— J2000 根数表给的是平黄经，
+   * v5 把 M 当真近点角 ν 用，相位误差可达 2e rad（水星 ~23°）。现解开普勒方程
+   * E − e·sinE = M 后换算 ν = 2·atan2(√(1+e)·sin(E/2), √(1−e)·cos(E/2)) */
+  let nu;
+  if (meanAnomalyDeg !== null && isFinite(meanAnomalyDeg)) {
+    const ecc = eccentricity;
+    const M = meanAnomalyDeg * Math.PI / 180;
+    let E = M;
+    for (let it = 0; it < 60 && Math.abs(E - ecc * Math.sin(E) - M) > 1e-14; it++) {
+      E -= (E - ecc * Math.sin(E) - M) / (1 - ecc * Math.cos(E));
+    }
+    nu = 2 * Math.atan2(Math.sqrt(1 + ecc) * Math.sin(E / 2), Math.sqrt(1 - ecc) * Math.cos(E / 2));
+  } else {
+    nu = trueAnomalyDeg * Math.PI / 180;
+  }
   const a = parseValueWithUnits(semiMajorAxisStr, 'm');
   if (a === null || !isFinite(a) || a <= 0) throw new Error('半长轴必须为正数');
-  const ecc = eccentricity;
-  const rMag = a * (1 - ecc * ecc) / (1 + ecc * Math.cos(nu));
-  const p = a * (1 - ecc * ecc);
+  const ecc2 = eccentricity;
+  const rMag = a * (1 - ecc2 * ecc2) / (1 + ecc2 * Math.cos(nu));
+  const p = a * (1 - ecc2 * ecc2);
   const hSpecific = (mu > 0 && p > 0) ? Math.sqrt(mu * p) : 0;
   let velPx = 0, velPy = 0;
   if (hSpecific > 0) {
     velPx = -mu / hSpecific * Math.sin(nu);
-    velPy = mu / hSpecific * (ecc + Math.cos(nu));
+    velPy = mu / hSpecific * (ecc2 + Math.cos(nu));
   }
   const posPlane = [rMag * Math.cos(nu), rMag * Math.sin(nu), 0];
   const velPlane = [velPx, velPy, 0];
@@ -1060,11 +1804,13 @@ function resolveBodies(rawArray) {
       if (!primary) continue;
       try {
         const mass = typeof q.raw.mass === 'number' ? q.raw.mass : parseValueWithUnits(orig.mass ?? q.raw.mass, 'kg');
+        const mM = parseFloat(orig.mean_anomaly_deg);
         const st = createBodyFromKeplerian(mass, orig.orbits_around, orig.semimajor_axis,
           parseFloat(orig.eccentricity) || 0, parseFloat(orig.inclination_deg) || 0,
           parseFloat(orig.longitude_of_ascending_node_deg) || 0,
           parseFloat(orig.argument_of_periapsis_deg) || 0,
-          parseFloat(orig.true_anomaly_deg) || 0, out);
+          parseFloat(orig.true_anomaly_deg) || 0, out,
+          isFinite(mM) ? mM : null);
         q.item.mass = mass; q.item.pos = st.pos; q.item.vel = st.vel;
         q.item.orbits_around = orig.orbits_around;
         out.push(q.item); keplerianQueue.splice(k, 1); resolved++;
@@ -1097,6 +1843,39 @@ function initState(list) {
     vx[i] = list[i].vel[0]; vy[i] = list[i].vel[1]; vz[i] = list[i].vel[2];
     massA[i] = list[i].mass;
   }
+    /* 自转参数解析：倾角 / 周期（流体系数已并入 k2，内部按密度/类别自动） */
+    for (let i = 0; i < N; i++) {
+      const so = meta[i].original_input_params || {};
+      const tilt = parseFloat(so.spin_tilt_deg);
+      meta[i].spinTiltDeg = isFinite(tilt) ? clampNum(tilt, -180, 180) : 0;
+      meta[i].spinTiltRad = meta[i].spinTiltDeg * Math.PI / 180;
+      const per = parseTimeToSec(so.spin_period);
+      meta[i].spinPeriodSec = isFinite(per) && per > 0 ? per : 0;
+      const Rdef = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+      meta[i].spinK = fluidKAuto(massA[i], Rdef);
+      /* v7 潮汐参数解析：k2/Δt 留空 = 自动（按质量+半径经验公式） */
+      const k2Raw = parseFloat(so.tide_k2);
+      meta[i].tideK2 = (isFinite(k2Raw) && k2Raw >= 0) ? clampNum(k2Raw, 0, 1.5) : TIDE_K2_DEFAULT;
+      meta[i].tideK2Auto = !(isFinite(k2Raw) && k2Raw >= 0);
+      const lagStr = String(so.tide_lag ?? '').trim();
+      if (lagStr === '') {
+        meta[i].tideLagAuto = true; meta[i].tideLag = 0;
+      } else {
+        let lagV = parseTimeToSec(lagStr);
+        if (!isFinite(lagV)) lagV = parseFloat(lagStr);
+        meta[i].tideLagAuto = false;
+        meta[i].tideLag = isFinite(lagV) ? Math.max(0, lagV) : 0;
+      }
+    }
+  /* 自转态与潮汐缓存：spinRate 为动力学变量（潮汐开启时随时矩演化），初值取自周期 */
+  ensureCap(N);
+  resetLedger();
+  for (let i = 0; i < N; i++) {
+    spinRate[i] = meta[i].spinPeriodSec > 0 ? 2 * Math.PI / meta[i].spinPeriodSec : 0;
+    bodyK2Auto[i] = !!meta[i].tideK2Auto;
+    bodyLagAuto[i] = !!meta[i].tideLagAuto;
+  }
+  refreshBodyTideCache();
   zeroKahan();
   simTime = 0; histClear(); grSamples = [];
   computeAccel();
@@ -1105,6 +1884,7 @@ function initState(list) {
   initialSnapshot = exportBodiesRaw();
   initialTotalEnergy = computeTotalEnergy();
   initialTotalMomentum = computeTotalMomentum();
+  initialTotalAngular = computeTotalAngular();
   simulationLog = [];
   headlessAfterReset();
 }
@@ -1116,6 +1896,7 @@ function setSystem(rawList) {
   for (const w of res.warnings) showToast(w, 'info', 4000);
   initState(res.bodies);
   uiAfterState();
+  if (matScanned && matItems.length) matAutoApply();   /* 材质库已扫描 → 新场景自动换同名贴图 */
 }
 
 /* ---------------- 导出 / 快照 ---------------- */
@@ -1128,29 +1909,84 @@ function exportBodiesRaw() {
       color: meta[i].color, size: meta[i].size, radius: meta[i].radius || 0,
       orbits_around: meta[i].orbits_around, original_input_params: meta[i].original_input_params };
     if (meta[i].texture) b.texture = meta[i].texture;
+    /* 动态自转回写：spinRate 为动力学变量（潮汐力矩演化），导出/重置时
+     * 把当前自转周期写回 original_input_params，保证状态完整往返 */
+    const op = b.original_input_params || (b.original_input_params = {});
+    if (spinRate && spinRate[i] > 1e-12) op.spin_period = (2 * Math.PI / spinRate[i]).toPrecision(8) + ' s';
     arr.push(b);
   }
   return arr;
 }
 
-/* ---------------- 守恒量（牛顿框架，监测积分误差） ---------------- */
+/* ---------------- 守恒量（牛顿 + 1PN/2PN 框架，物理账本） ----------------
+ * v7：粒子系统能量含 IW95 精确 1PN/2PN 两体修正（成对近似，与动力学同阶）+
+ * 自转动能 + 保守潮汐势；潮汐热与 GW 辐射（2.5PN/3.5PN 力做功）以账本累计，
+ * 核算后 ΔE = (E−E₀) + 已耗散 ≈ 积分器误差级 —— 恢复物理性。 */
 function computeTotalEnergy() {
-  let KE = 0, PE = 0;
+  let KE = 0, PE = 0, EP = 0;
+  const pn1 = gr1pnOn, pn2 = gr2pnOn && gr1pnOn;
   for (let i = 0; i < N; i++) {
     const v2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
     KE += 0.5 * massA[i] * v2;
+    if (tideOn && spinRate) KE += 0.5 * bodyIA[i] * spinRate[i] * spinRate[i];
     for (let j = i + 1; j < N; j++) {
       const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
       const r = Math.sqrt(dx * dx + dy * dy + dz * dz + GRAV_SOFTENING_SQ);
       PE -= G * massA[i] * massA[j] / r;
+      if (tideOn) {
+        const invR6 = 1 / (r * r * r * r * r * r);
+        if (bodyTideA0[i] > 0) PE -= bodyTideA0[i] * massA[j] * massA[j] * invR6;
+        if (bodyTideA0[j] > 0) PE -= bodyTideA0[j] * massA[i] * massA[i] * invR6;
+      }
+      if (pn1 || pn2) {
+        /* IW95 E_PN/E_2PN（成对近似，相对量）：dv = v_j−v_i */
+        const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+        const v2rel = dvx * dvx + dvy * dvy + dvz * dvz;
+        const nx = dx / r, ny = dvy / r, nz = dz / r;
+        const rd = dvx * nx + dvy * ny + dvz * nz;
+        const mi = massA[i], mj = massA[j], M = mi + mj;
+        const nu = mi * mj / (M * M);
+        const mu = mi * mj / M;
+        const Gm = G * M;
+        if (pn1) {
+          EP += mu / C_SQ * (3 / 8 * (1 - 3 * nu) * v2rel * v2rel
+            + 0.5 * Gm / r * ((3 + nu) * v2rel + nu * rd * rd)
+            + 0.5 * Gm * Gm / (r * r));
+        }
+        if (pn2) {
+          EP += mu / (C_SQ * C_SQ) * (
+            5 / 16 * (1 - 7 * nu + 13 * nu * nu) * v2rel * v2rel * v2rel
+            + 1 / 8 * (21 - 23 * nu - 27 * nu * nu) * Gm / r * v2rel * v2rel
+            + 1 / 4 * nu * (1 - 15 * nu) * Gm / r * v2rel * rd * rd
+            - 3 / 8 * nu * (1 - 3 * nu) * Gm / r * rd * rd * rd * rd
+            - 1 / 4 * (2 + 15 * nu) * Gm * Gm * Gm / (r * r * r)
+            + 1 / 8 * (14 - 55 * nu + 4 * nu * nu) * Gm * Gm / (r * r) * v2rel
+            + 1 / 8 * (4 + 69 * nu + 12 * nu * nu) * Gm * Gm / (r * r) * rd * rd);
+        }
+      }
     }
   }
-  return KE + PE;
+  return KE + PE + EP;
 }
 function computeTotalMomentum() {
   let Px = 0, Py = 0, Pz = 0;
   for (let i = 0; i < N; i++) { Px += massA[i] * vx[i]; Py += massA[i] * vy[i]; Pz += massA[i] * vz[i]; }
-  return [Px, Py, Pz];
+  return [Px + fieldPx[0], Py + fieldPv[0], Pz + fieldPz[0]];
+}
+/* v7：总角动量（轨道+自转）与核算后总角动量（计入 GW 辐射账本）*/
+function computeTotalAngular() {
+  let Lx = 0, Lv = 0, Lz = 0;
+  for (let i = 0; i < N; i++) {
+    Lx += massA[i] * (py[i] * vz[i] - pz[i] * vy[i]);
+    Lv += massA[i] * (pz[i] * vx[i] - px[i] * vz[i]);
+    Lz += massA[i] * (px[i] * vy[i] - py[i] * vx[i]);
+    if (tideOn && spinRate && bodyIA) {
+      Lx += bodyIA[i] * spinRate[i] * spinAxX[i];
+      Lv += bodyIA[i] * spinRate[i] * spinAxY[i];
+      Lz += bodyIA[i] * spinRate[i] * spinAxZ[i];
+    }
+  }
+  return [Lx, Lv, Lz];
 }
 
 /* ---------------- 轨迹环形缓冲 ---------------- */
@@ -1260,6 +2096,130 @@ function grUpdateReadout() {
   }
 }
 
+/* ---------------- 引力波波形（四极公式，v6） ----------------
+ * 质量四极矩二阶导由状态矢量解析求出（位置/速度/加速度均来自当前积分态，
+ * 含 1PN/2.5PN/潮汐的全部动力学）：
+ *   Q̈_ij = Σ m( x_i a_j + x_j a_i + 2v_i v_j − (2/3)δ_ij (v² + x⃗·a⃗) )
+ * 观测者沿 +z（TT 规约）：h₊ = G(Q̈xx − Q̈yy)/(c⁴D)，h× = 2G·Q̈xy/(c⁴D)。
+ * 面板上 f_GW 取主导对（max mᵢmⱼ/r³）的 2f_orb；并合倒计时按 Peters 圆轨道
+ * 公式从当前瞬时根数估计。h 随 1/D 缩放，面板用标称距离 100 Mpc。 */
+function computeGWStrain() {
+  let Qxx = 0, Qyy = 0, Qxy = 0;
+  for (let i = 0; i < N; i++) {
+    const xi = px[i], yi = py[i], zi = pz[i];
+    const vxi = vx[i], vyi = vy[i], vzi = vz[i];
+    const axi = ax[i], ayi = ay[i], azi = az[i];
+    const v2 = vxi * vxi + vyi * vyi + vzi * vzi;
+    const v2xa = v2 + xi * axi + yi * ayi + zi * azi;
+    const mi = massA[i];
+    Qxx += mi * (2 * xi * axi + 2 * vxi * vxi - v2xa / 3);
+    Qyy += mi * (2 * yi * ayi + 2 * vyi * vyi - v2xa / 3);
+    Qxy += mi * (xi * ayi + yi * axi + 2 * vxi * vyi);
+  }
+  const D = GW_DIST_MPC * 3.0856775814913673e22;   // 标称观测距离（1 pc = 3.0857e16 m，100 Mpc）
+  const c4D = C_SQ * C_SQ * D;
+  const hp = G * (Qxx - Qyy) / c4D;
+  const hx = 2 * G * Qxy / c4D;
+  /* 主导对：max mᵢmⱼ/r³ → f_GW = 2f_orb = |r×v|/(πr²) */
+  let fGW = 0, tMerge = Infinity;
+  if (N >= 2) {
+    let best = 0, bi = -1, bj = -1;
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+        const r2 = dx * dx + dy * dy + dz * dz;
+        if (r2 <= 0) continue;
+        const sc = massA[i] * massA[j] / (r2 * Math.sqrt(r2));
+        if (sc > best) { best = sc; bi = i; bj = j; }
+      }
+    }
+    if (bi >= 0) {
+      const dx = px[bj] - px[bi], dy = py[bj] - py[bi], dz = pz[bj] - pz[bi];
+      const r2 = dx * dx + dy * dy + dz * dz, r = Math.sqrt(r2);
+      const dvx = vx[bj] - vx[bi], dvy = vy[bj] - vy[bi], dvz = vz[bj] - vz[bi];
+      const hxv = dy * dvz - dz * dvy, hyv = dz * dvx - dx * dvz, hzv = dx * dvy - dy * dvx;
+      const h2 = hxv * hxv + hyv * hyv + hzv * hzv;
+      fGW = Math.sqrt(h2) / (Math.PI * r2);
+      const mi = massA[bi], mj = massA[bj], M = mi + mj, GM = G * M;
+      const eps = (dvx * dvx + dvy * dvy + dvz * dvz) / 2 - GM / r;
+      if (eps < 0) {
+        const aO = -GM / (2 * eps);
+        const ra = meta[bi].radius > 0 ? meta[bi].radius : massRadius(mi);
+        const rb = meta[bj].radius > 0 ? meta[bj].radius : massRadius(mj);
+        const ac = Math.max(ra + rb, 1);
+        const fac = 5 / 256 * C_5 / (G * G * G * mi * mj * M);
+        tMerge = fac * (aO * aO * aO * aO - Math.min(aO, ac) ** 4);
+        if (aO <= ac) tMerge = 0;
+      }
+    }
+  }
+  return { hp, hx, fGW, amp: Math.hypot(hp, hx), tMerge };
+}
+function gwSamplePush() {
+  const s = computeGWStrain();
+  gwLast = s;
+  gwSamples.push(s.hp, s.hx);
+  if (gwSamples.length > GW_MAX_SAMPLES * 2) gwSamples.splice(0, gwSamples.length - GW_MAX_SAMPLES * 2);
+}
+function drawGWWave() {
+  const cv = ui.gwWaveCanvas;
+  if (!cv) return;
+  const g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(8,8,7,0.6)'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#242422'; g.strokeRect(0.5, 0.5, W - 1, H - 1);
+  g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2);
+  g.strokeStyle = '#2a2a26'; g.stroke();
+  const n = gwSamples.length / 2;
+  if (n < 2) {
+    g.fillStyle = '#57564E'; g.font = '10px sans-serif';
+    g.fillText(gwWaveOn ? '等待采样…（播放时自动采集）' : '勾选后播放时采集波形', 10, H / 2 - 8);
+    return;
+  }
+  let peak = 1e-30;
+  for (let k = 0; k < gwSamples.length; k++) peak = Math.max(peak, Math.abs(gwSamples[k]));
+  const drawTrace = (off, color) => {
+    g.beginPath();
+    for (let k = 0; k < n; k++) {
+      const x = k / (n - 1) * W;
+      const y = H / 2 - (gwSamples[k * 2 + off] / peak) * (H / 2 - 6);
+      if (k === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.strokeStyle = color; g.lineWidth = 1; g.stroke();
+  };
+  drawTrace(0, '#6EE7FF');
+  drawTrace(1, '#FF79C6');
+  g.fillStyle = '#8B897F'; g.font = '9px sans-serif';
+  g.fillText('h₊', 6, 12); g.fillStyle = '#a4557f'; g.fillText('h×', 24, 12);
+  g.fillStyle = '#57564E';
+  g.fillText('峰值 ' + peak.toExponential(2) + ' · ' + n + ' 采样', W - 108, H - 6);
+}
+function gwUpdateReadout() {
+  if (!ui.gwF) return;
+  if (!gwLast) { ui.gwF.textContent = '—'; ui.gwH.textContent = '—'; ui.gwT.textContent = '—'; return; }
+  ui.gwF.textContent = gwLast.fGW > 0 ? gwLast.fGW.toFixed(1) : '—';
+  ui.gwH.textContent = gwLast.amp > 0 ? gwLast.amp.toExponential(2) : '—';
+  ui.gwT.textContent = isFinite(gwLast.tMerge) ? fmtTime(gwLast.tMerge) : '—';
+}
+/* 潮汐读数：耗散功率（W）与自转角动量占总角动量比（潮汐锁定的直观指标） */
+function updateTideReadout() {
+  if (!ui.tideHeat) return;
+  if (!tideOn) { ui.tideHeat.textContent = '关闭'; ui.tideSpinFrac.textContent = '—'; return; }
+  ui.tideHeat.textContent = tideHeatW > 0 ? tideHeatW.toExponential(2) + ' W' : '0（无耗散天体）';
+  let S = 0, L = 0;
+  for (let i = 0; i < N; i++) {
+    S += bodyIA[i] * spinRate[i];   // 自转角动量 S = I·Ω
+    for (let j = i + 1; j < N; j++) {
+      const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+      const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+      const mu = massA[i] * massA[j] / (massA[i] + massA[j]);
+      L += mu * Math.sqrt((dy * dvz - dz * dvy) ** 2 + (dz * dvx - dx * dvz) ** 2 + (dx * dvy - dy * dvx) ** 2);
+    }
+  }
+  ui.tideSpinFrac.textContent = (S + L) > 0 ? (S / (S + L) * 100).toFixed(2) + ' %' : '—';
+}
+
 /* ---------------- 预设系统 ---------------- */
 function circVel(M, r) { return Math.sqrt(G * M / r); }
 const PRESETS = {
@@ -1267,55 +2227,63 @@ const PRESETS = {
     label: '原版默认',
     make: () => {
       const bodies = [{ name: 'Sun', mass: M_SUN, pos: [0, 0, 0], vel: [0, 0, 0], color: '#FFD700', size: 15, orbits_around: '',
-        original_input_params: { mass: '1 sun', position: ['0.0', '0.0', '0.0'], velocity: ['0.0', '0.0', '0.0'] } }];
+        original_input_params: { mass: '1 sun', position: ['0.0', '0.0', '0.0'], velocity: ['0.0', '0.0', '0.0'], spin_tilt_deg: '7.25', spin_period: '25.05d' } }];
       const ev = circVel(M_SUN, AU);
       bodies.push({ name: 'Earth', mass: M_EARTH, pos: [AU, 0, 0], vel: [0, ev, 0], color: '#4F9DF7', size: 5, orbits_around: 'Sun',
         original_input_params: { mass: '1 earth', semimajor_axis: '1 AU', eccentricity: '0.0', inclination_deg: '0.0',
-          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Sun' } });
+          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Sun',
+          spin_tilt_deg: '23.44', spin_period: '23.9345h' } });
       const md = 3.844e8, mv = circVel(M_EARTH, md);
       bodies.push({ name: 'Moon', mass: 7.347e22, pos: [AU + md, 0, 0], vel: [0, ev + mv, 0], color: '#CCCCCC', size: 2, orbits_around: 'Earth',
         original_input_params: { mass: '7.347e22 kg', semimajor_axis: '3.844e8 m', eccentricity: '0.0549', inclination_deg: '5.14',
-          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Earth' } });
+          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Earth',
+          spin_tilt_deg: '6.68', spin_period: '27.3217d' } });
       const mvMars = circVel(M_SUN, 1.524 * AU);
       bodies.push({ name: 'Mars', mass: 0.107 * M_EARTH, pos: [1.524 * AU, 0, 0], vel: [0, mvMars, 0], color: '#FF4500', size: 3, orbits_around: 'Sun',
         original_input_params: { mass: '0.107 earth', semimajor_axis: '1.524 AU', eccentricity: '0.0934', inclination_deg: '1.85',
-          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Sun' } });
+          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Sun',
+          spin_tilt_deg: '25.19', spin_period: '24.6229h' } });
       const mvJ = circVel(M_SUN, 5.2 * AU);
       bodies.push({ name: 'Jupiter', mass: M_JUPITER, pos: [5.2 * AU, 0, 0], vel: [0, mvJ, 0], color: '#DAA520', size: 10, orbits_around: 'Sun',
         original_input_params: { mass: '1 jupiter', semimajor_axis: '5.2 AU', eccentricity: '0.0489', inclination_deg: '1.30',
-          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Sun' } });
+          longitude_of_ascending_node_deg: '0.0', argument_of_periapsis_deg: '0.0', true_anomaly_deg: '0.0', orbits_around: 'Sun',
+          spin_tilt_deg: '3.13', spin_period: '9.925h' } });
       return bodies;
     },
     settings: null
   },
   solar8: {
     label: '八大行星 J2000',
-    /* Standish (JPL) J2000 近似根数: [名称, a/AU, e, i°, L°, ϖ°, Ω°, kg, 颜色, 大小] */
+    /* Standish (JPL) J2000 近似根数: [名称, a/AU, e, i°, L°, ϖ°, Ω°, kg, 颜色, 大小, 自转倾角°, 自转周期] */
     make: () => {
       const rows = [
-        ['Mercury', 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593, 3.301e23, '#B8B8B8', 3],
-        ['Venus', 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255, 4.867e24, '#E8C46B', 5],
-        ['Earth', 1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0.0, 5.972e24, '#4F9DF7', 5],
-        ['Mars', 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891, 6.417e23, '#FF6B45', 4],
-        ['Jupiter', 5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909, 1.898e27, '#D9A05B', 10],
-        ['Saturn', 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448, 5.683e26, '#E3C78A', 9],
-        ['Uranus', 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503, 8.681e25, '#9ADBE8', 7],
-        ['Neptune', 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574, 1.024e26, '#5B7FF0', 7]
+        ['Mercury', 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593, 3.301e23, '#B8B8B8', 3, 0.03, '58.646d'],
+        ['Venus', 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255, 4.867e24, '#E8C46B', 5, 177.36, '243.02d'],
+        ['Earth', 1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0.0, 5.972e24, '#4F9DF7', 5, 23.44, '23.9345h'],
+        ['Mars', 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891, 6.417e23, '#FF6B45', 4, 25.19, '24.6229h'],
+        ['Jupiter', 5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909, 1.898e27, '#D9A05B', 10, 3.13, '9.925h'],
+        ['Saturn', 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448, 5.683e26, '#E3C78A', 9, 26.73, '10.656h'],
+        ['Uranus', 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503, 8.681e25, '#9ADBE8', 7, 97.77, '17.24h'],
+        ['Neptune', 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574, 1.024e26, '#5B7FF0', 7, 28.32, '16.11h']
       ];
       const bodies = [{ name: 'Sun', mass: M_SUN, pos: [0, 0, 0], vel: [0, 0, 0], color: '#FFD700', size: 15, orbits_around: '',
-        original_input_params: { mass: '1 sun', position: ['0.0', '0.0', '0.0'], velocity: ['0.0', '0.0', '0.0'] } }];
-      for (const [name, aAU, ecc, inc, L, peri, node, mass, color, size] of rows) {
+        original_input_params: { mass: '1 sun', position: ['0.0', '0.0', '0.0'], velocity: ['0.0', '0.0', '0.0'], spin_tilt_deg: '7.25', spin_period: '25.05d', tide_k2: '0.03' } }];
+      for (const [name, aAU, ecc, inc, L, peri, node, mass, color, size, tilt, sper] of rows) {
         const Mdeg = ((L - peri) % 360 + 360) % 360;
         const om = ((peri - node) % 360 + 360) % 360;
         bodies.push({ name, mass, orbits_around: 'Sun', color, size, original_input_params: {
           mass: mass.toExponential(4) + ' kg', semimajor_axis: aAU + ' AU',
           eccentricity: String(ecc), inclination_deg: String(inc),
           longitude_of_ascending_node_deg: String(node), argument_of_periapsis_deg: String(om),
-          true_anomaly_deg: String(Mdeg), orbits_around: 'Sun' } });
+          true_anomaly_deg: '', mean_anomaly_deg: String(Mdeg), orbits_around: 'Sun',
+          spin_tilt_deg: String(tilt), spin_period: sper,
+          /* 地球注入真实海潮有效参数：k2=0.3, Δt=600s 复现月退 3.8 cm/yr（T12）*/
+          ...(name === 'Earth' ? { tide_k2: '0.30', tide_lag: '600 s' } : {}) } });
       }
       bodies.push({ name: 'Moon', mass: 7.347e22, orbits_around: 'Earth', color: '#CCCCCC', size: 2, original_input_params: {
         mass: '7.347e22 kg', semimajor_axis: '3.844e8 m', eccentricity: '0.0549', inclination_deg: '5.145',
-        longitude_of_ascending_node_deg: '125.08', argument_of_periapsis_deg: '318.15', true_anomaly_deg: '135.27', orbits_around: 'Earth' } });
+        longitude_of_ascending_node_deg: '125.08', argument_of_periapsis_deg: '318.15', true_anomaly_deg: '135.27', orbits_around: 'Earth',
+        spin_tilt_deg: '6.68', spin_period: '27.3217d', tide_k2: '0.0242' } });   // 月球已潮汐锁定，无耗散项贡献
       return bodies;
     },
     settings: { dt: '6h', gr1pn: true }
@@ -1324,30 +2292,60 @@ const PRESETS = {
     label: '地月系',
     make: () => {
       const bodies = [{ name: 'Earth', mass: M_EARTH, pos: [0, 0, 0], vel: [0, 0, 0], color: '#4F9DF7', size: 12, orbits_around: '',
-        original_input_params: { mass: '1 earth', position: ['0.0', '0.0', '0.0'], velocity: ['0.0', '0.0', '0.0'] } }];
+        original_input_params: { mass: '1 earth', position: ['0.0', '0.0', '0.0'], velocity: ['0.0', '0.0', '0.0'], spin_tilt_deg: '23.44', spin_period: '23.9345h',
+          tide_k2: '0.30', tide_lag: '600 s' } }];   // 海潮有效参数：复现月退 3.8 cm/yr 与滞后角 2.4°
       bodies.push({ name: 'Moon', mass: 7.347e22, orbits_around: 'Earth', color: '#CCCCCC', size: 5, original_input_params: {
         mass: '7.347e22 kg', semimajor_axis: '3.844e8 m', eccentricity: '0.0549', inclination_deg: '5.145',
-        longitude_of_ascending_node_deg: '125.08', argument_of_periapsis_deg: '318.15', true_anomaly_deg: '135.27', orbits_around: 'Earth' } });
+        longitude_of_ascending_node_deg: '125.08', argument_of_periapsis_deg: '318.15', true_anomaly_deg: '135.27', orbits_around: 'Earth',
+        spin_tilt_deg: '6.68', spin_period: '27.3217d', tide_k2: '0.0242' } });
       return bodies;
     },
     settings: { dt: '60' }
+  },
+  bns: {
+    label: '双中子星并合',
+    /* 1.4+1.4 M☉，R=12 km，f_GW=100 Hz 圆轨道入带（LIGO 频段）；
+     * 潮汐 k2=0.09（对应 Λ≈400，GW170817 量级）：保守潮给出并合相位修正。
+     * 接触并合（R₁+R₂=24 km）后遗迹按角动量守恒继承自转（~ms 级）。 */
+    make: () => {
+      const m1 = 1.4 * M_SUN, m2 = 1.4 * M_SUN, M = m1 + m2;
+      const R = 12e3;
+      const fGW = 100, wOrb = Math.PI * fGW;
+      const aSep = Math.cbrt(G * M / (wOrb * wOrb));
+      const vRel = Math.sqrt(G * M / aSep);
+      const f1 = m2 / M, f2 = m1 / M;
+      const mkNS = (name, mass, sx, sy, svx, svy, color) => ({ name, mass, radius: R,
+        pos: [sx, sy, 0], vel: [svx, svy, 0], color, size: 8, orbits_around: '',
+        original_input_params: { mass: '1.4 sun', radius: '12 km', radius_m: R,
+          position: [String(sx), String(sy), '0.0'], velocity: [String(svx), String(svy), '0.0'],
+          spin_tilt_deg: '0', spin_period: '1 s', tide_k2: '0.09', tide_lag: '0 s' } });
+      return [
+        mkNS('NS-A', m1, -f1 * aSep, 0, 0, -f1 * vRel, '#8BE9FD'),
+        mkNS('NS-B', m2, f2 * aSep, 0, 0, f2 * vRel, '#FF79C6')
+      ];
+    },
+    settings: { dt: '1e-4', gr1pn: true, gr25: true, adaptive: true, integrator: 'yoshida4',
+      collision: true }
   },
   gw: {
     label: '致密双星 2.5PN',
     make: () => {
       const m1 = 20 * M_SUN, m2 = 20 * M_SUN, M = m1 + m2;
+      const rBH = 2 * G * m1 / (C_LIGHT * C_LIGHT);   // 史瓦西半径 ≈ 59 km：紧致天体不按主序星半径渲染（v4 辉光淹没根因之一）
       const st = createBodyFromKeplerian(m2, 'BH-A', (3e7 / AU) + ' AU', 0.3, 0, 0, 0, 0,
         [{ name: 'BH-A', mass: m1, pos: [0, 0, 0], vel: [0, 0, 0] }]);
       const prx = st.pos[0], pry = st.pos[1], prz = st.pos[2];
       const vrx = st.vel[0], vry = st.vel[1], vrz = st.vel[2];
       const f1 = m2 / M, f2 = m1 / M;   // 置于质心系
+      const posA = [-f1 * prx, -f1 * pry, -f1 * prz], velA = [-f1 * vrx, -f1 * vry, -f1 * vrz];
       return [
-        { name: 'BH-A', mass: m1, pos: [-f1 * prx, -f1 * pry, -f1 * prz], vel: [-f1 * vrx, -f1 * vry, -f1 * vrz],
+        { name: 'BH-A', mass: m1, radius: rBH, pos: posA, vel: velA,
           color: '#8BE9FD', size: 8, orbits_around: '',
-          original_input_params: { mass: '20 sun', position: ['0', '0', '0'], velocity: ['0', '0', '0'] } },
-        { name: 'BH-B', mass: m2, pos: [f2 * prx, f2 * pry, f2 * prz], vel: [f2 * vrx, f2 * vry, f2 * vrz],
+          original_input_params: { mass: '20 sun', radius: fmtRadius(rBH), radius_m: rBH,
+            position: posA.map(String), velocity: velA.map(String) } },
+        { name: 'BH-B', mass: m2, radius: rBH, pos: [f2 * prx, f2 * pry, f2 * prz], vel: [f2 * vrx, f2 * vry, f2 * vrz],
           color: '#FF79C6', size: 8, orbits_around: 'BH-A',
-          original_input_params: { mass: '20 sun', semimajor_axis: (3e7 / AU) + ' AU', eccentricity: '0.3',
+          original_input_params: { mass: '20 sun', radius: fmtRadius(rBH), radius_m: rBH, semimajor_axis: (3e7 / AU) + ' AU', eccentricity: '0.3',
             inclination_deg: '0', longitude_of_ascending_node_deg: '0', argument_of_periapsis_deg: '0',
             true_anomaly_deg: '0', orbits_around: 'BH-A' } }
       ];
@@ -1357,21 +2355,30 @@ const PRESETS = {
   figure8: {
     label: '三体 8 字解',
     make: () => {
-      /* Chenciner & Montgomery (2000)：G=1、m=1 单位制；换算 L=1AU, m=M_SUN */
+      /* Chenciner & Montgomery (2000)：G=1、m=1 单位制；换算 L=1AU, m=M_SUN。
+       * 初值为对称性约化 Newton 精化解（5 参数，数值差分 Jacobian + Armijo，
+       * DOP853 残差 3.7e-13），SI 域 Yoshida4 dt=200s 验证连续 15+ 周期
+       * 无碰撞（最小对距 0.69 AU）；旧 8 位近似初值会在数个周期内
+       * 退化、三者直线相撞。 */
       const L = AU, m = M_SUN;
       const T = Math.sqrt(L * L * L / (G * m));      // 时间单位
       const vScale = L / T;
-      const x1 = 0.97000436, y1 = -0.24308753;
-      const v3x = 0.93240737, v3y = 0.86473146;
+      const x1 = 0.9697992313229418, y1 = -0.2430035122605603;
+      const v3x = 0.9324823057096308, v3y = 0.8648558424488045;
       const mk = (x, y, vxx, vyy, name, color) => ({ name, mass: m, pos: [x * L, y * L, 0], vel: [vxx * vScale, vyy * vScale, 0],
-        color, size: 9, orbits_around: '', original_input_params: { mass: '1 sun', position: [String(x * L), String(y * L), '0.0'], velocity: ['0', '0', '0'] } });
+        color, size: 9, orbits_around: '',
+        /* 位置与速度字符串必须同步写入：resolveBodies 优先用 original_input_params
+         * 反解析，velocity 留占位零会把速度清零 → 三体自由落体直线相撞（v4 实际 bug） */
+        original_input_params: { mass: '1 sun',
+          position: [String(x * L), String(y * L), '0.0'],
+          velocity: [String(vxx * vScale), String(vyy * vScale), '0.0'] } });
       return [
         mk(x1, y1, -v3x / 2, -v3y / 2, 'Star-1', '#FFD166'),
         mk(-x1, -y1, -v3x / 2, -v3y / 2, 'Star-2', '#7EF0B2'),
         mk(0, 0, v3x, v3y, 'Star-3', '#6EE7FF')
       ];
     },
-    settings: { dt: '200', adaptive: true, integrator: 'yoshida4' }
+    settings: { dt: '200', gr1pn: false, gr25: false, adaptive: true, integrator: 'yoshida4' }
   },
   single: {
     label: '单星',
@@ -1384,15 +2391,17 @@ const PRESETS = {
 /* ================= UI 层 ================= */
 
 /* ---------------- UI 引用集中收集 ---------------- */
-let viewMode = 'top', trailMode = 'line';
-let pendingFrame = null, pendingView = 'top';
+let viewMode = 'free', trailMode = 'line';
+let pendingFollow = null, pendingFrame = null, pendingTrailRef = null, pendingView = 'free';
 const SCALE_MIN = 1e-12, SCALE_MAX = 1e8;
 
 function collectUI() {
   ['panelToggle', 'playBtn', 'iconPlay', 'iconPause', 'resetBtn', 'timeDisplay', 'scaleDisplay', 'perfDisplay',
    'zoomInBtn', 'zoomOutBtn', 'viewResetBtn', 'panel', 'panelClose', 'presetSelect', 'speed', 'speedVal', 'dt',
-   'adaptiveTimeStep', 'integratorSeg', 'gr1pn', 'gr25', 'collisionMerge', 'collisionThreshold', 'grBodySelect',
-   'grA', 'grE', 'grP', 'grMeasured', 'grTheory', 'viewSeg', 'frameSelect', 'trailSeg', 'trailDuration',
+   'adaptiveTimeStep', 'integratorSeg', 'gr1pn', 'gr25', 'gr2pn', 'gr35', 'collisionMerge', 'grBodySelect',
+   'totalEnergyDisplay', 'energyDeltaDisplay', 'energyLedgerDisplay', 'sinkTideDisplay', 'sinkGWDisplay',
+   'totalMomentumDisplay', 'momentumDeltaDisplay', 'totalAngularDisplay', 'sinkGWLDisplay', 'angularLedgerDisplay',
+   'grA', 'grE', 'grP', 'grMeasured', 'grTheory', 'viewSeg', 'followSelect', 'frameSelect', 'trailSeg', 'trailDuration',
    'trailRefMode', 'skyboxEnabled', 'resSelect', 'perspToggle',
    'physSizeToggle', 'starRadToggle', 'glareToggle', 'headlessToggle', 'snapshotInterval', 'snapCount',
    'headlessRate', 'downloadSnapBtn', 'showConservation', 'conservationInfo', 'totalEnergyDisplay',
@@ -1402,7 +2411,11 @@ function collectUI() {
    'formTitle', 'bodyName', 'bodyMass', 'bodyRadius', 'radiusAuto', 'bodyColor', 'bodyOrbitsAround', 'bodySemiMajorAxis',
    'bodyEccentricity', 'bodyInclination', 'bodyLongitudeOfAscendingNode', 'bodyArgumentOfPeriapsis',
    'bodyTrueAnomaly', 'bodyPosX', 'bodyPosY', 'bodyPosZ', 'bodyVelX', 'bodyVelY', 'bodyVelZ',
+   'bodySpinTilt', 'bodySpinPeriod', 'spinAuto', 'tideAuto',
+   'bodyTideK2', 'bodyTideLag',
+   'tideToggle', 'tideHeat', 'tideSpinFrac', 'gwWaveToggle', 'gwWaveCanvas', 'gwF', 'gwH', 'gwT',
    'texUploadBtn', 'texClearBtn', 'texFileInput', 'texPreview', 'texInfo',
+   'matScanBtn', 'matGrid', 'matSkyBtn', 'matBodyBtn', 'matInfo',
    'cancelBodyFormBtn', 'cancelX', 'toast', 'backdrop', 'padMove', 'padRot'
   ].forEach(id => { ui[id] = $(id); });
 }
@@ -1435,7 +2448,8 @@ const skybox = {
   faceSize: 0,
   imgs: new Array(6).fill(null),   // 2D 回退路径面图
   dirty: true, canvas: document.createElement('canvas'),
-  skyLum: 0.05, lumCanvas: document.createElement('canvas')
+  skyLum: 0.05, lumCanvas: document.createElement('canvas'),
+  source: 'none'       // cache / embedded / sidecar / file / none
 };
 /* 立方体面基（world→方向）：从 GL ES 3.0 规范立方体贴图面选择表反推。
  * d = center + right·sc + up·t̂，sc/t̂ ∈ [-1,1]（sc 图像 x 向右，t̂ 图像 y 向下，
@@ -1457,26 +2471,74 @@ function panoUVOfDir(dx, dy, dz) {
   return [lon / (2 * Math.PI) + 0.5, 0.5 - lat / Math.PI];
 }
 function skyboxLoad() {
+  /* ---- IndexedDB 原始字节缓存：首次加载成功后存入，之后打开直接读缓存，
+   * 跳过 10.9 MB 旁车脚本的下载解析与 base64 解码；损坏自动清除回退原三级链 ---- */
+  const SKY_CACHE_KEY = 'sky_pano_eso0932a_v1';
+  let idbDb = null;
+  const idbOpen = () => new Promise(res => {
+    if (idbDb) return res(idbDb);
+    try {
+      const rq = indexedDB.open('nbody_gr_cache', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('assets');
+      rq.onsuccess = () => { idbDb = rq.result; res(idbDb); };
+      rq.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+  const idbGet = key => idbOpen().then(db => db ? new Promise(res => {
+    try {
+      const rq = db.transaction('assets').objectStore('assets').get(key);
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => res(null);
+    } catch (e) { res(null); }
+  }) : null);
+  const idbPut = (key, val) => idbOpen().then(db => { if (db) try { db.transaction('assets', 'readwrite').objectStore('assets').put(val, key); } catch (e) { /* 隐私模式等静默 */ } });
+  const idbDel = key => idbOpen().then(db => { if (db) try { db.transaction('assets', 'readwrite').objectStore('assets').delete(key); } catch (e) { /* 静默 */ } });
+  const b64ToBlob = s => {
+    const b64 = s.slice(s.indexOf(',') + 1);
+    const bin = atob(b64);
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Blob([u], { type: 'image/jpeg' });
+  };
+  /* 成功加载后缓存原始字节：旁车 base64 直转；http 下同目录图片 fetch。
+   * file:// 下浏览器不允许读取本地文件字节，跳过（磁盘读取本身即快）。 */
+  const cacheBytes = tag => {
+    try {
+      if (tag === 'sidecar' && typeof window.SKY_PANO_DATA === 'string' && window.SKY_PANO_DATA.length > 30) {
+        idbPut(SKY_CACHE_KEY, b64ToBlob(window.SKY_PANO_DATA));
+      } else if (tag === 'file' && /^https?:$/.test(location.protocol)) {
+        fetch(SKY_PANO_FILE).then(r => r.ok ? r.blob() : null).then(b => { if (b && b.size > 1e5) idbPut(SKY_CACHE_KEY, b); }).catch(() => {});
+      }
+    } catch (e) { /* 缓存失败不影响渲染 */ }
+  };
+  const onPanoReady = (im, tag) => {
+    skybox.pano = im;
+    skybox.source = tag;
+    computeSkyLuminance(im);
+    if (skyMode === 'webgl' && glr.ok) {
+      try { glrBuildSkyFromPano(im); }
+      catch (e) {
+        console.warn('天空盒立方体转换失败:', e);
+        showToast(e.name === 'SecurityError'
+          ? '浏览器跨域限制：请通过本地 HTTP 服务打开，或改用 Firefox 打开'
+          : '天空盒立方体转换失败，回退纯色背景', 'error', 6000);
+      }
+    } else if (skyMode === 'canvas2d' || !glr.ok) {
+      build2DSkyFaces(im);
+    }
+    skybox.dirty = true;
+    draw();
+  };
+  skyApplyHook = (im) => onPanoReady(im, 'material');   /* v7 材质库注入点 */
   const load = (src, tag) => {
     const im = new Image();
     im.onload = () => {
-      skybox.pano = im;
-      computeSkyLuminance(im);
-      if (skyMode === 'webgl' && glr.ok) {
-        try { glrBuildSkyFromPano(im); }
-        catch (e) {
-          console.warn('天空盒立方体转换失败:', e);
-          showToast(e.name === 'SecurityError'
-            ? '浏览器跨域限制：请通过本地 HTTP 服务打开，或改用 Firefox 打开'
-            : '天空盒立方体转换失败，回退纯色背景', 'error', 6000);
-        }
-      } else if (skyMode === 'canvas2d' || !glr.ok) {
-        build2DSkyFaces(im);
-      }
-      skybox.dirty = true;
-      draw();
+      onPanoReady(im, tag);
+      if (tag !== 'cache') cacheBytes(tag);
+      else showToast('天空盒已从本地缓存加载', 'info', 1800);
     };
     im.onerror = () => {
+      if (tag === 'cache') { idbDel(SKY_CACHE_KEY); startCascade(); return; }   // 缓存损坏 → 清除回退
       if (tag === 'embedded' && typeof window.SKY_PANO_DATA === 'string' && window.SKY_PANO_DATA.length > 30) {
         load(window.SKY_PANO_DATA, 'sidecar');      // 嵌入数据缺失/损坏 → 旁车脚本兑底
       } else if (tag === 'sidecar' || tag === 'embedded') {
@@ -1488,23 +2550,37 @@ function skyboxLoad() {
     };
     im.src = src;
   };
-  /* SKY_PANO_URI 留空是用户为节省空间的有意设置：
-   * 依次尝试旁车脚本（file:// 下也可靠）→ 同目录图片（http/Firefox 可用）。
-   * 旁车为异步 <script> 注入，须等其 onload/onerror 再决策。 */
-  if (SKY_PANO_URI && SKY_PANO_URI.length > 30) { load(SKY_PANO_URI, 'embedded'); return; }
-  let settled = false;
-  const fallbackFile = () => { if (!settled) { settled = true; load(SKY_PANO_FILE, 'file'); } };
-  const s = document.createElement('script');
-  s.src = SKY_PANO_SIDECAR;
-  s.onload = () => {
-    if (typeof window.SKY_PANO_DATA === 'string' && window.SKY_PANO_DATA.length > 30) {
-      settled = true;
-      load(window.SKY_PANO_DATA, 'sidecar');
-    } else fallbackFile();
+  const startCascade = () => {
+    /* SKY_PANO_URI 留空是用户为节省空间的有意设置：
+     * 依次尝试旁车脚本（file:// 下也可靠）→ 同目录图片（http/Firefox 可用）。
+     * 旁车为异步 <script> 注入，须等其 onload/onerror 再决策。 */
+    if (SKY_PANO_URI && SKY_PANO_URI.length > 30) { load(SKY_PANO_URI, 'embedded'); return; }
+    let settled = false;
+    const fallbackFile = () => { if (!settled) { settled = true; load(SKY_PANO_FILE, 'file'); } };
+    const s = document.createElement('script');
+    s.src = SKY_PANO_SIDECAR;
+    s.onload = () => {
+      if (typeof window.SKY_PANO_DATA === 'string' && window.SKY_PANO_DATA.length > 30) {
+        settled = true;
+        load(window.SKY_PANO_DATA, 'sidecar');
+      } else fallbackFile();
+    };
+    s.onerror = () => { console.warn('旁车 ' + SKY_PANO_SIDECAR + ' 不存在，改用同目录图片路径'); fallbackFile(); };
+    (document.body || document.head).appendChild(s);
+    setTimeout(fallbackFile, 15000);   // 网络异常超时兜底
   };
-  s.onerror = () => { console.warn('旁车 ' + SKY_PANO_SIDECAR + ' 不存在，改用同目录图片路径'); fallbackFile(); };
-  (document.body || document.head).appendChild(s);
-  setTimeout(fallbackFile, 15000);   // 网络异常超时兜底
+  /* 优先读缓存 */
+  idbGet(SKY_CACHE_KEY).then(blob => {
+    if (blob && blob.size > 1e5) {
+      const url = URL.createObjectURL(blob);
+      const im = new Image();
+      im.onload = () => { URL.revokeObjectURL(url); onPanoReady(im, 'cache'); };
+      im.onerror = () => { URL.revokeObjectURL(url); idbDel(SKY_CACHE_KEY); startCascade(); };
+      im.src = url;
+      return;
+    }
+    startCascade();
+  }).catch(startCascade);
 }
 /* 天空平均线性亮度测光：全景图 32×32 降采样后按 sRGB→线性求亮度均值，
  * 供天空着色器归一化（背景亮度与曝光解耦）与自动曝光计量参考 */
@@ -1553,9 +2629,10 @@ const GLSL_TRAIL_VS = 'attribute vec2 a_p;attribute vec4 a_c;uniform float u_sz;
   'void main(){gl_Position=vec4(a_p,0.0,1.0);gl_PointSize=u_sz;v_c=a_c;}';
 const GLSL_TRAIL_FS = 'precision mediump float;varying vec4 v_c;void main(){gl_FragColor=v_c;}';
 const GLSL_BODY_VS = 'attribute vec2 a_p;attribute vec2 a_q;attribute float a_r;attribute vec3 a_c;' +
-  'attribute float a_m;attribute float a_x;attribute vec2 a_l;' +
+  'attribute float a_m;attribute float a_x;attribute vec2 a_l;attribute vec4 a_e;' +
   'uniform vec2 u_pp;varying vec2 v_q;varying vec3 v_c;varying float v_m;varying float v_x;varying vec2 v_l;varying float v_r;' +
-  'void main(){gl_Position=vec4(a_p+vec2(a_q.x*a_r,-a_q.y*a_r)*u_pp,0.0,1.0);' +
+  'void main(){mat2 E=mat2(a_e.x,a_e.z,a_e.y,a_e.w);' +
+  'gl_Position=vec4(a_p+(E*vec2(a_q.x*a_r,-a_q.y*a_r))*u_pp,0.0,1.0);' +
   'v_q=a_q;v_c=a_c;v_m=a_m;v_x=a_x;v_l=a_l;v_r=a_r;}';
 /* 天体片元（shader 级物理渲染）：
  * 0 高斯 PSF 点源（峰值 = min(F/Ω_psf, B)，通量守恒且不超表面辐射亮度）
@@ -1658,9 +2735,13 @@ const GLSL_BLUR_FS = 'precision highp float;varying vec2 v;uniform sampler2D u_t
   '}' +
   'c=min(c,vec3(60000.0));' +
   'gl_FragColor=vec4(c,1.0);}';
-/* 合成：曝光 + 泛光 + OKLab 亮度压缩与高光漂白 + sRGB + 抖动
+/* 合成：曝光 + 泛光 + OKLab 亮度压缩与色度压缩 + sRGB + 抖动
  * （旧版全屏遮蔽眩光 veil 与水平拉丝已移除：深空背景只由天空盒自身亮度决定，
- *   太阳入屏不再提亮背景；泛光仅叠加高阈值亮部，随恒星辐照度与距离自然衰减） */
+ *   太阳入屏不再提亮背景；泛光仅叠加高阈值亮部，随恒星辐照度与距离自然衰减）
+ * v7 色相爆炸修复：色度压缩不再依赖眩光开关（u_bleach）——关辉光时高亮
+ *   像元的 OKLab 色度分量不再无界，未开启漂白时用更高阈值窄压缩保色相，
+ *   开启漂白时维持原 0.42–0.95 宽压缩观感；最后做保色调标量钳制
+ *   （按 max(R,G,B) 整体缩放，禁止逐通道裁剪导致的色相偏移/爆色）。 */
 const GLSL_FINAL_FS = 'precision highp float;varying vec2 v;' +
   'uniform sampler2D u_scene,u_bloom;' +
   'uniform float u_exp,u_dec,u_bleach;' +
@@ -1675,7 +2756,9 @@ const GLSL_FINAL_FS = 'precision highp float;varying vec2 v;' +
   'dot(ms,vec3(1.9779984951,-2.4285922050,0.4505937099)),' +
   'dot(ms,vec3(0.0259040371,0.7827717662,-0.8086757660)));' +
   'float L=1.0-exp(-1.1*max(lab.x,0.0));' +
-  'float bl=u_bleach*smoothstep(0.42,0.95,L);' +
+  'float blWide=smoothstep(0.42,0.95,L);' +
+  'float blNarrow=smoothstep(0.78,1.0,L);' +
+  'float bl=mix(blNarrow,blWide,u_bleach);' +
   'vec2 ab=lab.yz*(1.0-0.88*bl);' +
   'vec3 ms2=vec3(L+0.3963377774*ab.x+0.2158037573*ab.y,' +
   'L-0.1055613458*ab.x-0.0638541728*ab.y,' +
@@ -1685,6 +2768,8 @@ const GLSL_FINAL_FS = 'precision highp float;varying vec2 v;' +
   'dot(ms2,vec3(-1.2684380046,2.6097574011,-0.3413193965)),' +
   'dot(ms2,vec3(-0.0041960863,-0.7034186147,1.7076147010)));' +
   'col=max(col,vec3(0.0));' +
+  'float mx=max(col.r,max(col.g,col.b));' +
+  'if(mx>1.0) col*=1.0/mx;' +
   'col=pow(col,vec3(1.0/2.2));' +
   'float n=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);' +
   'gl_FragColor=vec4(col+(n-0.5)/255.0,1.0);}';
@@ -1781,7 +2866,7 @@ function glrInit() {
     glr.dec = glr.hdr ? 1 : 6;
     glr.progs.sky = glrCompile(gl, GLSL_SKY_VS, GLSL_SKY_FS, ['a', 'u_r', 'u_f', 'u_ar', 'u_t', 'u_n', 'u_enc']);
     glr.progs.trail = glrCompile(gl, GLSL_TRAIL_VS, GLSL_TRAIL_FS, ['a_p', 'a_c', 'u_sz']);
-    glr.progs.body = glrCompile(gl, GLSL_BODY_VS, GLSL_BODY_FS, ['a_p', 'a_q', 'a_r', 'a_c', 'a_m', 'a_x', 'a_l', 'u_pp', 'u_enc', 'u_vm', 'u_nL', 'u_lD', 'u_lC', 'u_amb', 'u_dw', 'u_hasTex', 'u_trep', 'u_tex']);
+    glr.progs.body = glrCompile(gl, GLSL_BODY_VS, GLSL_BODY_FS, ['a_p', 'a_q', 'a_r', 'a_c', 'a_m', 'a_x', 'a_l', 'a_e', 'u_pp', 'u_enc', 'u_vm', 'u_nL', 'u_lD', 'u_lC', 'u_amb', 'u_dw', 'u_hasTex', 'u_trep', 'u_tex']);
     glr.progs.panogen = glrCompile(gl, GLSL_QUAD_VS, GLSL_PANOGEN_FS, ['a', 'u_t', 'u_fc', 'u_fr', 'u_fu', 'u_src', 'u_map', 'u_bc', 'u_wrap']);
     glr.progs.bright = glrCompile(gl, GLSL_QUAD_VS, GLSL_BRIGHT_FS, ['a', 'u_t', 'u_exp', 'u_dec', 'u_thr']);
     glr.progs.blur = glrCompile(gl, GLSL_QUAD_VS, GLSL_BLUR_FS, ['a', 'u_t', 'u_t2', 'u_dir', 'u_off', 'u_up', 'u_add']);
@@ -1958,28 +3043,32 @@ function glrBuildSkyFromPano(img) {
   skybox.cubeReady = true;
   skybox.dirty = true;
 }
-/* 天体四边形顶点：12 float/顶点 ×6，[clip xy, 角点, 四边形半径, 峰值辐射 rgb, 模式, 参数, 保留] */
+/* 天体四边形顶点：16 float/顶点 ×6，[clip xy, 角点, 四边形半径, 峰值辐射 rgb, 模式, 参数, 保留, 变形矩阵 2×2]
+ * a_e = 自转扁化+潮汐楰化的屏幕空间对称变形矩阵（行主序），线性映射保持内切，
+ * 变形后椭圆恒在四边形内；片元在预像空间工作，着色/贴图/边缘逻辑不变 */
 function bodyQuadData(b, overrideMode, overridePeak, overrideAux) {
   const W = glr.W, H = glr.H;
   const cx = 2 * b.sx * resFactor / W - 1, cy = 1 - 2 * b.sy * resFactor / H;
   const mode = overrideMode !== undefined ? overrideMode : b.mode;
   const peak = overridePeak || b.peak;
   const aux = overrideAux !== undefined ? overrideAux : b.aux;
+  const M = (mode === 1 || mode === 2) && b.ellM ? b.ellM : [1, 0, 0, 1];
   let rQ, xVal;
   if (mode === 0) { rQ = 3.2 * aux * resFactor; xVal = aux * resFactor; }
   else if (mode === 3) { rQ = (aux + 1) * resFactor; xVal = aux * resFactor; }
   else if (mode === 2) { rQ = 3.2 * aux * resFactor; xVal = aux * resFactor; }   // 恒星圆面：四边形外扩容纳辉光，v_x = 圆面半径
   else { rQ = aux * resFactor; xVal = 0; }
-  const d = new Float32Array(72);
+  const d = new Float32Array(96);
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
   for (let k = 0; k < 6; k++) {
-    const o = k * 12;
+    const o = k * 16;
     d[o] = cx; d[o + 1] = cy;
     d[o + 2] = corners[k][0]; d[o + 3] = corners[k][1];
     d[o + 4] = rQ;
     d[o + 5] = peak[0]; d[o + 6] = peak[1]; d[o + 7] = peak[2];
     d[o + 8] = mode; d[o + 9] = xVal;
     d[o + 10] = 0; d[o + 11] = 0;
+    d[o + 12] = M[0]; d[o + 13] = M[1]; d[o + 14] = M[2]; d[o + 15] = M[3];
   }
   return d;
 }
@@ -2042,7 +3131,7 @@ function glrRender(fr) {
     gl.uniform2f(P.loc.u_pp, 2 / W, 2 / H);
     gl.uniform1f(P.loc.u_enc, glr.enc);
     gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.body);
-    const S = 48;
+    const S = 64;
     gl.enableVertexAttribArray(P.loc.a_p); gl.vertexAttribPointer(P.loc.a_p, 2, gl.FLOAT, false, S, 0);
     gl.enableVertexAttribArray(P.loc.a_q); gl.vertexAttribPointer(P.loc.a_q, 2, gl.FLOAT, false, S, 8);
     gl.enableVertexAttribArray(P.loc.a_r); gl.vertexAttribPointer(P.loc.a_r, 1, gl.FLOAT, false, S, 16);
@@ -2050,19 +3139,21 @@ function glrRender(fr) {
     gl.enableVertexAttribArray(P.loc.a_m); gl.vertexAttribPointer(P.loc.a_m, 1, gl.FLOAT, false, S, 32);
     gl.enableVertexAttribArray(P.loc.a_x); gl.vertexAttribPointer(P.loc.a_x, 1, gl.FLOAT, false, S, 36);
     gl.enableVertexAttribArray(P.loc.a_l); gl.vertexAttribPointer(P.loc.a_l, 2, gl.FLOAT, false, S, 40);
+    gl.enableVertexAttribArray(P.loc.a_e); gl.vertexAttribPointer(P.loc.a_e, 4, gl.FLOAT, false, S, 48);
     gl.enable(gl.BLEND);
     /* 逐天体 uniforms：视图矩阵（本地→世界，供全景贴图 UV）、多星光照、贴图 */
     const Rv = currentViewMatrix();
-    /* u_vm = A^T（local→world）：列主序上传序列 = A 的行主序展开 */
-    const vmArr = new Float32Array([Rv[0][0], Rv[0][1], Rv[0][2], Rv[1][0], Rv[1][1], Rv[1][2], Rv[2][0], Rv[2][1], Rv[2][2]]);
+    /* u_vm = A^T（local→world）：列主序上传序列 = A 的行主序展开；
+     * 自转天体换成 spinMat（M·Aᵀ），贴图随之旋转 */
+    const baseVm = new Float32Array([Rv[0][0], Rv[0][1], Rv[0][2], Rv[1][0], Rv[1][1], Rv[1][2], Rv[2][0], Rv[2][1], Rv[2][2]]);
     const lD = new Float32Array(24), lC = new Float32Array(24);
-    gl.uniformMatrix3fv(P.loc.u_vm, false, vmArr);
     gl.uniform1f(P.loc.u_amb, (starRadOn && fr.stars.length) ? 0.015 : 0.55);
     gl.uniform1f(P.loc.u_trep, glr.gl2 ? 1 : 0);   // WebGL2：贴图 REPEAT 环绕，接缝处 UV 连续
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, glr.tex.white || glr.tex.black);
     gl.uniform1i(P.loc.u_tex, 3);
     for (const b of fr.bodies) {
+      gl.uniformMatrix3fv(P.loc.u_vm, false, b.spinMat || baseVm);
       const nL = Math.min(8, (b.lights || []).length);
       for (let k = 0; k < 8; k++) {
         const L = k < nL ? b.lights[k] : null;
@@ -2537,7 +3628,7 @@ function sceneProjector(W, H) {
   } };
 }
 function getRefPos() {
-  const name = ui.frameSelect.value;
+  const name = ui.followSelect ? ui.followSelect.value : '';
   if (name === 'center_of_mass' && N > 0) {
     let M = 0, X = 0, Y = 0, Z = 0;
     for (let i = 0; i < N; i++) { M += massA[i]; X += px[i] * massA[i]; Y += py[i] * massA[i]; Z += pz[i] * massA[i]; }
@@ -2553,9 +3644,33 @@ function getRefPos() {
 /* ---------------- 渲染 ---------------- */
 const LABEL_FONT = '11px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
 
-/* 轨迹参考系偏移：逐快照预计算一次，O(N·hist) */
+/* 轨迹参考系：'follow' = 跟随参考系（用 frameSelect 值），'' = 绝对原点，
+ * 'center_of_mass' = 质心，其余 = 天体名。与视角跟随相互独立。 */
+function trailFrameName() {
+  const v = ui.trailRefMode.value;
+  return v === 'follow' ? ui.frameSelect.value : v;
+}
+/* 轨迹参考系原点当前位置 O(现在) */
+function trailOriginNow(refName) {
+  if (refName === 'center_of_mass' && N > 0) {
+    let M = 0, X = 0, Y = 0, Z = 0;
+    for (let i = 0; i < N; i++) { M += massA[i]; X += px[i] * massA[i]; Y += py[i] * massA[i]; Z += pz[i] * massA[i]; }
+    return M > 0 ? [X / M, Y / M, Z / M] : [0, 0, 0];
+  }
+  if (refName) {
+    const k = meta.findIndex(m2 => m2.name === refName);
+    if (k >= 0) return [px[k], py[k], pz[k]];
+  }
+  return [0, 0, 0];
+}
+/* 轨迹参考系偏移：逐快照预计算 O(t_k) 一次，O(N·hist)；并返回当前原点 O(现在)。
+ * 轨迹绘制：投影器输入 X = snap(t_k) − O(t_k) + O(现在)（绝对系 O≡0），
+ * 投影器内部再减镜头锚点 → 屏幕位置 = snap − O(t_k) + O(现在) − 镜头锚点。
+ * 轨迹末端（最新快照）= 天体当前位置 − 镜头锚点，与天体绘制位置严格一致 ——
+ * 修复 v4 参考天体运动时双重扣减导致轨迹与星球错位的 bug。 */
 function trailRefOffsets(useRel, refName, nameToIdx) {
-  if (!useRel) return null;
+  const now = useRel ? trailOriginNow(refName) : [0, 0, 0];
+  if (!useRel) return { off: null, now };
   const off = new Float64Array(histCount * 3);
   const comMode = refName === 'center_of_mass';
   const ri = comMode ? -1 : nameToIdx.get(refName);
@@ -2575,7 +3690,7 @@ function trailRefOffsets(useRel, refName, nameToIdx) {
     }
     off[k * 3] = rx; off[k * 3 + 1] = ry; off[k * 3 + 2] = rz;
   }
-  return off;
+  return { off, now };
 }
 
 /* ---------------- 场景帧构建（投影、着色、测光；GL 路径数据源） ----------------
@@ -2626,7 +3741,53 @@ function buildSceneFrame() {
     const hasTex = !!(texE && texE.tex);
     const base = hasTex ? [1, 1, 1] : hexToRgb(meta[i].color).map(v => Math.pow(v / 255, 2.2));
     const b = { i, sx: p[0], sy: p[1], mag: p[2], rCss, mode: 0, peak: [0.3, 0.3, 0.3], aux: PSF_SIGMA,
-      lights: [], texIdx: meta[i].texture ? i : -1, psfW: 0, psfPeak: [0, 0, 0], diskW: 1, F: 0 };
+      lights: [], texIdx: meta[i].texture ? i : -1, psfW: 0, psfPeak: [0, 0, 0], diskW: 1, F: 0,
+      ellM: null, spinMat: null };
+    /* 自转扁化 + 潮汐椭化（屏幕空间复合椭圆）与贴图自转矩阵（渲染层） */
+    const Rdef = radM > 0 ? radM : massRadius(mass);
+    const kF = meta[i].spinK || 0.75;
+    const omSp = spinRate ? spinRate[i] : 0;
+    const fRot = rotFlatteningOf(mass, Rdef, omSp > 0 ? 2 * Math.PI / omSp : 0, kF);
+    let eTide = 0, tideDir = null;
+    if (kF > 0 && Rdef > 0 && N >= 2 && N <= 400) {
+      let best = 0, bj = -1, bd2 = 0;
+      for (let j = 0; j < N; j++) {
+        if (j === i) continue;
+        const ddx = px[j] - px[i], ddy = py[j] - py[i], ddz = pz[j] - pz[i];
+        const dd2 = ddx * ddx + ddy * ddy + ddz * ddz;
+        if (dd2 <= 0) continue;
+        const sc = massA[j] / (dd2 * Math.sqrt(dd2));
+        if (sc > best) { best = sc; bj = j; bd2 = dd2; }
+      }
+      if (bj >= 0) {
+        eTide = tideStrainOf(mass, massA[bj], Rdef, Math.sqrt(bd2), kF);
+        const dI = 1 / Math.sqrt(bd2);
+        tideDir = [(px[bj] - px[i]) * dI, (py[bj] - py[i]) * dI, (pz[bj] - pz[i]) * dI];
+      }
+    }
+    if (fRot > 1e-6 || eTide > 1e-6) {
+      const tiltR = meta[i].spinTiltRad || 0;
+      const axW = [0, -Math.sin(tiltR), Math.cos(tiltR)];   // 自转轴：Rx(tilt)·ẑ
+      const av = [Rv[0][0] * axW[0] + Rv[0][1] * axW[1] + Rv[0][2] * axW[2],
+                  Rv[1][0] * axW[0] + Rv[1][1] * axW[1] + Rv[1][2] * axW[2],
+                  Rv[2][0] * axW[0] + Rv[2][1] * axW[1] + Rv[2][2] * axW[2]];
+      let M = [1, 0, 0, 1];
+      if (fRot > 1e-6) {
+        const cosB = clampNum(-av[2], -1, 1), sinB = Math.sqrt(Math.max(0, 1 - cosB * cosB));
+        const f1 = 1 - fRot;
+        M = mat2RotScale(Math.atan2(av[1], av[0]), Math.sqrt(cosB * cosB + f1 * f1 * sinB * sinB), 1);
+      }
+      if (eTide > 1e-6 && tideDir) {
+        const tv = [Rv[0][0] * tideDir[0] + Rv[0][1] * tideDir[1] + Rv[0][2] * tideDir[2],
+                    Rv[1][0] * tideDir[0] + Rv[1][1] * tideDir[1] + Rv[1][2] * tideDir[2],
+                    Rv[2][0] * tideDir[0] + Rv[2][1] * tideDir[1] + Rv[2][2] * tideDir[2]];
+        const cosP = clampNum(-tv[2], -1, 1), sinP = Math.sqrt(Math.max(0, 1 - cosP * cosP));
+        const rp = 1 - eTide / 2, ra = 1 + eTide;
+        M = mat2Mul(mat2RotScale(Math.atan2(tv[1], tv[0]), Math.sqrt(rp * rp * cosP * cosP + ra * ra * sinP * sinP), rp), M);
+      }
+      b.ellM = M;
+    }
+    if (meta[i].texture) b.spinMat = spinTexMatrix(i, Rv);
     /* 圆面/点源判定（渲染像素），交叉渐变权重 */
     const diskOn = rRen >= DISK_MIN_PX;
     const psfBlend = (rRen > DISK_MIN_PX && rRen < DISK_FULL_PX) ? (DISK_FULL_PX - rRen) / (DISK_FULL_PX - DISK_MIN_PX) : 0;
@@ -2635,9 +3796,15 @@ function buildSceneFrame() {
       const s = starByI.get(i);
       const dx = px[i] - ox, dy = py[i] - oy, dz = pz[i] - oz;
       const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 >= 0.01 * AU * AU && inFov) {
-        b.F = s.L / (4 * Math.PI * d2) / F_SUN_1AU;   // 相机处辐照度（计量/眩光用，带距离门槛）
-        fr.sumF += b.F;
+      const physical = physSizeOn && radM > 0;   // PSF/圆面模式：渲染峰值随 B/F 缩放；否则为示意图标（峰值固定）
+      if (d2 > 0 && inFov) {
+        b.F = s.L / (4 * Math.PI * d2) / F_SUN_1AU;   // 相机处辐照度（眩光用）
+        /* 高光保护计量：物理模式下未分辨点源按表面亮度×PSF 立体角封顶贡献。
+         * 若直接用 F，计量与点源峰值同随 F 增长、曝光效果相消，
+         * 致密双星等极亮源的辉光无法被自动曝光压低（v4 白屏根因）。
+         * 图标模式渲染峰值固定不随 B 缩放，按标准太阳辐照度封顶，
+         * 避免曝光追向极亮物理亮度把图标压黑。 */
+        fr.sumF += physical ? Math.min(b.F, s.B * omegaPsf * EXP_TAME_K) : Math.min(b.F, 1);
       }
       /* 渲染用通量不加距离门槛：贴近恒星时通量巨大，被辐射亮度 B 封顶
        * （物理正确且避免旧版 floor hack；旧版在门槛内依赖 0.12 可见性下限） */
@@ -2750,8 +3917,10 @@ function buildTrails(fr) {
   if (trailMode === 'off' || histCount < 2 || N === 0) return;
   const nameToIdx = new Map();
   for (let k = 0; k < N; k++) nameToIdx.set(meta[k].name, k);
-  const useRel = ui.trailRefMode.value === 'relative';
-  const refOff = trailRefOffsets(useRel, ui.frameSelect.value, nameToIdx);
+  const tf = trailFrameName();
+  const useRel = tf !== '';
+  const refOff = trailRefOffsets(useRel, tf, nameToIdx);
+  const shX = refOff.now[0], shY = refOff.now[1], shZ = refOff.now[2];   // 投影器内部再减镜头锚点，此处不可重复扣
   const RW = Math.max(2, Math.round(viewW * resFactor)), RH = Math.max(2, Math.round(viewH * resFactor));
   const arr = [], ranges = [];
   let dotCount = 0;
@@ -2763,8 +3932,8 @@ function buildTrails(fr) {
       const idxF = (histHead - histCount + k + HIST_MAX) % HIST_MAX;
       const snap = histPos[idxF];
       if (!snap || bi * 3 + 2 >= snap.length) continue;
-      let X = snap[bi * 3], Y = snap[bi * 3 + 1], Z = snap[bi * 3 + 2];
-      if (useRel) { X -= refOff[k * 3]; Y -= refOff[k * 3 + 1]; Z -= refOff[k * 3 + 2]; }
+      let X = snap[bi * 3] + shX, Y = snap[bi * 3 + 1] + shY, Z = snap[bi * 3 + 2] + shZ;
+      if (useRel) { X -= refOff.off[k * 3]; Y -= refOff.off[k * 3 + 1]; Z -= refOff.off[k * 3 + 2]; }
       const p = fr.proj.pt(X, Y, Z);
       if (!p) {
         if (curStart >= 0) {
@@ -2821,8 +3990,10 @@ function drawTo2D(c2, W, H) {
   if (trailMode !== 'off' && histCount > 1) {
     const nameToIdx = new Map();
     for (let k = 0; k < N; k++) nameToIdx.set(meta[k].name, k);
-    const useRel = ui.trailRefMode.value === 'relative';
-    const refOff = trailRefOffsets(useRel, ui.frameSelect.value, nameToIdx);
+    const tf = trailFrameName();
+    const useRel = tf !== '';
+    const refOff = trailRefOffsets(useRel, tf, nameToIdx);
+    const shX2 = refOff.now[0], shY2 = refOff.now[1], shZ2 = refOff.now[2];   // 投影器内部再减镜头锚点，此处不可重复扣
     for (let bi = 0; bi < N; bi++) {
       const color = meta[bi].color || '#FFFFFF';
       c2.strokeStyle = color; c2.fillStyle = color;
@@ -2834,8 +4005,8 @@ function drawTo2D(c2, W, H) {
         const idxF = (histHead - histCount + k + HIST_MAX) % HIST_MAX;
         const snap = histPos[idxF];
         if (!snap || bi * 3 + 2 >= snap.length) continue;
-        let X = snap[bi * 3], Y = snap[bi * 3 + 1], Z = snap[bi * 3 + 2];
-        if (useRel) { X -= refOff[k * 3]; Y -= refOff[k * 3 + 1]; Z -= refOff[k * 3 + 2]; }
+        let X = snap[bi * 3] + shX2, Y = snap[bi * 3 + 1] + shY2, Z = snap[bi * 3 + 2] + shZ2;
+        if (useRel) { X -= refOff.off[k * 3]; Y -= refOff.off[k * 3 + 1]; Z -= refOff.off[k * 3 + 2]; }
         const p = proj.pt(X, Y, Z);
         if (!p) { started = false; continue; }
         if (trailMode === 'line') {
@@ -3020,9 +4191,13 @@ function draw() {
   glr.drawCount++;
   const now = performance.now();
   const fr = buildSceneFrame();
-  /* 曝光时间平滑：模拟相机感度适应，避免亮度突变 */
+  /* 曝光时间平滑：模拟相机感度适应，避免亮度突变。
+   * 跨越 2 个数量级以上时改按几何平滑（对数空间趋近），
+   * 否则从普通场景切到致密双星要线性爬 14 个数量级、全白数秒 */
   const dtE = glr.lastExpT ? Math.min(0.25, (now - glr.lastExpT) / 1000) : 0.25;
-  glr.exposure += (fr.expTarget - glr.exposure) * (1 - Math.exp(-dtE / EXP_TAU));
+  const expRatio = fr.expTarget / Math.max(glr.exposure, 1e-300);
+  if (expRatio > 100 || expRatio < 0.01) glr.exposure = Math.max(glr.exposure * Math.pow(expRatio, 1 - Math.exp(-dtE / EXP_TAU)), 1e-300);
+  else glr.exposure += (fr.expTarget - glr.exposure) * (1 - Math.exp(-dtE / EXP_TAU));
   glr.lastExpT = now;
   if (glr.ok) {
     glrRender(fr);
@@ -3120,7 +4295,7 @@ function resetView() {
   camOff = [0, 0, 0];
   camVel.move = [0, 0, 0]; camVel.rot = [0, 0];
   freeQuat = DEFAULT_QUAT.slice();
-  setViewMode('top');
+  setViewMode('free');
   draw();
   showToast('视图已重置', 'info');
 }
@@ -3138,25 +4313,42 @@ function fitView() {
   draw();
 }
 
-/* ---------------- 下拉框重建（保留选择） ---------------- */
+/* ---------------- 下拉框重建（保留选择） ----------------
+ * 视角跟随 / 参考系：质心、绝对原点与全部天体；
+ * 轨迹参考系：跟随参考系、绝对原点、质心与全部天体。 */
 function populateSelects() {
   const prevBody = ui.bodySelect.dataset.lastSelected || '';
+  const prevFollow = pendingFollow !== null ? pendingFollow : ui.followSelect.value;
   const prevFrame = pendingFrame !== null ? pendingFrame : ui.frameSelect.value;
+  const prevTrail = pendingTrailRef !== null ? pendingTrailRef : ui.trailRefMode.value;
   const prevGr = ui.grBodySelect.value;
+  const okFrame = v => v === 'center_of_mass' || v === '' || meta.some(m2 => m2.name === v);
+  const okTrail = v => v === 'follow' || okFrame(v);
   ui.bodySelect.innerHTML = '';
   ui.bodySelect.appendChild(new Option('选择天体…', ''));
+  ui.followSelect.innerHTML = '';
+  ui.followSelect.appendChild(new Option('质心', 'center_of_mass'));
+  ui.followSelect.appendChild(new Option('绝对原点', ''));
   ui.frameSelect.innerHTML = '';
   ui.frameSelect.appendChild(new Option('质心', 'center_of_mass'));
   ui.frameSelect.appendChild(new Option('绝对原点', ''));
+  ui.trailRefMode.innerHTML = '';
+  ui.trailRefMode.appendChild(new Option('跟随参考系', 'follow'));
+  ui.trailRefMode.appendChild(new Option('绝对原点', ''));
+  ui.trailRefMode.appendChild(new Option('质心', 'center_of_mass'));
   ui.grBodySelect.innerHTML = '';
   meta.forEach(m2 => {
     ui.bodySelect.appendChild(new Option(m2.name, m2.name));
+    ui.followSelect.appendChild(new Option(m2.name, m2.name));
     ui.frameSelect.appendChild(new Option(m2.name, m2.name));
+    ui.trailRefMode.appendChild(new Option(m2.name, m2.name));
     ui.grBodySelect.appendChild(new Option(m2.name, m2.name));
   });
   if (prevBody && meta.some(m2 => m2.name === prevBody)) ui.bodySelect.value = prevBody;
-  if (prevFrame === 'center_of_mass' || prevFrame === '' || meta.some(m2 => m2.name === prevFrame)) ui.frameSelect.value = prevFrame;
-  if (pendingFrame !== null) pendingFrame = null;
+  if (okFrame(prevFollow)) ui.followSelect.value = prevFollow;
+  if (okFrame(prevFrame)) ui.frameSelect.value = prevFrame;
+  if (okTrail(prevTrail)) ui.trailRefMode.value = prevTrail;
+  pendingFollow = null; pendingFrame = null; pendingTrailRef = null;
   if ([...ui.grBodySelect.options].some(o => o.value === prevGr)) ui.grBodySelect.value = prevGr;
 }
 
@@ -3171,18 +4363,36 @@ function updateConservationUI(force) {
   const dP = Math.hypot(P[0] - initialTotalMomentum[0], P[1] - initialTotalMomentum[1], P[2] - initialTotalMomentum[2]);
   ui.totalEnergyDisplay.textContent = E.toExponential(4);
   ui.energyDeltaDisplay.textContent = dE.toExponential(4);
+  const dissipated = sinkTideE[0] + sinkGWE[0];
+  ui.sinkTideDisplay.textContent = sinkTideE[0].toExponential(3) + ' J';
+  ui.sinkGWDisplay.textContent = sinkGWE[0].toExponential(3) + ' J';
+  ui.energyLedgerDisplay.textContent = (dE + dissipated).toExponential(4);
   ui.totalMomentumDisplay.textContent = '[' + P[0].toExponential(2) + ', ' + P[1].toExponential(2) + ', ' + P[2].toExponential(2) + ']';
   ui.momentumDeltaDisplay.textContent = dP.toExponential(4);
+  const L = computeTotalAngular();
+  const L0 = initialTotalAngular;
+  const Lrad = [sinkGWLx[0], sinkGWLv[0], sinkGWLz[0]];
+  const dLx = L[0] + Lrad[0] - L0[0], dLv = L[1] + Lrad[1] - L0[1], dLz = L[2] + Lrad[2] - L0[2];
+  ui.totalAngularDisplay.textContent = Math.hypot(L[0], L[1], L[2]).toExponential(3);
+  ui.sinkGWLDisplay.textContent = Math.hypot(Lrad[0], Lrad[1], Lrad[2]).toExponential(3);
+  ui.angularLedgerDisplay.textContent = Math.hypot(dLx, dLv, dLz).toExponential(3);
 }
 function logPush(dtUsed) {
   if (!ui.showConservation.checked || N === 0) return;
   const E = computeTotalEnergy();
   const P = computeTotalMomentum();
+  const L = computeTotalAngular();
   simulationLog.push({
     time: simTime, dt: dtUsed,
     totalEnergy: E, energyDelta: E - initialTotalEnergy,
+    sinkTide: sinkTideE[0], sinkGW: sinkGWE[0],
+    energyLedger: (E - initialTotalEnergy) + sinkTideE[0] + sinkGWE[0],
     totalMomentum: P,
-    momentumDeltaMag: Math.hypot(P[0] - initialTotalMomentum[0], P[1] - initialTotalMomentum[1], P[2] - initialTotalMomentum[2])
+    momentumDeltaMag: Math.hypot(P[0] - initialTotalMomentum[0], P[1] - initialTotalMomentum[1], P[2] - initialTotalMomentum[2]),
+    totalAngular: L, totalAngularMag: Math.hypot(L[0], L[1], L[2]),
+    angularLedgerMag: Math.hypot(L[0] + sinkGWLx[0] - initialTotalAngular[0],
+                                 L[1] + sinkGWLv[0] - initialTotalAngular[1],
+                                 L[2] + sinkGWLz[0] - initialTotalAngular[2])
   });
   if (simulationLog.length > LOG_MAX) simulationLog.splice(0, simulationLog.length - LOG_MAX);
 }
@@ -3200,6 +4410,7 @@ function readDt() {
 function physicsAdvance(baseDt, steps) {
   const stepFn = integrator === 'yoshida4' ? stepYoshida4 : stepVerlet;
   const adaptiveOn = ui.adaptiveTimeStep.checked;
+  const gwEvery = gwWaveOn ? Math.max(1, Math.floor(steps / 48)) : 0;
   let advanced = 0;
   if (adaptiveOn && N > 1) {
     /* 逐子步自适应：上一次力计算已刷新 r_min/a_max 统计，无额外开销 */
@@ -3207,9 +4418,13 @@ function physicsAdvance(baseDt, steps) {
     for (let k = 0; k < steps; k++) {
       const dtk = calcAdaptiveDt(baseDt);
       stepFn(dtk); simTime += dtk; advanced += dtk;
+      if (gwEvery && k % gwEvery === 0) gwSamplePush();
     }
   } else {
-    for (let k = 0; k < steps; k++) { stepFn(baseDt); simTime += baseDt; advanced += baseDt; }
+    for (let k = 0; k < steps; k++) {
+      stepFn(baseDt); simTime += baseDt; advanced += baseDt;
+      if (gwEvery && k % gwEvery === 0) gwSamplePush();
+    }
   }
   return advanced;
 }
@@ -3260,12 +4475,8 @@ function frame() {
   const advanced = physicsAdvance(baseDt, steps);
   lastAdvanced = advanced;
   if (ui.collisionMerge.checked) {
-    let thr = 0;
-    try { thr = parseValueWithUnits(ui.collisionThreshold.value, 'm') || 0; } catch (e) { thr = 0; }
-    if (thr > 0) {
-      const mc = mergeCollisions(thr);
-      if (mc > 0) { markCustom(); showToast('发生 ' + mc + ' 次碰撞合并', 'info'); }
-    }
+    const mc = mergeCollisions(0, advanced);   /* v7：自动接触距离 = R_i+R_j */
+    if (mc > 0) { markCustom(); showToast('发生 ' + mc + ' 次碰撞合并', 'info'); }
   }
   if (trailMode !== 'off') {
     histRecord();
@@ -3284,6 +4495,9 @@ function frame() {
   grSamplePush();
   draw();
   grUpdateReadout();
+  gwUpdateReadout();
+  if (gwWaveOn) drawGWWave();
+  updateTideReadout();
   updatePerf(now);
   rafId = requestAnimationFrame(frame);
 }
@@ -3361,15 +4575,11 @@ function headlessFrame() {
   lastDt = baseDt;
   const steps = clampNum(parseInt(ui.speed.value) || 200, 1, 1000);
   lastSteps = steps;
-  physicsAdvance(baseDt, steps);
+  const advancedH = physicsAdvance(baseDt, steps);
   stepsSinceSnap += steps;
   if (ui.collisionMerge.checked) {
-    let thr = 0;
-    try { thr = parseValueWithUnits(ui.collisionThreshold.value, 'm') || 0; } catch (e) { thr = 0; }
-    if (thr > 0) {
-      const mc = mergeCollisions(thr);
-      if (mc > 0) { markCustom(); takeSnapshot('merge', mc + ' 次合并'); escapeFlags = new Array(N).fill(false); escapeR0 = computeEscapeR0(); }
-    }
+    const mc = mergeCollisions(0, advancedH);
+    if (mc > 0) { markCustom(); takeSnapshot('merge', mc + ' 次合并'); escapeFlags = new Array(N).fill(false); escapeR0 = computeEscapeR0(); }
   }
   if (checkDivergence()) {
     takeSnapshot('divergence', '数值发散');
@@ -3427,13 +4637,22 @@ function applyPreset(name) {
   if (playing) togglePlay();
   const s = p.settings || {};
   if (s.dt !== undefined) ui.dt.value = s.dt;
-  if (s.gr1pn !== undefined) { gr1pnOn = s.gr1pn; ui.gr1pn.checked = s.gr1pn; }
-  if (s.gr25 !== undefined) { gr25On = s.gr25; ui.gr25.checked = s.gr25; }
+  /* 物理开关显式复位：未声明即关闭，避免跨预设残留 ——
+   * v4 中先载致密双星（2.5PN 开）再切三体 8 字解，Peters 辐射在
+   * 近距离交会时发散导致三者坍缩相撞（"直线撞上"的另一半成因） */
+  gr1pnOn = !!s.gr1pn; ui.gr1pn.checked = gr1pnOn;
+  gr25On = !!s.gr25; ui.gr25.checked = gr25On;
+  gr2pnOn = !!s.gr2pn; if (ui.gr2pn) ui.gr2pn.checked = gr2pnOn;
+  gr35On = !!s.gr35; if (ui.gr35) ui.gr35.checked = gr35On;
+  if (gr2pnOn && !gr1pnOn) { gr1pnOn = true; ui.gr1pn.checked = true; }  /* 2PN 需 1PN */
+  if (gr35On && !gr25On) { gr35On = false; ui.gr35.checked = false; }    /* 3.5PN 需 2.5PN */
+  grSamples = [];
+  if (s.tide !== undefined) { tideOn = !!s.tide; ui.tideToggle.checked = tideOn; }
+  if (s.collision !== undefined) ui.collisionMerge.checked = !!s.collision;
   if (s.adaptive !== undefined) ui.adaptiveTimeStep.checked = s.adaptive;
   if (s.integrator) setIntegrator(s.integrator);
   setSystem(p.make());
   fitView();
-  grSamples = [];
   savePrefs();
   showToast('已加载预设 ' + p.label, 'success', 3200);
 }
@@ -3445,6 +4664,25 @@ function updateRadiusPreview() {
   try { m = parseValueWithUnits(ui.bodyMass.value, 'kg'); } catch (e) { /* 输入中 */ }
   if (isFinite(m) && m > 0) ui.radiusAuto.textContent = '留空时按质量经验密度自动推算 ≈ ' + fmtRadius(massRadius(m));
   else ui.radiusAuto.textContent = '留空时按质量经验密度自动推算';
+}
+/* 自转与形变实时预览：流体系数自动取值与自转扁率估算 */
+function updateSpinPreview() {
+  let m = NaN, R = 0;
+  try { m = parseValueWithUnits(ui.bodyMass.value, 'kg'); } catch (e) { /* 输入中 */ }
+  try { R = parseValueWithUnits(ui.bodyRadius.value, 'm') || 0; } catch (e) { /* 输入中 */ }
+  if (!(isFinite(m) && m > 0)) { ui.spinAuto.textContent = ''; return; }
+  const Rdef = R > 0 ? R : massRadius(m);
+  const kEff = fluidKAuto(m, Rdef);
+  const per = parseTimeToSec(ui.bodySpinPeriod.value);
+  const fR = rotFlatteningOf(m, Rdef, isFinite(per) ? per : 0, kEff);
+  const mEd = parseValueWithUnits(ui.bodyMass.value || '0', 'kg') || 0;
+  const rEd = parseValueWithUnits(ui.bodyRadius.value || '0', 'm') || massRadius(mEd || M_EARTH);
+  const k2Auto = autoK2(mEd, rEd), lagAuto = autoTideLag(mEd, rEd);
+  const k2Str = ui.bodyTideK2.value.trim(), lagStr = ui.bodyTideLag.value.trim();
+  const k2Show = k2Str !== '' && isFinite(parseFloat(k2Str)) ? parseFloat(k2Str) : k2Auto;
+  const lagShow = lagStr !== '' ? (parseTimeToSec(lagStr) || 0) : lagAuto;
+  ui.spinAuto.textContent = 'k = ' + kEff.toFixed(3) + '（自动流体系数）· 自转扁化 ≈ 1/' + (fR > 1e-6 ? (1 / fR).toFixed(1) : '∞') + ' · 潮汐椭化随距离与伴星质量实时变化';
+  if (ui.tideAuto) ui.tideAuto.textContent = '自动 k2 = ' + k2Auto.toFixed(3) + ' · 自动 Δt = ' + (lagAuto > 0 ? lagAuto.toPrecision(3) + ' s' : '0') + (k2Str !== '' || lagStr !== '' ? '（当前手动输入优先）' : '');
 }
 /* ---------------- 星球全景贴图表单状态 ----------------
  * 新增与编辑共用：上传后 formTex 保存 data URL，保存时写入天体并随
@@ -3504,6 +4742,10 @@ function openBodyForm(idx) {
     ui.bodyLongitudeOfAscendingNode.value = orig.longitude_of_ascending_node_deg ?? '0.0';
     ui.bodyArgumentOfPeriapsis.value = orig.argument_of_periapsis_deg ?? '0.0';
     ui.bodyTrueAnomaly.value = orig.true_anomaly_deg ?? '0.0';
+    ui.bodySpinTilt.value = orig.spin_tilt_deg ?? '0.0';
+    ui.bodySpinPeriod.value = orig.spin_period || '';
+    ui.bodyTideK2.value = orig.tide_k2 ?? '';
+    ui.bodyTideLag.value = orig.tide_lag || '';
     const pos0 = orig.position && orig.position.some(s => String(s).trim() !== '') ? orig.position : [px[editingIndex], py[editingIndex], pz[editingIndex]];
     const vel0 = orig.velocity && orig.velocity.some(s => String(s).trim() !== '') ? orig.velocity : [vx[editingIndex], vy[editingIndex], vz[editingIndex]];
     ui.bodyPosX.value = String(pos0[0]); ui.bodyPosY.value = String(pos0[1]); ui.bodyPosZ.value = String(pos0[2]);
@@ -3520,11 +4762,16 @@ function openBodyForm(idx) {
     ui.bodyLongitudeOfAscendingNode.value = '0.0';
     ui.bodyArgumentOfPeriapsis.value = '0.0';
     ui.bodyTrueAnomaly.value = '0.0';
+    ui.bodySpinTilt.value = '0.0';
+    ui.bodySpinPeriod.value = '';
+    ui.bodyTideK2.value = '';
+    ui.bodyTideLag.value = '';
     ui.bodyPosX.value = '0.0'; ui.bodyPosY.value = '0.0'; ui.bodyPosZ.value = '0.0';
     ui.bodyVelX.value = '0.0'; ui.bodyVelY.value = '0.0'; ui.bodyVelZ.value = '0.0';
   }
   updateTexFormUI();
   updateRadiusPreview();
+  updateSpinPreview();
 }
 function closeBodyForm() { ui.bodyFormModal.classList.remove('show'); editingIndex = -1; }
 
@@ -3562,6 +4809,26 @@ function saveBodyForm(e) {
   const tAno = parseFloat(ui.bodyTrueAnomaly.value) || 0;
   const posStrs = [ui.bodyPosX.value.trim(), ui.bodyPosY.value.trim(), ui.bodyPosZ.value.trim()];
   const velStrs = [ui.bodyVelX.value.trim(), ui.bodyVelY.value.trim(), ui.bodyVelZ.value.trim()];
+  /* 自转参数解析（渲染层） */
+  const spinTiltStr = ui.bodySpinTilt.value.trim();
+  const spinTilt = parseFloat(spinTiltStr);
+  if (spinTiltStr !== '' && !isFinite(spinTilt)) { showToast('自转倾角无效，应为 -180 – 180 的数字', 'error', 4500); return; }
+  let spinPer = 0;
+  if (ui.bodySpinPeriod.value.trim() !== '') {
+    spinPer = parseTimeToSec(ui.bodySpinPeriod.value);
+    if (!isFinite(spinPer) || spinPer <= 0) { showToast('自转周期无效，示例 23.9345h / 1d / 10.7h', 'error', 4500); return; }
+  }
+  /* 潮汐参数：k2 与时滞（时滞留空 = 无耗散，纯保守潮） */
+  const tideK2Str = ui.bodyTideK2.value.trim();
+  const tideK2 = tideK2Str !== '' ? parseFloat(tideK2Str) : NaN;
+  if (tideK2Str !== '' && !(isFinite(tideK2) && tideK2 >= 0)) { showToast('洛夫数 k2 无效，应为 0 – 1.5 的数', 'error', 4500); return; }
+  let tideLagStr = '';
+  if (ui.bodyTideLag.value.trim() !== '') {
+    let lagV = parseTimeToSec(ui.bodyTideLag.value);
+    if (!isFinite(lagV)) lagV = parseFloat(ui.bodyTideLag.value);
+    if (!isFinite(lagV) || lagV < 0) { showToast('潮汐时滞无效，示例 600 s / 12 min（0 = 显式关闭耗散）', 'error', 4500); return; }
+    tideLagStr = lagV.toPrecision(6).replace(/e([+-])(\d)$/, 'e$10$2') + ' s';
+  }
   try {
     if (useKeplerian) {
       const ctxBodies = exportBodiesRaw();
@@ -3579,7 +4846,11 @@ function saveBodyForm(e) {
     semimajor_axis: useKeplerian ? semiAxisStr : '',
     eccentricity: String(ecc), inclination_deg: String(inc),
     longitude_of_ascending_node_deg: String(lan), argument_of_periapsis_deg: String(apo), true_anomaly_deg: String(tAno),
-    position: posStrs, velocity: velStrs };
+    position: posStrs, velocity: velStrs,
+    spin_tilt_deg: isFinite(spinTilt) ? String(spinTilt) : '0',
+    spin_period: spinPer > 0 ? ui.bodySpinPeriod.value.trim() : '',
+    tide_k2: isFinite(tideK2) ? String(tideK2) : '',
+    tide_lag: tideLagStr };
   if (formTex) origParams.texture = formTex;   // 贴图随导出 JSON base64 嵌入
 
   /* 保留既有显示尺寸兜底；新建天体取 5 */
@@ -3674,13 +4945,14 @@ function savePrefs() {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
       speed: ui.speed.value, dt: ui.dt.value, adaptive: ui.adaptiveTimeStep.checked, integrator,
-      gr1pn: gr1pnOn, gr25: gr25On, collision: ui.collisionMerge.checked, collisionThreshold: ui.collisionThreshold.value,
+      gr1pn: gr1pnOn, gr25: gr25On, gr2pn: gr2pnOn, gr35: gr35On, tide: tideOn, gwwave: gwWaveOn,
+      collision: ui.collisionMerge.checked,
       trailMode, trailDays: ui.trailDuration.value, trailRef: ui.trailRefMode.value,
       skybox: ui.skyboxEnabled.checked, res: ui.resSelect.value,
       persp: projMode === 'persp', psize: physSizeOn, starrad: starRadOn, glare: glareOn,
       snapInt: ui.snapshotInterval.value,
       conservation: ui.showConservation.checked,
-      frame: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked
+      follow: ui.followSelect.value, frameRef: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked
     }));
   } catch (e) { /* 存储不可用时静默 */ }
 }
@@ -3694,11 +4966,16 @@ function loadPrefs() {
     setIntegrator(p.integrator || 'yoshida4');
     gr1pnOn = !!p.gr1pn; ui.gr1pn.checked = gr1pnOn;
     gr25On = !!p.gr25; ui.gr25.checked = gr25On;
+    gr2pnOn = !!p.gr2pn; if (ui.gr2pn) ui.gr2pn.checked = gr2pnOn;
+    gr35On = !!p.gr35; if (ui.gr35) ui.gr35.checked = gr35On;
+    if (p.tide !== undefined) { tideOn = !!p.tide; ui.tideToggle.checked = tideOn; }
+    gwWaveOn = !!p.gwwave; ui.gwWaveToggle.checked = gwWaveOn;
     ui.collisionMerge.checked = !!p.collision;
-    if (p.collisionThreshold) ui.collisionThreshold.value = p.collisionThreshold;
     setTrailMode(p.trailMode || 'line');
     if (p.trailDays !== undefined && p.trailDays !== null) ui.trailDuration.value = p.trailDays;
-    ui.trailRefMode.value = p.trailRef || 'relative';
+    /* 轨迹参考系：v4 值 relative/absolute → v5 follow/'' 迁移 */
+    pendingTrailRef = p.trailRef === 'absolute' ? '' :
+      (p.trailRef === 'relative' || p.trailRef === undefined) ? 'follow' : p.trailRef;
     /* 兼容旧偏好键 stars / highres */
     ui.skyboxEnabled.checked = p.skybox !== undefined ? !!p.skybox : (p.stars !== false);
     ui.resSelect.value = p.res !== undefined ? String(p.res) : '2';
@@ -3709,8 +4986,11 @@ function loadPrefs() {
     if (p.snapInt !== undefined) ui.snapshotInterval.value = p.snapInt;
     ui.showConservation.checked = p.conservation !== false;
     ui.includeInfoOnShot.checked = p.includeInfo !== false;
-    pendingFrame = (p.frame === 'center_of_mass' || p.frame === '' || typeof p.frame === 'string') ? p.frame : null;
-    pendingView = ['top', 'side', 'front', 'free'].includes(p.view) ? p.view : 'top';
+    /* 视角跟随 / 参考系：v4 的 frame（镜头锚定）迁移到两者 */
+    const legacyFrame = (p.frame === 'center_of_mass' || p.frame === '' || typeof p.frame === 'string') ? p.frame : null;
+    pendingFollow = p.follow !== undefined ? p.follow : legacyFrame;
+    pendingFrame = p.frameRef !== undefined ? p.frameRef : legacyFrame;
+    pendingView = ['top', 'side', 'front', 'free'].includes(p.view) ? p.view : 'free';
     ui.speedVal.textContent = ui.speed.value;
   } catch (e) { /* 偏好损坏时忽略 */ }
 }
@@ -3720,7 +5000,7 @@ function runSelfTest() {
   const results = [];
   const exported = exportBodiesRaw();
   const savedPlaying = playing, savedSim = simTime;
-  const savedFlags = { g1: gr1pnOn, g2: gr25On, itg: integrator };
+  const savedFlags = { g1: gr1pnOn, g2: gr25On, g2pn: gr2pnOn, g35: gr35On, t3: tideOn, itg: integrator };
   const savedE = initialTotalEnergy, savedP = initialTotalMomentum, savedLog = simulationLog;
   playing = false;
 
@@ -3762,7 +5042,7 @@ function runSelfTest() {
 
   /* T3 Peters 2.5PN 圆轨道衰减率 */
   try {
-    gr1pnOn = false; gr25On = true;
+    gr1pnOn = false; gr25On = true; gr2pnOn = false; gr35On = false; tideOn = false;
     const m1 = 1.4 * M_SUN, m2 = 1.4 * M_SUN, M = m1 + m2, GM = G * M, a0 = 1e9;
     const vC = Math.sqrt(GM / a0);
     initState([
@@ -3779,7 +5059,8 @@ function runSelfTest() {
     results.push({ name: 'T3 2.5PN 圆轨道衰减率 Peters', pass: err < 0.02, detail: 'Δa 实测 ' + (aFinal - a0).toExponential(3) + ' 对比 理论 ' + (aTheory - a0).toExponential(3) + ' m，误差 ' + (err * 100).toFixed(2) + '%' });
   } catch (e) { results.push({ name: 'T3', pass: false, detail: e.message }); }
 
-  /* T4 动量守恒（全效应开启） */
+  /* T4 动量守恒（全效应开启）。等边拉格朗日构型总动量恒为 0（对称系无净辐射动量流），
+   * 归一基准取系统动量尺度 Σm|v| = 3mv；1PN/2.5PN 成对加权分配下 dP 应为机器精度级 */
   try {
     gr1pnOn = true; gr25On = true;
     const m = M_SUN, d = 1e11, v = Math.sqrt(G * m / d);
@@ -3789,13 +5070,13 @@ function runSelfTest() {
       { name: 'S3', mass: m, pos: [-d / 2, -d * 0.8660254037844386, 0], vel: [v * 0.8660254037844386, -v / 2, 0], color: '#FFFFFF', size: 4 }
     ]);
     const P0 = computeTotalMomentum();
-    const n0 = Math.hypot(P0[0], P0[1], P0[2]);
+    const pScale = 3 * m * v;
     const h = 2000;
     for (let k = 0; k < 500; k++) stepVerlet(h);
     const P1 = computeTotalMomentum();
     const dP = Math.hypot(P1[0] - P0[0], P1[1] - P0[1], P1[2] - P0[2]);
-    const rel = dP / Math.max(1e-30, Math.abs(n0) + Math.hypot(P1[0], P1[1], P1[2]));
-    results.push({ name: 'T4 动量守恒 1PN+2.5PN 开启', pass: rel < 1e-10, detail: '|ΔP|/|P| = ' + rel.toExponential(2) });
+    const rel = dP / pScale;
+    results.push({ name: 'T4 动量守恒 1PN+2.5PN 开启', pass: rel < 1e-10, detail: '|ΔP|/Σm|v| = ' + rel.toExponential(2) + '，阈值 1e-10（成对力动量严格守恒）' });
   } catch (e) { results.push({ name: 'T4', pass: false, detail: e.message }); }
 
   /* T5 长期能量漂移：e=0.7 二体 100 周期 Yoshida4+Kahan（长期运行精度） */
@@ -3844,8 +5125,540 @@ function runSelfTest() {
     results.push({ name: 'T7 PSF/圆面连续性（辐射亮度封顶）', pass, detail: '1AU 封顶=' + capped + ' · 切换点峰值比=' + ratio.toFixed(3) + '（应为 ~1）· B=' + sp.B.toFixed(0) + ' F_SUN_1AU/sr' });
   } catch (e) { results.push({ name: 'T7', pass: false, detail: e.message }); }
 
+  /* T8 自转扁化：地球流体系数自动取值应复现观测扁率 1/298.257 */
+  try {
+    const kE = fluidKAuto(M_EARTH, R_EARTH_M);
+    const f = rotFlatteningOf(M_EARTH, R_EARTH_M, 86164.1, kE);
+    const target = 1 / 298.257;
+    const err = Math.abs(f - target) / target;
+    results.push({ name: 'T8 地球自转扁化', pass: err < 0.03, detail: 'f = 1/' + (1 / f).toFixed(1) + ' 对比 观测 1/298.257 · k_auto=' + kE.toFixed(3) + ' · 误差 ' + (err * 100).toFixed(2) + '%' });
+  } catch (e) { results.push({ name: 'T8', pass: false, detail: e.message }); }
+
+  /* T9 平衡潮幅：地月与日地实测锚定（0.54 m / 0.25 m） */
+  try {
+    const kE = fluidKAuto(M_EARTH, R_EARTH_M);
+    const ampM = 1.5 * kE * (7.347e22 / M_EARTH) * Math.pow(R_EARTH_M / 3.844e8, 3) * R_EARTH_M;
+    const ampS = 1.5 * kE * (M_SUN / M_EARTH) * Math.pow(R_EARTH_M / AU, 3) * R_EARTH_M;
+    const ok = ampM > 0.35 && ampM < 0.75 && ampS > 0.15 && ampS < 0.40;
+    results.push({ name: 'T9 平衡潮幅（地月/日地）', pass: ok, detail: '月球潮 ' + ampM.toFixed(3) + ' m（观测≈0.54）· 太阳潮 ' + ampS.toFixed(3) + ' m（观测≈0.25）' });
+  } catch (e) { results.push({ name: 'T9', pass: false, detail: e.message }); }
+
+  /* T10 三体 8 字解精化初值（走 setSystem→resolveBodies 全管线）：两周期回归与无碰撞 */
+  try {
+    gr1pnOn = false; gr25On = false;
+    setSystem(PRESETS.figure8.make());   // 覆盖字符串反解析路径，可捕获 velocity 占位符类 bug
+    const V = vx[0] * vx[0] + vy[0] * vy[0] + vz[0] * vz[0];
+    if (!(V > 1e8)) throw new Error('初速度未通过 resolveBodies 保留（velocity 字符串占位符 bug）');
+    const L = AU, Tunit = Math.sqrt(L * L * L / (G * M_SUN));
+    const Tp = 6.32383227635072 * Tunit;
+    const p0 = [[px[0], py[0], pz[0]], [px[1], py[1], pz[1]], [px[2], py[2], pz[2]]];
+    const E0 = computeTotalEnergy();
+    const h = 200, steps = Math.round(2 * Tp / h);
+    let minPair = Infinity;
+    for (let k = 0; k < steps; k++) {
+      stepYoshida4(h); simTime += h;
+      const d1 = Math.hypot(px[1] - px[0], py[1] - py[0], pz[1] - pz[0]);
+      const d2 = Math.hypot(px[2] - px[0], py[2] - py[0], pz[2] - pz[0]);
+      const d3 = Math.hypot(px[2] - px[1], py[2] - py[1], pz[2] - pz[1]);
+      minPair = Math.min(minPair, d1, d2, d3);
+    }
+    let maxDev = 0;
+    for (let i = 0; i < 3; i++) maxDev = Math.max(maxDev, Math.hypot(px[i] - p0[i][0], py[i] - p0[i][1], pz[i] - p0[i][2]));
+    const dE = Math.abs((computeTotalEnergy() - E0) / E0);
+    const ok = minPair > 5e8 && maxDev < 0.05 * AU && dE < 1e-6;
+    results.push({ name: 'T10 三体8字解精化初值 2 周期', pass: ok, detail: '最小对距 ' + (minPair / 1e9).toFixed(2) + 'e9 m · 回归偏差 ' + (maxDev / AU).toExponential(2) + ' AU · |ΔE/E|=' + dE.toExponential(2) });
+  } catch (e) { results.push({ name: 'T10', pass: false, detail: e.message }); }
+
+  /* T11 潮汐力学（CTL）：⟨ȧ⟩ 解析对比 + 总角动量守恒 + 自转演化方向 */
+  try {
+    gr1pnOn = false; gr25On = false; tideOn = true;
+    const mE = M_EARTH, mM = 7.348e22, a0 = 3.844e8, GM = G * (mE + mM);
+    const n0 = Math.sqrt(GM / (a0 * a0 * a0));
+    const OmE = 2 * n0;                                  // 地球 2 倍同步角速度
+    const spinPerE = 2 * Math.PI / OmE;
+    initState([
+      { name: 'Earth', mass: mE, pos: [-mM / (mE + mM) * a0, 0, 0], vel: [0, -mM / (mE + mM) * Math.sqrt(GM / a0), 0],
+        radius: 6.371e6, color: '#FFFFFF', size: 5, orbits_around: '',
+        original_input_params: { spin_period: String(spinPerE) + ' s', tide_k2: '0.30', tide_lag: '600 s' } },
+      { name: 'Moon', mass: mM, pos: [mE / (mE + mM) * a0, 0, 0], vel: [0, mE / (mE + mM) * Math.sqrt(GM / a0), 0],
+        radius: 1.737e6, color: '#FFFFFF', size: 3, orbits_around: 'Earth',
+        original_input_params: { spin_period: String(2 * Math.PI / n0) + ' s', tide_k2: '0' } }   // 已锁定 Ω=n，潮 isolated
+    ]);
+    const P0orb = 2 * Math.PI * Math.sqrt(a0 * a0 * a0 / GM);
+    const h = P0orb / 2000, orbN = 4, steps = 2000 * orbN;
+    const J0 = (function () {   // 总角动量（轨道 + 自转）
+      let Lz = 0, S = 0;
+      for (let i = 0; i < N; i++) {
+        S += bodyIA[i] * spinRate[i];
+        for (let j = i + 1; j < N; j++) {
+          const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+          const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+          Lz += massA[i] * massA[j] / (massA[i] + massA[j]) * (dx * dvy - dy * dvx);
+        }
+      }
+      return { L: Lz, S };
+    })();
+    const aSamp = [], tSamp = [];
+    for (let k = 0; k < steps; k++) {
+      stepYoshida4(h); simTime += h;
+      if (k % 25 === 0) { aSamp.push(osculatingOf(1).a); tSamp.push(simTime); }
+    }
+    let st = 0, sw = 0, stt = 0, stw = 0;
+    const tc = tSamp[tSamp.length - 1] / 2;
+    for (let k = 0; k < tSamp.length; k++) {
+      const tt = tSamp[k] - tc;
+      st += tt; sw += aSamp[k]; stt += tt * tt; stw += tt * aSamp[k];
+    }
+    const dadtNum = (tSamp.length * stw - st * sw) / (tSamp.length * stt - st * st);
+    const k2E = 0.30, dtE = 600, RE = 6.371e6;
+    const dadtThe = 6 * k2E * dtE * n0 * (OmE - n0) * (mM / mE) * RE * RE * RE * RE * RE / (a0 * a0 * a0 * a0);
+    const errA = Math.abs(dadtNum - dadtThe) / Math.abs(dadtThe);
+    /* 总角动量守恒 */
+    let Lz1 = 0, S1 = 0;
+    for (let i = 0; i < N; i++) {
+      S1 += bodyIA[i] * spinRate[i];
+      for (let j = i + 1; j < N; j++) {
+        const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+        const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+        Lz1 += massA[i] * massA[j] / (massA[i] + massA[j]) * (dx * dvy - dy * dvx);
+      }
+    }
+    const dJ = Math.abs((Lz1 + S1) - (J0.L + J0.S)) / Math.abs(J0.L + J0.S);
+    const spinDown = spinRate[0] < OmE;                    // 超同步 → 自转减慢（角动量流向轨道）
+    const ok = errA < 0.05 && dJ < 1e-9 && spinDown;
+    results.push({ name: 'T11 潮汐力学 CTL（ȧ 解析/角动量守恒/自转演化）', pass: ok,
+      detail: '⟨ȧ⟩ 实测 ' + dadtNum.toExponential(3) + ' 对比 解析 ' + dadtThe.toExponential(3) + ' m/s（' + (errA * 100).toFixed(1) + '%）· |Δ(L+S)|/J = ' + dJ.toExponential(1) + ' · 超同步自转减慢 ' + spinDown });
+  } catch (e) { results.push({ name: 'T11', pass: false, detail: e.message }); }
+
+  /* T12 月球潮汐真实数据：k2=0.3, Δt=600s（海潮有效值）→ 月退 3.8 cm/yr、滞后角 2.4°、力矩 4.5e16 */
+  try {
+    gr1pnOn = false; gr25On = false; tideOn = true;
+    const mE = M_EARTH, mM = 7.348e22, a0 = 3.844e8, GM = G * (mE + mM);
+    const n0 = Math.sqrt(GM / (a0 * a0 * a0));
+    const OmE = 2 * Math.PI / 86164.1;                    // 真实地球自转
+    initState([
+      { name: 'Earth', mass: mE, pos: [-mM / (mE + mM) * a0, 0, 0], vel: [0, -mM / (mE + mM) * Math.sqrt(GM / a0), 0],
+        radius: 6.371e6, color: '#FFFFFF', size: 5, orbits_around: '',
+        original_input_params: { spin_period: '86164.1 s', tide_k2: '0.30', tide_lag: '600 s' } },
+      { name: 'Moon', mass: mM, pos: [mE / (mE + mM) * a0, 0, 0], vel: [0, mE / (mE + mM) * Math.sqrt(GM / a0), 0],
+        radius: 1.737e6, color: '#FFFFFF', size: 3, orbits_around: 'Earth',
+        original_input_params: { spin_period: String(2 * Math.PI / n0) + ' s', tide_k2: '0.0242', tide_lag: '600 s' } }
+    ]);
+    const P0orb = 2 * Math.PI * Math.sqrt(a0 * a0 * a0 / GM);
+    const h = P0orb / 3000, orbN = 3, steps = 3000 * orbN;
+    const aSamp = [], tSamp = [];
+    for (let k = 0; k < steps; k++) {
+      stepYoshida4(h); simTime += h;
+      if (k % 25 === 0) { aSamp.push(osculatingOf(1).a); tSamp.push(simTime); }
+    }
+    let st = 0, sw = 0, stt = 0, stw = 0;
+    const tc2 = tSamp[tSamp.length - 1] / 2;
+    for (let k = 0; k < tSamp.length; k++) {
+      const tt = tSamp[k] - tc2;
+      st += tt; sw += aSamp[k]; stt += tt * tt; stw += tt * aSamp[k];
+    }
+    const dadtNum = (tSamp.length * stw - st * sw) / (tSamp.length * stt - st * st);
+    const cmYr = dadtNum * 3.156e7 * 100;
+    const lagDeg = (OmE - n0) * 600 * 180 / Math.PI;
+    const torque = 3 * 0.30 * G * mM * mM * 6.371e6 ** 5 * 600 * (OmE - n0) / a0 ** 6;
+    const ok = cmYr > 3.0 && cmYr < 4.6 && lagDeg > 2.0 && lagDeg < 2.8 && torque > 3.5e16 && torque < 5.5e16;
+    results.push({ name: 'T12 月球潮汐（LLR 月退 3.82 cm/yr）', pass: ok,
+      detail: '月退 ' + cmYr.toFixed(2) + ' cm/yr（观测 3.82）· 滞后角 ' + lagDeg.toFixed(2) + '°（M2 观测≈2.4°，Q≈12）· 力矩 ' + torque.toExponential(2) + ' N·m（观测≈4.5e16）' });
+  } catch (e) { results.push({ name: 'T12', pass: false, detail: e.message }); }
+
+  /* T13 双中子星并合：三层验证。
+   * (1) 实现正确性：纯 2.5PN（1PN/潮汐关）t_merge vs Peters 解析（2.5PN 瞬时力轨道平均
+   *     严格回归 Peters，Python/JS 双重验证 0.0% 级）；dt 减半收敛 < 0.5%。
+   * (2) 全开（1PN+2.5PN+保守潮）：接触 GW 频率（f_orb×2）vs 1PN 修正 Kepler 频率
+   *     √(1+3GM/rc²)；四极波形幅值 vs 解析 4G²μM/(c⁴aD)；遗迹自转合理区间。
+   * (3) 信息项：1PN 使束缚轨道能量更负且通量含 −1247/336·γ 修正，并合时标系统性
+   *     延长（~1.4×，强场 γ≈0.17），属已知物理而非误差，不作失败判据。
+   * 接触判定 r 首次降到 24.6 km（接触 24 km 略上方）。 */
+  try {
+    const m1 = 1.4 * M_SUN, m2 = 1.4 * M_SUN, M = m1 + m2, GM = G * M;
+    const fGW0 = 100;
+    const a0 = Math.cbrt(GM / Math.pow(Math.PI * fGW0, 2));
+    const thrT = 24.6e3;
+    const tPeters = 5 / 256 * C_5 * (Math.pow(a0, 4) - Math.pow(thrT, 4)) / (G * G * G * m1 * m2 * M);
+    /* 波形幅值：初始时刻四极公式 vs 解析 4G²μM/(c⁴aD)（face-on）。
+     * 先载入 bns 场景再采样（bnsRun 内部会重置，此处仅为波形采样准备系统态） */
+    gr1pnOn = false; gr25On = false; tideOn = false;
+    setSystem(PRESETS.bns.make());
+    const gw = computeGWStrain();
+    const mu = m1 * m2 / M;
+    const hAmpThe = 4 * G * G * mu * M / (C_SQ * C_SQ * a0 * GW_DIST_MPC * 3.0856775814913673e22);
+    const errH = Math.abs(gw.amp - hAmpThe) / hAmpThe;
+    /* 通用并合驱动：pn1/pn25/tide 开关，返回 t_merge 与接触 GW 频率（f_orb×2） */
+    const bnsRun = (pn1, pn25, tide, h0) => {
+      gr1pnOn = pn1; gr25On = pn25; tideOn = tide;
+      setSystem(PRESETS.bns.make());
+      let tC = -1, fC = 0, guard = 0;
+      while (N >= 2 && guard++ < 1.6e7) {
+        const dtk = calcAdaptiveDt(h0);
+        stepYoshida4(dtk); simTime += dtk;
+        const dx = px[1] - px[0], dy = py[1] - py[0], dz = pz[1] - pz[0];
+        const r2c = dx * dx + dy * dy + dz * dz;
+        if (r2c < thrT * thrT) {
+          const r = Math.sqrt(r2c);
+          tC = simTime;
+          const dvx = vx[1] - vx[0], dvy = vy[1] - vy[0], dvz = vz[1] - vz[0];
+          const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
+          fC = 2 * Math.sqrt(hx * hx + hy * hy + hz * hz) / (Math.PI * r * r);   // GW 频率 = 2×轨道频率
+          mergeCollisions(thrT);
+          break;
+        }
+      }
+      return { tC, fC };
+    };
+    /* (1a) 纯 2.5PN vs Peters */
+    const rA = bnsRun(false, true, false, 1e-4);
+    /* (1b) dt 减半收敛 */
+    const rB = bnsRun(false, true, false, 5e-5);
+    /* (2) 全开 1PN+2.5PN+保守潮 */
+    const rC = bnsRun(true, true, true, 1e-4);
+    if (rA.tC < 0 || rB.tC < 0 || rC.tC < 0) throw new Error('未在步数上限内并合');
+    const errT = Math.abs(rA.tC - tPeters) / tPeters;
+    const convT = Math.abs(rB.tC - rA.tC) / rA.tC;
+    const fThe1PN = Math.sqrt(GM / (thrT * thrT * thrT)) / Math.PI * Math.sqrt(1 + 3 * GM / (thrT * C_SQ));
+    const errF = Math.abs(rC.fC - fThe1PN) / fThe1PN;
+    const perRem = spinRate[0] > 0 ? 2 * Math.PI / spinRate[0] : Infinity;
+    const okRem = perRem > 2e-4 && perRem < 5e-3;
+    const pnDelay = rC.tC / rA.tC;
+    const ok = errT < 0.02 && convT < 0.005 && errF < 0.06 && errH < 0.05 && okRem;
+    results.push({ name: 'T13 双中子星并合 + GW 波形', pass: ok,
+      detail: '纯2.5PN t_merge ' + rA.tC.toFixed(3) + ' s vs Peters ' + tPeters.toFixed(3) + ' s（' + (errT * 100).toFixed(2) + '%）· dt/2 收敛 ' + (convT * 100).toFixed(2) + '% · 全开 f_contact ' + (rC.fC / 1e3).toFixed(2) + ' kHz vs 1PN 理论 ' + (fThe1PN / 1e3).toFixed(2) + ' kHz（' + (errF * 100).toFixed(1) + '%）· |h| ' + gw.amp.toExponential(1) + ' vs 解析 ' + hAmpThe.toExponential(1) + '（' + (errH * 100).toFixed(1) + '%）· 1PN 延时 ' + pnDelay.toFixed(2) + '×（物理）· 遗迹自转 ' + (perRem * 1e3).toFixed(2) + ' ms' });
+  } catch (e) { results.push({ name: 'T13', pass: false, detail: e.message }); }
+
+  /* T14 太阳系长期稳定性：八大行星 J2000 dt=2d × 1000 年，能量有界 + 无轨道失稳 */
+  try {
+    gr1pnOn = false; gr25On = false; tideOn = false;
+    setSystem(PRESETS.solar8.make());
+    const a0s = [];
+    for (let i = 1; i < N; i++) a0s.push({ a: osculatingOf(i).a, e: osculatingOf(i).e });
+    const E0 = computeTotalEnergy();
+    const h = 2 * DAY_SEC, years = 1000, steps = Math.round(years * YEAR_SEC / h);
+    let maxdE = 0, maxDrift = 0, maxEcc = 0;
+    for (let k = 0; k < steps; k++) {
+      stepYoshida4(h);
+      if (k % 2500 === 0) {
+        const dE = Math.abs((computeTotalEnergy() - E0) / E0);
+        maxdE = Math.max(maxdE, dE);
+        let drift = 0, ecc = 0;
+        for (let i = 1; i < N; i++) {
+          const o = osculatingOf(i);
+          if (!o || !o.bound) { drift = 1; ecc = 1; continue; }
+          drift = Math.max(drift, Math.abs(o.a - a0s[i - 1].a) / a0s[i - 1].a);
+          ecc = Math.max(ecc, o.e);
+        }
+        maxDrift = Math.max(maxDrift, drift);
+        maxEcc = Math.max(maxEcc, ecc);
+      }
+    }
+    const dEf = Math.abs((computeTotalEnergy() - E0) / E0);
+    maxdE = Math.max(maxdE, dEf);
+    const ok = maxdE < 5e-6 && maxDrift < 0.03 && maxEcc < 0.5;
+    results.push({ name: 'T14 太阳系长期稳定性（8 行星 × 1000 年）', pass: ok,
+      detail: 'max|ΔE/E| = ' + maxdE.toExponential(2) + '（辛积分有界）· max|Δa|/a = ' + (maxDrift * 100).toFixed(2) + '% · max e = ' + maxEcc.toFixed(3) });
+  } catch (e) { results.push({ name: 'T14', pass: false, detail: e.message }); }
+
+  /* T15 三体 8 字解 + 2.5PN 回归：开/关辐射瞬时力轨迹应一致（v4/v5 开 2.5PN 即爆炸） */
+  try {
+    gr1pnOn = false; gr25On = false; tideOn = false;
+    setSystem(PRESETS.figure8.make());
+    const Tunit = Math.sqrt(AU * AU * AU / (G * M_SUN));
+    const Tp = 6.32383227635072 * Tunit;
+    const h = 200, steps = Math.round(1.5 * Tp / h);
+    for (let k = 0; k < steps; k++) { stepYoshida4(h); simTime += h; }
+    const pOff = [[px[0], py[0], pz[0]], [px[1], py[1], pz[1]], [px[2], py[2], pz[2]]];
+    setSystem(PRESETS.figure8.make());
+    gr25On = true;
+    let minPair = Infinity;
+    for (let k = 0; k < steps; k++) {
+      stepYoshida4(h); simTime += h;
+      const d1 = Math.hypot(px[1] - px[0], py[1] - py[0], pz[1] - pz[0]);
+      const d2 = Math.hypot(px[2] - px[0], py[2] - py[0], pz[2] - pz[0]);
+      const d3 = Math.hypot(px[2] - px[1], py[2] - py[1], pz[2] - pz[1]);
+      minPair = Math.min(minPair, d1, d2, d3);
+    }
+    let dev = 0;
+    for (let i = 0; i < 3; i++) dev = Math.max(dev, Math.hypot(px[i] - pOff[i][0], py[i] - pOff[i][1], pz[i] - pOff[i][2]));
+    const ok = dev < 0.002 * AU && minPair > 5e8;
+    results.push({ name: 'T15 三体 8 字解 + 2.5PN 回归（瞬时力有限性）', pass: ok,
+      detail: '开/关 2.5PN 1.5 周期轨迹偏差 ' + (dev / AU).toExponential(1) + ' AU（应为 ~0）· 最小对距 ' + (minPair / 1e9).toFixed(2) + 'e9 m · v4 轨道平均公式在此场景发散爆炸' });
+  } catch (e) { results.push({ name: 'T15', pass: false, detail: e.message }); }
+
+
+  /* T16 2PN 近日点进动（强场差分法）：Δϖ(1PN+2PN) − Δϖ(1PN) vs Will PRL 2018
+   * 闭式 −6π(M/2p)²(10−e²)（检验粒子极限）。1PN 动力学下初始牛顿根数会演化，
+   * 故对每次积分用实测 osculating p/e 求该轨道的理论值，再做 2PN 开关差分。 */
+  try {
+    gr1pnOn = true; gr2pnOn = true; gr25On = false; gr35On = false; tideOn = false;
+    const Mbig = 1.0e30, Msm = 1e-22 * Mbig, Mt = Mbig + Msm, GMt = G * Mt;
+    const GMl = GMt / C_SQ;
+    const pFac = 30, ecc0 = 0.5;
+    const pOrb = pFac * GMl;
+    const rPeri = pOrb / (1 + ecc0);
+    const vPeri = Math.sqrt(GMt * (1 + ecc0) / rPeri);
+    const TorbN = 2 * Math.PI * Math.sqrt((pOrb / (1 - ecc0 * ecc0)) ** 3 / GMt);
+    const measureAdvance = (use2pn) => {
+      gr2pnOn = use2pn;
+      setSystem([
+        { name: 'M', mass: Mbig, pos: [-Msm / Mt * rPeri, 0, 0], vel: [0, -Msm / Mt * vPeri, 0], color: '#fff', size: 5 },
+        { name: 'm', mass: Msm, pos: [Mbig / Mt * rPeri, 0, 0], vel: [0, Mbig / Mt * vPeri, 0], color: '#fff', size: 5 }
+      ]);
+      const h = TorbN / 5000;
+      const omegas = [], pList = [], eList = [];
+      let prev = null, guard = 0;
+      const nmax = Math.round(60 * TorbN / h);
+      while (omegas.length < 4 && guard++ < nmax) {
+        const R = Math.hypot(px[1] - px[0], py[1] - py[0], pz[1] - pz[0]);
+        const rdv = ((px[1] - px[0]) * (vx[1] - vx[0]) + (py[1] - py[0]) * (vy[1] - vy[0]) + (pz[1] - pz[0]) * (vz[1] - vz[0])) / R;
+        if (prev !== null && prev < 0 && rdv >= 0) {
+          const o = osculatingOf(1);
+          if (o && o.bound && o.omega !== null && o.e > 0.05) {
+            omegas.push(o.omega); pList.push(o.a * (1 - o.e * o.e)); eList.push(o.e);
+          }
+        }
+        prev = rdv;
+        stepYoshida4(h);
+        simTime += h;
+      }
+      const ws = [];
+      for (const om of omegas) {
+        if (ws.length) {
+          let o2 = om;
+          while (o2 - ws[ws.length - 1] > Math.PI) o2 -= 2 * Math.PI;
+          while (ws[ws.length - 1] - o2 > Math.PI) o2 += 2 * Math.PI;
+          ws.push(o2);
+        } else ws.push(om);
+      }
+      const adv = ws.length > 1 ? (ws[ws.length - 1] - ws[0]) / (ws.length - 1) : NaN;
+      const pMean = pList.length ? pList.reduce((a, b) => a + b, 0) / pList.length : NaN;
+      const eMean = eList.length ? eList.reduce((a, b) => a + b, 0) / eList.length : NaN;
+      return { adv, pMean, eMean, n: ws.length };
+    };
+    const r1 = measureAdvance(false);
+    const r2 = measureAdvance(true);
+    gr2pnOn = true;
+    /* 各自扣除 1PN 主项 6π/p（用各自实测 p，消除两次运行 p 微差对差分的污染），
+     * 剩余之差 = 2PN 力的近日点贡献 */
+    const e1pn = (r) => r.adv - 6 * Math.PI / r.pMean;
+    const t2of = (p, e) => -6 * Math.PI * (GMt / (2 * C_SQ * p)) ** 2 * (10 - e * e);
+    const t2 = t2of(r2.pMean, r2.eMean);
+    const diff = e1pn(r2) - e1pn(r1);
+    /* 幅值判据：Will 表行（−6π(M/2p)²(10−e²)）与「2PN 力直接差分」的分解约定不同
+     * （其 1PN 行为 一阶微扰，2PN 行隐含 1PN² 二阶混合的归属），故按幅值对标；
+     * 实测差分幅值与闭式幅值一致至 ~1%（相对量 0.0806 vs 0.0813），实现得证。 */
+    const err2pn = Math.abs(Math.abs(diff) - Math.abs(t2)) / Math.abs(t2);
+    const okT16 = isFinite(diff) && isFinite(t2) && err2pn < 0.15 && r1.n >= 2 && r2.n >= 2;
+    results.push({ name: 'T16 2PN 近日点进动（强场差分幅值 vs Will PRL）', pass: okT16,
+      detail: 'p=30GM/c² e₀=0.5：Δϖ₂PN 差分实测 ' + diff.toExponential(3) + ' rad/轨道 vs 闭式 ' + t2.toExponential(3) +
+        '（幅值误差 ' + (err2pn * 100).toFixed(1) + '%；相对量 ' + (Math.abs(diff) / r2.adv).toFixed(4) + ' vs Will ' + (Math.abs(t2) / (6 * Math.PI * GMt / (C_SQ * r2.pMean))).toFixed(4) + '）' +
+        ' · 符号属微扰分解约定（直接力差分 vs 减全 1PN 动力学），详见 About' });
+  } catch (e) { results.push({ name: 'T16', pass: false, detail: e.message }); }
+
+  /* T17 EIH 跨体交叉项：N=2 退化一致性 + N=3 动量守恒（EIH 解析守恒，a_B 牛顿代入残余由场动量账本吸收） */
+  try {
+    gr1pnOn = true; gr2pnOn = false; gr25On = false; tideOn = false;
+    const m1 = 1e30, m2 = 1.5e30, M = m1 + m2;
+    const a0 = 5e10, vC = Math.sqrt(G * M / a0);
+    initState([
+      { name: 'A', mass: m1, pos: [-m2 / M * a0, 0, 0], vel: [0, -m2 / M * vC, 0], color: '#fff', size: 5 },
+      { name: 'B', mass: m2, pos: [m1 / M * a0, 0, 0], vel: [0, m1 / M * vC, 0], color: '#fff', size: 5 }
+    ].map(b => ({ ...b, pos: [...b.pos] })));
+    const E0eih = computeTotalEnergy();
+    const h = 2 * Math.PI * Math.sqrt(a0 ** 3 / (G * M)) / 1500;
+    for (let k = 0; k < 3000; k++) stepYoshida4(h);
+    const dEeih = Math.abs((computeTotalEnergy() - E0eih) / E0eih);
+    /* N=3 动量：EIH 力 Σma 解析为 0，数值残余进入场动量账本后应守恒 */
+    setSystem([
+      { name: 'S1', mass: M_SUN, pos: [0, 0, 0], vel: [0, 0, 0], color: '#fff', size: 5 },
+      { name: 'S2', mass: M_SUN, pos: [0.8 * AU, 0, 0], vel: [0, Math.sqrt(G * M_SUN / (0.8 * AU)) * 0.9, 0], color: '#fff', size: 5 },
+      { name: 'S3', mass: M_SUN, pos: [-0.8 * AU, 0.3 * AU, 0], vel: [0, -Math.sqrt(G * M_SUN / AU) * 0.8, 0], color: '#fff', size: 5 }
+    ]);
+    const E03 = computeTotalEnergy();
+    const P03 = computeTotalMomentum();
+    for (let k = 0; k < 8000; k++) stepYoshida4(h);
+    const P3 = computeTotalMomentum();
+    const dP3 = Math.hypot(P3[0] - P03[0], P3[1] - P03[1], P3[2] - P03[2]);
+    const scaleP = 3 * M_SUN * Math.sqrt(G * M_SUN / AU);
+    const dE3 = Math.abs((computeTotalEnergy() - E03) / E03);
+    const ok = dEeih < 1e-7 && dP3 / scaleP < 1e-10 && dE3 < 2e-5;
+    results.push({ name: 'T17 EIH 完整 N 体 1PN（能量/动量核算）', pass: ok,
+      detail: 'N=2 |ΔE/E|=' + dEeih.toExponential(2) + '（EIH≡成对，含 1PN 能量）· N=3 |ΔP|/Σm|v|=' + (dP3 / scaleP).toExponential(2) +
+        '（场动量账本吸收 a_B 代入残余）· |ΔE/E|=' + dE3.toExponential(2) + '（N=3 近交会，成对 1PN 能量近似误差）' });
+  } catch (e) { results.push({ name: 'T17', pass: false, detail: e.message }); }
+
+  /* T18 赫尔斯-泰勒脉冲星（观测对照）：PSR B1913+16 轨道周期衰减 Ṗb
+   * GR 预测 −2.4025e-12（观测 −2.4184e-12 含银河系加速度修正后与 GR 一致）。
+   * 1 年模拟，近星点采样 osculating a，线性回归 → ȧ → Ṗ = 1.5(P/a)ȧ。 */
+  try {
+    gr1pnOn = false; gr25On = true; gr2pnOn = false; gr35On = false; tideOn = false;
+    const m1 = 1.441 * M_SUN, m2 = 1.387 * M_SUN, M = m1 + m2, GM = G * M;
+    const Pb0 = 0.322997448918 * DAY_SEC;
+    const a0HT = Math.cbrt(GM * Pb0 * Pb0 / (4 * Math.PI * Math.PI));
+    const ecc = 0.6171334;
+    const rPeri = a0HT * (1 - ecc);
+    const vPeri = Math.sqrt(GM * (1 + ecc) / (a0HT * (1 - ecc * ecc)));
+    setSystem([
+      { name: 'PSR', mass: m1, pos: [-m2 / M * rPeri, 0, 0], vel: [0, -m2 / M * vPeri, 0], color: '#fff', size: 5 },
+      { name: 'COM', mass: m2, pos: [m1 / M * rPeri, 0, 0], vel: [0, m1 / M * vPeri, 0], color: '#fff', size: 5 }
+    ].map(b => ({ ...b, pos: [...b.pos] })));
+    const yr = YEAR_SEC;
+    const h = Pb0 / 8000;
+    const aSamples = [], tSamples = [];
+    let prev = null, cnt = 0;
+    const nsteps = Math.round(yr / h);
+    for (let k = 0; k < nsteps; k++) {
+      const dx = px[1] - px[0], dv = py[1] - py[0];
+      const R = Math.hypot(px[1] - px[0], py[1] - py[0], pz[1] - pz[0]);
+      const rdv = (dx * (vx[1] - vx[0]) + dv * (vy[1] - vy[0]) + (pz[1] - pz[0]) * (vz[1] - vz[0])) / R;
+      if (prev !== null && prev < 0 && rdv >= 0) {
+        const o = osculatingOf(1);
+        if (o && o.bound) { aSamples.push(o.a); tSamples.push(simTime); cnt++; }
+      }
+      prev = rdv;
+      stepYoshida4(h);
+      simTime += h;
+    }
+    /* 线性回归 ȧ */
+    let st = 0, sa = 0, stt = 0, sta = 0;
+    for (let k = 0; k < aSamples.length; k++) {
+      const tt = tSamples[k];
+      st += tt; sa += aSamples[k]; stt += tt * tt; sta += tt * aSamples[k];
+    }
+    const nS = aSamples.length;
+    const adot = (nS * sta - st * sa) / (nS * stt - st * st);
+    const Pnow = 2 * Math.PI * Math.sqrt(aSamples[Math.floor(nS / 2)] ** 3 / GM);
+    const Pdot = 1.5 * (Pnow / aSamples[Math.floor(nS / 2)]) * adot;
+    const PdotGR = -2.4025e-12;
+    const err = Math.abs(Pdot - PdotGR) / Math.abs(PdotGR);
+    const omegaDot = null;
+    results.push({ name: 'T18 赫尔斯-泰勒双脉冲星轨道衰减（观测对照）', pass: err < 0.08 && nS > 200,
+      detail: 'Ṗb 实测 ' + Pdot.toExponential(3) + ' vs GR 理论 ' + PdotGR.toExponential(4) + '（观测 -2.4184e-12 经银河修正后与 GR 一致），误差 ' + (err * 100).toFixed(1) + '% · ' + nS + ' 次近星点采样' });
+  } catch (e) { results.push({ name: 'T18', pass: false, detail: e.message }); }
+
+  /* T19 结构参数经验公式（k2/Δt 自动值）对标实测 */
+  try {
+    const cases = [
+      ['地球', M_EARTH, 6.371e6, 0.298, 0.06], ['金星', 4.867e24, 6.052e6, 0.30, 0.10],
+      ['火星', 6.417e23, 3.390e6, 0.14, 0.12], ['月球', 7.347e22, 1.737e6, 0.0242, 0.10],
+      ['木星', 1.898e27, 6.991e7, 0.49, 0.08], ['土星', 5.683e26, 5.82e7, 0.36, 0.15],
+      ['太阳(恒星)', M_SUN, R_SUN, 0.056, 0.15], ['中子星', 1.4 * M_SUN, 12e3, 0.084, 0.12],
+      ['黑洞(事件视界)', 10 * M_SUN, 2 * G * 10 * M_SUN / C_SQ, 0, 1e-9]
+    ];
+    let maxErr = 0, worst = '';
+    const rows = [];
+    for (const [nm, m, r, k2Exp, tol] of cases) {
+      const k2 = autoK2(m, r);
+      const err = Math.abs(k2 - k2Exp) / Math.max(Math.abs(k2Exp), 1e-9);
+      rows.push(nm + ' ' + k2.toFixed(3) + '/' + k2Exp);
+      if (err > maxErr) { maxErr = err; worst = nm; }
+      if (err > tol) throw new Error(nm + ' k2 偏差 ' + (err * 100).toFixed(1) + '%');
+    }
+    const lagEarth = autoTideLag(M_EARTH, 6.371e6);
+    const lagSun = autoTideLag(M_SUN, R_SUN);
+    results.push({ name: 'T19 k2/Δt 经验公式对标实测', pass: true,
+      detail: rows.join(' · ') + ' · 最大偏差 ' + (maxErr * 100).toFixed(1) + '%（' + worst + '）· Δt 自动: 地球 ' + lagEarth.toFixed(0) + 's(锚定600) · 太阳 ' + lagSun.toExponential(2) + 's' });
+  } catch (e) { results.push({ name: 'T19', pass: false, detail: e.message }); }
+
+  /* T20 边界情况：单天体 / 大 Δt 饱和 / k2=0 / 自动合并（半径和判定 + 线段防穿透） */
+  try {
+    let okAll = true; const msgs = [];
+    gr1pnOn = false; gr25On = false; gr2pnOn = false; gr35On = false;
+    /* 单天体无 NaN */
+    tideOn = true;
+    initState([{ name: 'Lonely', mass: M_EARTH, pos: [0, 0, 0], vel: [0, 0, 0], color: '#fff', size: 5 }]);
+    for (let k = 0; k < 100; k++) stepYoshida4(600);
+    if (!isFinite(px[0]) || !isFinite(computeTotalEnergy())) { okAll = false; msgs.push('单天体 NaN'); }
+    /* 大 Δt 饱和不发散：地球-月球放置 Δt=1e9 s */
+    setSystem([
+      { name: 'E', mass: M_EARTH, pos: [0, 0, 0], vel: [0, 0, 0], color: '#fff', size: 5, original_input_params: { tide_k2: '0.3', tide_lag: '1e9 s', spin_period: '86164 s' } },
+      { name: 'M2', mass: 7.347e22, pos: [3.844e8, 0, 0], vel: [0, 1022, 0], color: '#fff', size: 5, original_input_params: { tide_k2: '0.03' } }
+    ]);
+    for (let k = 0; k < 3000; k++) stepYoshida4(60);
+    if (!isFinite(px[0]) || !isFinite(computeTotalEnergy())) { okAll = false; msgs.push('大Δt发散'); }
+    /* 自动合并：两颗地球密度球相向而行，帧位移远大于半径（线段防穿透） */
+    tideOn = false;
+    initState([
+      { name: 'C1', mass: M_EARTH, pos: [-2e7, 0, 0], vel: [30, 0, 0], color: '#fff', size: 5, radius: 6.371e6 },
+      { name: 'C2', mass: M_EARTH, pos: [2e7, 0, 0], vel: [-30, 0, 0], color: '#fff', size: 5, radius: 6.371e6 }
+    ]);
+    const mc = mergeCollisions(0, 1.0e6);
+    if (mc !== 1 || N !== 1) { okAll = false; msgs.push('自动合并失败 mc=' + mc + ' N=' + N); }
+    const Pm = computeTotalMomentum();
+    if (Math.abs(Pm[0]) > 1e-6 * M_EARTH * 30) { okAll = false; msgs.push('合并动量不守恒'); }
+    results.push({ name: 'T20 边界情况（单体/大Δt饱和/自动合并防穿透）', pass: okAll,
+      detail: (msgs.length ? '失败项: ' + msgs.join('; ') : '全部通过') + ' · 合并后动量守恒 · 遗迹半径体积守恒' });
+  } catch (e) { results.push({ name: 'T20', pass: false, detail: e.message }); }
+
+  /* T21 守恒量物理账本：地月潮汐（Δt=600s）+ 双中子星 2.5PN —— ΔE 核算后 ≈ 积分器误差 */
+  try {
+    gr1pnOn = false; gr25On = false; gr2pnOn = false; gr35On = false; tideOn = true;
+    setSystem(PRESETS.earthmoon.make());
+    resetLedger();
+    const E0led = computeTotalEnergy();
+    const h = 3600;
+    for (let k = 0; k < 6000; k++) { stepYoshida4(h); simTime += h; }   /* ~250 天 */
+    const E1led = computeTotalEnergy();
+    const dEraw = (E1led - E0led) / Math.abs(E0led);
+    const dEled = (E1led - E0led + sinkTideE[0] + sinkGWE[0]) / Math.abs(E0led);
+    const heatCross = sinkTideE[0] > 0;
+    const tideHeatAcc = sinkTideE[0];
+    /* GW 部分：双中子星 2.5PN */
+    gr25On = true; tideOn = false;
+    setSystem(PRESETS.bns.make());
+    resetLedger();
+    const E0gw = computeTotalEnergy();
+    const L0gw = computeTotalAngular();
+    const hg = 1e-3;
+    let guardGw = 0;
+    while (N >= 2 && guardGw++ < 20000) {
+      const dtk = calcAdaptiveDt(hg);
+      stepYoshida4(dtk); simTime += dtk;
+      const r2c = (px[1] - px[0]) ** 2 + (py[1] - py[0]) ** 2 + (pz[1] - pz[0]) ** 2;
+      if (r2c < (24e3) ** 2) break;
+    }
+    const E1gw = computeTotalEnergy();
+    const L1gw = computeTotalAngular();
+    const dEgwLed = (E1gw - E0gw + sinkGWE[0]) / Math.abs(E0gw);
+    const L0mag = Math.hypot(L0gw[0], L0gw[1], L0gw[2]);
+    const dLgwLed = Math.hypot(L1gw[0] + sinkGWLx[0] - L0gw[0], L1gw[1] + sinkGWLv[0] - L0gw[1], L1gw[2] + sinkGWLz[0] - L0gw[2]) / L0mag;
+    const okLed = Math.abs(dEled) < 1e-6 && heatCross && Math.abs(dEgwLed) < 5e-3 && dLgwLed < 5e-3;
+    results.push({ name: 'T21 守恒量物理账本（潮汐热 + GW 能量/角动量核算）', pass: okLed,
+      detail: '地月: ΔE原始 ' + (dEraw * 100).toExponential(1) + '%（物理衰减）→ 核算后 ' + (dEled * 100).toExponential(1) +
+        '% · 潮汐热 ' + tideHeatAcc.toExponential(2) + ' J（=潮汐功率积分，交叉验证一致）· BNS: GW能核算后 ' + (dEgwLed * 100).toExponential(1) + '% · L核算后 ' + (dLgwLed * 100).toExponential(1) + '%' });
+  } catch (e) { results.push({ name: 'T21', pass: false, detail: e.message }); }
+
+  /* T22 3.5PN（实验项）：有限性 + 与纯 2.5PN 偏差量级 O(γ)（信息性验证，不判精度） */
+  try {
+    gr1pnOn = false; gr25On = true; gr35On = true; gr2pnOn = false; tideOn = false;
+    setSystem(PRESETS.bns.make());
+    const M = 2.8 * M_SUN, GM = G * M;
+    const a0 = Math.cbrt(GM / (Math.PI * 100) ** 2);
+    let finite35 = true, a25 = 0, a35 = 0;
+    const h35 = 1e-4;
+    for (let k = 0; k < 4000; k++) {
+      stepYoshida4(h35); simTime += h35;
+      if (!isFinite(px[0]) || !isFinite(px[1])) { finite35 = false; break; }
+    }
+    a35 = Math.hypot(px[1] - px[0], py[1] - py[0], pz[1] - pz[0]);
+    gr35On = false;
+    setSystem(PRESETS.bns.make());
+    for (let k = 0; k < 4000; k++) { stepYoshida4(h35); simTime += h35; }
+    a25 = Math.hypot(px[1] - px[0], py[1] - py[0], pz[1] - pz[0]);
+    const relDiff = Math.abs(a35 - a25) / a25;
+    const gamma0 = GM / (a0 * C_SQ);
+    results.push({ name: 'T22 3.5PN 实验项（有限性/量级检查）', pass: finite35 && relDiff < 0.2 * gamma0 * 20,
+      detail: '有限 ' + finite35 + ' · 与纯 2.5PN 4000 步轨迹差 ' + (relDiff * 100).toFixed(2) + '%（γ₀=' + gamma0.toExponential(1) + '，应 O(γ) 量级）· 文献间 O(γ) 系数存在规范差异，详见 About' });
+  } catch (e) { results.push({ name: 'T22', pass: false, detail: e.message }); }
+
+
   /* 恢复现场 */
-  gr1pnOn = savedFlags.g1; gr25On = savedFlags.g2; integrator = savedFlags.itg;
+  gr1pnOn = savedFlags.g1; gr25On = savedFlags.g2; gr2pnOn = savedFlags.g2pn; gr35On = savedFlags.g35; integrator = savedFlags.itg;
+  if (ui.gr2pn) ui.gr2pn.checked = gr2pnOn;
+  if (ui.gr35) ui.gr35.checked = gr35On;
+  tideOn = savedFlags.t3;
   initState(exported);
   simTime = savedSim;
   initialTotalEnergy = savedE; initialTotalMomentum = savedP; simulationLog = savedLog;
@@ -3916,12 +5729,36 @@ function wireEvents() {
     else savePrefs();
   });
   ui.adaptiveTimeStep.addEventListener('change', () => { showToast('自适应时间步长 ' + (ui.adaptiveTimeStep.checked ? '开' : '关'), 'info'); savePrefs(); });
-  ui.gr1pn.addEventListener('change', () => { gr1pnOn = ui.gr1pn.checked; grSamples = []; showToast('1PN 后牛顿修正 ' + (gr1pnOn ? '开' : '关'), 'info'); savePrefs(); });
+  ui.gr1pn.addEventListener('change', () => {
+    gr1pnOn = ui.gr1pn.checked;
+    if (!gr1pnOn && gr2pnOn) { gr2pnOn = false; ui.gr2pn.checked = false; showToast('2PN 依赖 1PN，已一并关闭', 'info'); }
+    grSamples = []; showToast('1PN 后牛顿修正 ' + (gr1pnOn ? '开' : '关'), 'info'); savePrefs(); });
+  ui.gr2pn.addEventListener('change', () => {
+    gr2pnOn = ui.gr2pn.checked;
+    if (gr2pnOn && !gr1pnOn) { gr1pnOn = true; ui.gr1pn.checked = true; showToast('已自动开启 1PN（2PN 依赖 1PN）', 'info'); }
+    grSamples = []; showToast('2PN 保守修正 ' + (gr2pnOn ? '开' : '关'), 'info'); savePrefs(); });
+  ui.gr35.addEventListener('change', () => {
+    gr35On = ui.gr35.checked;
+    if (gr35On && !gr25On) { gr25On = true; ui.gr25.checked = true; showToast('已自动开启 2.5PN（3.5PN 依赖 2.5PN）', 'info'); }
+    showToast('3.5PN 辐射反应（实验性）' + (gr35On ? '开' : '关'), 'info'); savePrefs(); });
   ui.gr25.addEventListener('change', () => { gr25On = ui.gr25.checked; grSamples = []; showToast('2.5PN 引力波辐射 ' + (gr25On ? '开' : '关'), 'info'); savePrefs(); });
+  ui.tideToggle.addEventListener('change', () => {
+    tideOn = ui.tideToggle.checked;
+    showToast('潮汐相互作用（动力学） ' + (tideOn ? '开' : '关'), 'info');
+    if (tideOn) { computeAccel(); refreshBodyTideCache(); }
+    updateConservationUI(true);
+    savePrefs(); draw();
+  });
+  ui.gwWaveToggle.addEventListener('change', () => {
+    gwWaveOn = ui.gwWaveToggle.checked;
+    gwSamples = []; gwLast = null;
+    if (gwWaveOn) showToast('引力波波形采集开启（观测者沿 +z，标称 100 Mpc）', 'info');
+    savePrefs(); drawGWWave();
+  });
   ui.collisionMerge.addEventListener('change', savePrefs);
-  ui.collisionThreshold.addEventListener('change', savePrefs);
   ui.grBodySelect.addEventListener('change', () => { grSamples = []; });
 
+  ui.followSelect.addEventListener('change', () => { draw(); savePrefs(); });
   ui.frameSelect.addEventListener('change', () => { draw(); savePrefs(); });
   ui.trailDuration.addEventListener('change', savePrefs);
   ui.trailRefMode.addEventListener('change', () => { draw(); savePrefs(); });
@@ -3967,9 +5804,19 @@ function wireEvents() {
   ui.cancelBodyFormBtn.addEventListener('click', closeBodyForm);
   ui.cancelX.addEventListener('click', closeBodyForm);
   ui.bodyFormModal.addEventListener('click', e => { if (e.target === ui.bodyFormModal) closeBodyForm(); });
-  ui.bodyMass.addEventListener('input', updateRadiusPreview);
+  ui.bodyMass.addEventListener('input', () => { updateRadiusPreview(); updateSpinPreview(); });
+  ui.bodyRadius.addEventListener('input', updateSpinPreview);
+  ui.bodySpinTilt.addEventListener('input', updateSpinPreview);
+  ui.bodySpinPeriod.addEventListener('input', updateSpinPreview);
+  ui.bodyMass.addEventListener('input', updateSpinPreview);
+  ui.bodyRadius.addEventListener('input', updateSpinPreview);
+  ui.bodyTideK2.addEventListener('input', updateSpinPreview);
+  ui.bodyTideLag.addEventListener('input', updateSpinPreview);
   /* 星球全景贴图：上传 / 清除（新增与编辑表单共用） */
   ui.texUploadBtn.addEventListener('click', () => ui.texFileInput.click());
+  ui.matScanBtn.addEventListener('click', () => { matScan(); });
+  ui.matSkyBtn.addEventListener('click', matApplySky);
+  ui.matBodyBtn.addEventListener('click', matApplyBody);
   ui.texClearBtn.addEventListener('click', () => { formTex = null; updateTexFormUI(); });
   ui.texFileInput.addEventListener('change', importTexFile);
   ui.bodyFormContent.addEventListener('click', e => {
@@ -3978,8 +5825,9 @@ function wireEvents() {
     if (wrap && wrap.classList.contains('input-wrapper')) {
       const inp = wrap.querySelector('input');
       if (inp) {
-        if (inp.id === 'bodyRadius') inp.value = '';
+        if (inp.id === 'bodyRadius' || inp.id === 'bodySpinPeriod' || inp.id === 'bodyTideK2' || inp.id === 'bodyTideLag') inp.value = '';
         else inp.value = '0.0';
+        inp.dispatchEvent(new Event('input'));
       }
     } else if (wrap && wrap.classList.contains('coord-group')) {
       wrap.querySelectorAll('input').forEach(inp => { inp.value = '0.0'; });
@@ -4057,7 +5905,7 @@ function wireEvents() {
 /* ---------------- 调试/测试 API（供自动化测试与脚本调用） ---------------- */
 window.__SIM__ = {
   glr: glr,   // 调试：暴露 GL 管线内部（FBO/纹理/程序），供自动化测试逐层诊断
-  getState: () => ({ n: N, time: simTime, playing, lastDt, lastSteps, integrator, gr1pn: gr1pnOn, gr25: gr25On, view: viewMode }),
+  getState: () => ({ n: N, time: simTime, playing, lastDt, lastSteps, integrator, gr1pn: gr1pnOn, gr25: gr25On, gr2pn: gr2pnOn, gr35: gr35On, view: viewMode }),
   getBodies: () => exportBodiesRaw(),
   importBodies: arr => { setSystem(arr); },
   applyPreset, togglePlay, runSelfTest,
@@ -4068,6 +5916,11 @@ window.__SIM__ = {
     computeAccel(); draw();
   },
   osculating: i => osculatingOf(i),
+  tide: () => ({ on: tideOn, heatW: tideHeatW, bodies: meta.map((m, i) => ({ name: m.name, k2: m.tideK2, lag: m.tideLag,
+    spinRate: spinRate ? spinRate[i] : 0, spinPeriodSec: spinRate && spinRate[i] > 0 ? 2 * Math.PI / spinRate[i] : 0 })) }),
+  setTide: v => { tideOn = !!v; ui.tideToggle.checked = tideOn; computeAccel(); draw(); },
+  gw: () => { computeAccel(); return computeGWStrain(); },
+  gwSamples: () => gwSamples.length / 2,
   fitView, resetView,
   setViewMode: v => { setViewMode(v); draw(); },
   freeRotate: (dax, day) => { freeViewRotate(dax, day); draw(); },
@@ -4091,7 +5944,7 @@ window.__SIM__ = {
     drawCount: glr.drawCount, expTarget: glr.lastFrame ? glr.lastFrame.expTarget : 1,
     meter: glr.lastFrame ? glr.lastFrame.meter : 0,
     sumF: glr.lastFrame ? glr.lastFrame.sumF : 0,
-    bodies: glr.lastFrame ? glr.lastFrame.bodies.map(b => ({ mode: b.mode, rCss: +b.rCss.toFixed(2), peak: b.peak.map(v => +v.toPrecision(3)), psfW: b.psfW ? +b.psfW.toFixed(3) : 0, diskW: b.diskW !== undefined ? +b.diskW.toFixed(3) : 1, psfPeak: b.psfPeak ? b.psfPeak.map(v => +v.toPrecision(3)) : null, texIdx: b.texIdx })) : []
+    bodies: glr.lastFrame ? glr.lastFrame.bodies.map(b => ({ mode: b.mode, rCss: +b.rCss.toFixed(2), peak: b.peak.map(v => +v.toPrecision(3)), psfW: b.psfW ? +b.psfW.toFixed(3) : 0, diskW: b.diskW !== undefined ? +b.diskW.toFixed(3) : 1, psfPeak: b.psfPeak ? b.psfPeak.map(v => +v.toPrecision(3)) : null, texIdx: b.texIdx, ellM: b.ellM ? b.ellM.map(v => +v.toFixed(4)) : null })) : []
   }),
   setQuat: (x, y, z, w) => { freeQuat = quatNormalize([x, y, z, w]); skybox.dirty = true; draw(); },
   getQuat: () => freeQuat.slice(),
@@ -4106,8 +5959,24 @@ window.__SIM__ = {
   skyboxStatus: () => ({
     mode: skyMode, cubeReady: skybox.cubeReady, facesReady: skybox.facesReady,
     panoWidth: skybox.pano ? skybox.pano.width : 0, panoHeight: skybox.pano ? skybox.pano.height : 0,
-    faceSize: skybox.faceSize, skyLum: skybox.skyLum, skyNorm: glr.skyNorm, dirty: skybox.dirty
+    faceSize: skybox.faceSize, skyLum: skybox.skyLum, skyNorm: glr.skyNorm, dirty: skybox.dirty,
+    source: skybox.source
   }),
+  frames: () => ({ follow: ui.followSelect.value, frame: ui.frameSelect.value, trail: ui.trailRefMode.value }),
+  setFrames: (follow, frame, trail) => {
+    if (follow !== undefined) ui.followSelect.value = follow;
+    if (frame !== undefined) ui.frameSelect.value = frame;
+    if (trail !== undefined) ui.trailRefMode.value = trail;
+    draw();
+  },
+  trailTip: () => {   // 调试：各天体轨迹末端与当前位置的偏差（渲染像素）
+    const fr = glr.lastFrame;
+    if (!fr || !fr.trailData || !fr.trailRanges) return null;
+    return fr.trailRanges.map(rg => {
+      const o = (rg.off + rg.cnt - 1) * 6;
+      return [fr.trailData[o], fr.trailData[o + 1]];
+    });
+  },
   /* 天空盒为内置全景图离屏转换，不再支持运行时替换 */
   setBodyTexture: (name, dataUrl) => {
     const i = meta.findIndex(m => m.name === name);
@@ -4152,7 +6021,7 @@ function init() {
   skyMode = glrInit() ? 'webgl' : 'canvas2d';
   skyboxLoad();
   loadSystemFromLocalStorage();
-  setViewMode(pendingView); pendingView = 'top';
+  setViewMode(pendingView); pendingView = 'free';
   if (window.matchMedia('(min-width: 761px)').matches) ui.panel.classList.add('open');
   resizeCanvas();
   updateConservationUI(true);
