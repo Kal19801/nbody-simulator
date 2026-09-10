@@ -138,6 +138,14 @@ body.free-touch .pad{display:grid}
   .pad{grid-template-columns:repeat(3,46px);grid-auto-rows:46px}
 }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 <canvas id="glcanvas"></canvas>
@@ -207,9 +215,9 @@ body.free-touch .pad{display:grid}
         <button data-v="top">俯视</button><button data-v="side">侧视</button><button data-v="front">前视</button><button data-v="free" class="on">自由</button>
       </div>
     </div>
-    <div class="row"><span class="lbl" style="width:70px;flex:none">视角跟随</span><select id="followSelect" style="flex:1"></select></div>
+    <div class="row"><span class="lbl" style="width:70px;flex:none">视角跟随</span><select id="followSelect" style="flex:1"></select><span style="display:inline-flex;align-items:center;gap:7px;flex:none;margin-left:8px"><input type="checkbox" id="selfRotateToggle"><label for="selfRotateToggle" style="cursor:pointer" title="勾选：原地转头——镜头位置锁定，视角自由旋转，星球随视线移出眼前（与跟随目标解耦）；不勾：绕跟随目标中心公转（锚点钉在屏幕上，世界绕它公转）">自身</label></span></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">参考系</span><select id="frameSelect" style="flex:1"></select></div>
-    <div class="hint">视角跟随决定镜头锚定（绝对原点 / 质心 / 任意天体），与参考系彼此独立。参考系为坐标计量框架，轨迹默认按其绘制；轨迹末端始终精确对齐天体当前位置，参考天体自身运动不再引起错位。自由视角下拖拽旋转，触屏设备出现飞行按钮，桌面端可用 W A S D 与 R F Q E。</div>
+    <div class="hint">视角跟随决定镜头跟随目标（质心 / 绝对原点 / 任意天体），镜头位置随目标同步运动，与参考系彼此独立。「自身」开关决定拖拽旋转的方式：勾选 = 原地转头——镜头位置锁定，视角自由旋转，星球随视线移出眼前（在地球轨道上转头，地球不会一直钉在眼前）；不勾（默认）= 绕跟随目标中心公转，锚点钉在屏幕上、世界绕它公转。Q/E 恒为滚转。参考系为坐标计量框架，轨迹默认按其绘制；轨迹末端始终精确对齐天体当前位置。自由视角下拖拽旋转，触屏设备出现飞行按钮，桌面端可用 W A S D 前后左右、R F 升降、Q E 滚转，Shift 加速。</div>
     <div class="row">
       <div class="seg" id="trailSeg">
         <button data-v="line" class="on">曲线</button><button data-v="dot">点迹</button><button data-v="off">关</button>
@@ -235,7 +243,7 @@ body.free-touch .pad{display:grid}
     <div class="row"><input type="checkbox" id="perspToggle" checked><label for="perspToggle" style="cursor:pointer">透视投影</label></div>
     <div class="row"><input type="checkbox" id="physSizeToggle"><label for="physSizeToggle" style="cursor:pointer">星球真实尺寸</label></div>
     <div class="row"><input type="checkbox" id="starRadToggle" checked><label for="starRadToggle" style="cursor:pointer">恒星黑体辐射照明</label></div>
-    <div class="row"><input type="checkbox" id="glareToggle" checked><label for="glareToggle" style="cursor:pointer">亮度眩光与发白</label></div>
+    <div class="row"><input type="checkbox" id="glareToggle" checked><label for="glareToggle" style="cursor:pointer">bloom 泛光辉光（three.js 后处理）</label></div>
     <div class="hint">真实尺寸按物理半径随距离缩放，小于约 2 像素时改以通量守恒的高斯点源绘制，辐照度与缩放级别无关，真实比例缩小后仍可见。恒星阈值取氢燃烧下限 0.08 倍太阳质量，色温由质光关系与质径关系反解。眩光开启时启用真实相机模拟：自动曝光随相机接收亮度适应（对未分辨恒星做高光保护封顶，致密双星等极亮点源不再撑爆画面），泛光经多级滤波链，高光在 OKLab 空间漂白发白。</div>
     <div class="row wrap" style="gap:16px">
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="skyboxEnabled" checked><label for="skyboxEnabled" style="cursor:pointer">天空盒背景 · 内置银河全景</label></span>
@@ -309,12 +317,16 @@ body.free-touch .pad{display:grid}
   <section class="sec">
     <div class="kicker">Materials</div>
     <h2>材质库</h2>
-    <div class="hint">扫描与本文件同目录的 <b>textures/</b> 文件夹：全景图（宽高比≈2:1）可一键设为天空盒；与天体同名的图片（earth.jpg、火星.png 等中英文名）自动应用到对应星球，也可手动指定。支持子目录、服务器目录列表或 textures/manifest.json（文件名数组）。</div>
-    <div class="row"><button id="matScanBtn" class="btn" style="flex:1">扫描 textures/ 材质文件夹</button></div>
-    <div id="matGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px"></div>
+    <div class="hint">自动扫描与本文件同目录的 <b>textures/</b> 文件夹（启动即扫，结果缓存秒开），作为<b>星球表面贴图</b>（不用于天空盒）。自动匹配：<b>星球名.jpg → 底层；星球名_任意.jpg / 星球名-任意.jpg → 上层第二贴图</b>（中英文名均可）；后缀含 cloud/云 等词时自动开启「暗部透明」（像素越黑越透明，适合云图）。支持服务器目录列表或 textures/manifest.json（文件名数组）。</div>
+    <div class="row"><button id="matScanBtn" class="btn" style="flex:1">重新扫描 textures/ 材质文件夹</button></div>
+    <div id="matBigWrap" style="display:none;margin-top:8px;border:1px solid var(--line);padding:6px;text-align:center">
+      <img id="matBig" alt="" style="max-width:100%;max-height:150px;object-fit:contain;display:block;margin:0 auto">
+      <div id="matBigInfo" class="lbl" style="margin-top:4px;font-size:10px"></div>
+    </div>
+    <div id="matGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;max-height:222px;overflow-y:auto;overscroll-behavior:contain"></div>
     <div class="row" style="margin-top:6px;gap:6px">
-      <button id="matSkyBtn" class="btn" style="flex:1">设为天空盒</button>
-      <button id="matBodyBtn" class="btn" style="flex:1">应用到选中天体</button>
+      <select id="matTargetSel" style="flex:1"><option value="1">应用到底层贴图</option><option value="2">应用到上层贴图</option></select>
+      <button id="matBodyBtn" class="btn" style="flex:1">应用</button>
     </div>
     <div id="matInfo" class="lbl" style="margin-top:4px">未扫描</div>
   </section>
@@ -362,14 +374,14 @@ body.free-touch .pad{display:grid}
       自适应步长按 η·√(r_min/a_max) 启发式，思想源自 IAS15，Rein &amp; Spiegel 2015。<br>
       八大行星预设采用 JPL J2000 近似根数，Standish 1992，DE440 见 Park et al. 2021（v6 起平黄经经开普勒方程换算真近点角，修复 v5 相位误差）；双中子星并合预设 1.4+1.4 M☉、R=12 km、f_GW=100 Hz 入带，潮汐 k₂=0.09 对应 Λ≈400（GW170817 量级）。三体 8 字解取自 Chenciner &amp; Montgomery 2000，初值为对称性约化 Newton 精化解（DOP853 残差 3.7e-13）。<br>
       <span class="em">渲染与文献</span><br>
-      全部视觉元素经 WebGL 管线渲染：立方体贴图天空盒、轨迹、天体与后期合成；WebGL2 加 EXT_color_buffer_float 使用 RGBA16F 浮点缓冲，仅 WebGL1 时以 1/6 线性编码的 RGBA8 替代，WebGL 完全不可用才回退 Canvas 2D 网格投影路径。<br>
+      全部视觉元素由 three.js（ES Module，CDN 导入）渲染：真实网格天体、立方体贴图天空盒、轨迹与 EffectComposer 后期链；HDR 经 RGBA16F 浮点缓冲，three.js 加载失败自动回退极简 Canvas 2D（无辉光）。<br>
       恒星亮度按用户要求的物理链计算：质量→半径→有效温度→ L = 4πR²σT⁴（温度×表面积）一次计算并缓存，表面辐射亮度 B = σT⁴/π 距离无关。点源 PSF 峰值 = min(辐照度/PSF 立体角, B)：通量守恒且不超过表面辐射亮度，与圆面在切换点连续（数值比恰为 1），彻底消除旧版“开启真实尺寸后辉光跳变”。<br>
-      恒星圆面做临边昏暗 I(μ)=I₀(1−u(1−μ)) 与指数边缘辉光；行星圆面逐像素球面法线，多星朗伯 N·L 照明（每星真实辐照度×黑体颜色，柔和晨昏线）；支持等距柱状全景贴图（有贴图时不用表面颜色，导出 JSON base64 嵌入）。<br>
-      镜头模拟：自动曝光以相机接收辐照度计量（含圆面通量闭环），中灰 key 0.18，感度适应时间常数 0.3 秒；泛光移植 three.js UnrealBloomPass：软阈值亮度提取 + 9-tap 可分离 tent 高斯五级链 + 3×3 tent 上采样回累加，阈值 1.0 —— 深空背景低于阈值不参与泛光，太阳入屏不提亮背景，辉光强度随恒星辐照度（温度×表面积一次计算）与相机距离自然变化；高光漂白在 OKLab 空间做亮度压缩与色度衰减，模拟传感器高光去饱和，OKLab 见 Ottosson 2020，高斯核见 RasterGrid 线性采样优化。<br>
-      恒星色温由分段质光关系与 L=4πR²σT⁴ 反解，质光关系见 Kippenhahn &amp; Weigert 恒星结构理论；色温到 RGB 采用 Planckian 色度轨迹近似，即 Tanner Helland 算法。质量半径经验关系锚定太阳系天体实测，岩石行星段参照 Zeng et al. 2016。<br>
-      自由视角拖拽为单轴屏幕轨迹球：旋转轴取 (dy,−dx,0) 本地轴直接前置乘，视场中心内容位移恒等于 (dx,dy)·sin(θ)/len（Python 随机姿态精确验证，任意姿态跟手、无滚转）。<br>
+      恒星圆面为临边昏暗网格 I(μ)=I₀(1−u(1−μ))；行星圆面为真实网格，多星朗伯 N·L 照明（每星真实辐照度×黑体颜色，柔和晨昏线）+ 食阴影弓形公式（世界系）；支持等距柱状全景贴图（立方体方向采样，导出 JSON base64 嵌入）。亚像素天体切换为高斯点源精灵，缩小的行星同样以 HDR 加性进入泛光。<br>
+      镜头模拟：自动曝光以相机接收辐照度计量（含圆面通量闭环），中灰 key 0.18，感度适应时间常数 0.3 秒；泛光由 three.js UnrealBloomPass 后处理完成（软阈值亮度提取 + 五级高斯链，阈值 = 1/曝光）—— 深空背景低于阈值不参与泛光，太阳入屏不提亮背景，辉光强度随恒星辐照度与相机距离自然变化；色调映射 ACES Filmic 在 OutputPass 完成（高光自然去饱和），v16 的手写泛光链、OKLab 漂白、恒星 halo 与眩光项已整体移除。<br>
+      恒星亮度由分段质光关系给出主序基准，有效温度再与平均密度挂钩（同调关系 + Hayashi 下限，密度低的大半径恒星温度下降），亮度按 L = 4πR²σT⁴ 真实计算表面积与黑体谱，质光关系见 Kippenhahn &amp; Weigert 恒星结构理论，Hayashi 线见 Hayashi 1961；色温到 RGB 采用 Planck 黑体谱与 CIE 1931 标准观察者配色函数逐波长积分（Wyman-Sloan-Shirley 2013 解析拟合），色域外出色度向白收缩保色相。质量半径经验关系锚定太阳系天体实测，岩石行星段参照 Zeng et al. 2016。<br>
+      自由视角拖拽为单轴屏幕轨迹球：旋转轴取 (dy,dx,0) 本地轴直接前置乘，视场中心内容位移恒等于 (dx,dy)·sin(θ)/len（Python 随机姿态精确验证，任意姿态跟手、无滚转）。<br>
       <span class="em">视角 / 参考系 / 轨迹参考系</span><br>
-      三者分离：视角跟随决定镜头锚定天体；参考系为坐标计量框架；轨迹参考系可独立选跟随参考系、绝对原点、质心或任意天体。轨迹按 X = snap(t) − O(t) + O(现在) − 镜头锚点 绘制（O 为轨迹框架原点，绝对系 O≡0），轨迹末端与天体当前位置严格对齐，修复了 v4 参考天体运动时轨迹双重扣减的错位。<br>
+      三者分离：视角跟随决定镜头跟随目标（质心 / 绝对原点 / 任意天体），镜头位置随目标同步携行；「自身」开关决定拖拽旋转中心（勾选：绕摄像机自身翻滚，视角与跟随目标解耦，星球不钉在眼前；不勾：绕跟随目标中心公转，目标钉在屏幕上）；参考系为坐标计量框架；轨迹参考系可独立选跟随参考系、绝对原点、质心或任意天体。轨迹按 X = snap(t) − O(t) + O(现在) − 镜头锚点 绘制（O 为轨迹框架原点，绝对系 O≡0），轨迹末端与天体当前位置严格对齐，修复了 v4 参考天体运动时轨迹双重扣减的错位。<br>
       <span class="em">自转与潮汐形变</span><br>
       每天体可设自转倾角、周期与经验流体系数 k（留空按平均密度在土星 0.64 与地球 0.97 间对数插值）。自转扁化 f = k·ω²R³/GM（Maclaurin 近似，地球复现 1/298）；平衡潮椭化 ΔR/R = (3/2)·k·(M′/M)·(R/d)³ 指向主导伴星（地月 ≈0.52 m、日地 ≈0.24 m，与观测一致）；贴图按 Rz(−θ)·Rx(−i) 随自转旋转；椭球轮廓 = 沿投影轴 √(Rt²cos²β+Ra²sin²β)、垂轴 Rt 的椭圆（线性映射保持内切，无裁剪）。潮汐开启时自转为动力学变量，渲染与力学共用同一自转态。<br>
       <span class="em">潮汐与结构参数（v7 合一）</span><br>
@@ -381,13 +393,15 @@ body.free-touch .pad{display:grid}
       <span class="em">天空盒缓存</span><br>
       首次成功加载后全景图原始字节存入 IndexedDB（键 sky_pano_eso0932a_v1），之后打开直接读缓存，跳过 10.9 MB 旁车脚本的下载与 base64 解码；缓存解码失败自动清除并回退原三级加载链。<br>
       <span class="em">性能</span><br>
-      Float64Array 结构化数组、对称成对力循环、环形轨迹缓冲、WebGL 单场景 pass 加多级泛光链、无头模式完全跳过渲染。<br>
+      Float64Array 结构化数组、对称成对力循环、环形轨迹缓冲、three.js 单场景 pass 加 UnrealBloomPass 后期链、无头模式完全跳过渲染。<br>
       <span class="em">天空盒</span><br>
-      银河全景图 eso0932a（6000×3000 JPEG）原始字节加载：默认读取与本文件同目录的 eso0932a_mediumQuality.jpg（无重压缩、无分辨率缩放），SKY_PANO_URI 嵌入 base64 时优先使用嵌入值；运行时经离屏 WebGL FBO 一次性转换为立方体贴图六面：面尺寸 = 源宽/4（分辨率守恒），面方向按 OpenGL ES 立方体贴图规范表精确推导，与 textureCube 采样互逆 → 无缝；采样用 Catmull-Rom 双三次；WebGL2 生成 mipmap + 各向异性过滤。
-      <span class="em">材质库（v7）</span><br>
-      「材质库」面板扫描与本文件同目录的 textures/ 文件夹（三级发现链：服务器目录列表 → textures/manifest.json 文件名数组 → 常规名称探测）。全景图（宽高比≈2:1）可一键设为天空盒（复用同一立方体转换管线）；与天体同名的图片（earth.jpg、火星.png 等中英文别名）在扫描后与场景加载时自动应用到对应星球（不覆盖手动设置）。file:// 协议下目录列表与 WebGL 本地图上传受浏览器同源策略限制，推荐 python -m http.server 等本地 HTTP 服务打开。
+      银河全景图 eso0932a（6000×3000 JPEG）原始字节加载：默认读取与本文件同目录的 eso0932a_mediumQuality.jpg（无重压缩、无分辨率缩放），SKY_PANO_URI 嵌入 base64 时优先使用嵌入值；运行时经离屏 WebGLCubeRenderTarget 一次性转换为立方体贴图六面：面尺寸 = 源宽/4（分辨率守恒），面方向按 OpenGL ES 立方体贴图规范表精确推导，与 textureCube 采样互逆 → 无缝；采样用 Catmull-Rom 双三次；mipmap + 各向异性过滤。
+      <span class="em">材质库（v9）</span><br>
+      「材质库」面板启动即自动扫描与本文件同目录的 textures/ 文件夹（发现链：服务器目录列表 → textures/manifest.json 文件名数组 → 常规名称+常见后缀探测），扫描结果<b>缓存到本地</b>，下次打开秒开、断网可用；仅用于<b>星球表面贴图</b>（底层/上层双层，各自独立不透明度）；不再提供天空盒设置。自动匹配：<b>星球名.jpg → 底层；星球名_任意 / 星球名-任意 → 该星球上层第二贴图</b>（不覆盖手动设置）；后缀含 cloud/云 等词自动开启该层「暗部透明」。缩略图懒加载 + 大图预览区，图片数量多时只解码可视部分。file:// 协议下目录列表与 WebGL 本地图上传受浏览器同源策略限制，推荐 python -m http.server 等本地 HTTP 服务打开。<br>
+      <span class="em">星球贴图（v10/v11）</span><br>
+      等距柱状贴图按<b>自转轴约定</b>映射：图顶/图底对应自转北极/南极（倾角后随轴倾斜），晨昏线扫过赤道；<b>全部视图均非镜像、北上</b>（俯视从北极侧看顺行为逆时针，侧视/前视北上东经朝右）。<b>v10 贴图经立方体贴图方向采样</b>：加载时离屏 GPU 转为 6 面 cubemap，无经度接缝、无极区平均色带（等距柱状 2D 采样的 atan 分支切割与极点收敛伪影从机制上消除），WebGL1/WebGL2 一致。<b>v11 手性根治</b>：v8-v10 的“贴图左右反”实为自由视角视图矩阵镜像（四元数纯旋转行基为右手系，无法表达非镜像相机），修复后用诊断图（品红顶/红柱东向）经 Python 等价贴合与浏览器像素读数双重验证：北上时红柱在黄右侧，与平面地图一致；「水平镜像」开关随之移除。支持双层贴图：底层可与表面颜色按不透明度混合，上层绘制在 1.5% 外层球壳上（真实大气厚度量级）并 以 97% 角速度差速自转（相对地表缓慢西漂），两层各有独立不透明度滑杆与「暗部透明」云图模式（亮度作 alpha，越黑越透明）。
       <span class="em">快捷键</span><br>
-      Space 播放暂停 · Shift+R 重置模拟 · 0 重置视图 · 滚轮或双指缩放 · 自由视角下 W A S D 平移、R F 俯仰、Q E 滚转，全部以摄像机为基准
+      Space 播放暂停 · Shift+R 重置模拟 · 0 重置视图 · 滚轮或双指缩放 · 自由视角下 W A S D 前后左右平移、R F 升降（与 WASD 同类的移动，非旋转）、Q E 滚转，全部以摄像机为基准
     </div>
   </section>
 </aside>
@@ -409,17 +423,30 @@ body.free-touch .pad{display:grid}
       <small id="radiusAuto"></small>
       <label for="bodyColor">颜色</label>
       <input type="color" id="bodyColor" value="#FFFFFF">
-      <label for="texFileInput">全景表面贴图 · 可选</label>
-      <div class="hint">等距柱状投影贴图映射到球面。有贴图时表面颜色不参与渲染；导出 JSON 时贴图 base64 嵌入，导入方同样拥有贴图。</div>
+      <label>底层贴图 · 可选（等距柱状，图顶 = 自转北极）</label>
+      <div class="hint">有贴图时按不透明度与表面颜色混合（100% = 纯贴图）；导出 JSON 时 base64 嵌入，导入方同样拥有贴图。</div>
       <div class="row wrap" style="gap:6px;margin:8px 0">
-        <button type="button" id="texUploadBtn" class="btn" style="flex:1">上传贴图</button>
-        <button type="button" id="texClearBtn" class="btn" style="flex:1">清除贴图</button>
+        <button type="button" id="texUploadBtn" class="btn" style="flex:1">上传底层贴图</button>
+        <button type="button" id="texClearBtn" class="btn" style="flex:1">清除底层</button>
       </div>
       <input type="file" id="texFileInput" accept="image/*" class="hidden">
       <div class="row" style="margin:4px 0 10px;align-items:center;gap:10px">
         <img id="texPreview" alt="" style="width:64px;height:32px;object-fit:cover;border:1px solid var(--line2);display:none">
-        <span id="texInfo" class="lbl">未使用贴图 · 以表面颜色渲染</span>
+        <span id="texInfo" class="lbl" style="flex:1">未使用贴图 · 以表面颜色渲染</span>
       </div>
+      <div class="row"><span class="lbl" style="width:88px;flex:none">底层不透明度</span><input type="range" id="texOp1" min="0" max="1" step="0.01" value="1"><span class="lbl" id="texOp1Val" style="width:38px;flex:none;text-align:right;font-family:var(--mono)">100%</span></div>
+      <div class="row"><input type="checkbox" id="texDark1"><label for="texDark1" style="cursor:pointer">暗部透明 · 云图模式（像素越黑越透明）</label></div>
+      <label>上层贴图 · 可选（叠加层，如云层 / 夜光图）</label>
+      <div class="row wrap" style="gap:6px;margin:8px 0">
+        <button type="button" id="texUploadBtn2" class="btn" style="flex:1">上传上层贴图</button>
+        <button type="button" id="texClearBtn2" class="btn" style="flex:1">清除上层</button>
+      </div>
+      <div class="row" style="margin:4px 0 4px;align-items:center;gap:10px">
+        <img id="texPreview2" alt="" style="width:64px;height:32px;object-fit:cover;border:1px solid var(--line2);display:none">
+        <span id="texInfo2" class="lbl" style="flex:1">未使用上层贴图</span>
+      </div>
+      <div class="row"><span class="lbl" style="width:88px;flex:none">上层不透明度</span><input type="range" id="texOp2" min="0" max="1" step="0.01" value="1"><span class="lbl" id="texOp2Val" style="width:38px;flex:none;text-align:right;font-family:var(--mono)">100%</span></div>
+      <div class="row"><input type="checkbox" id="texDark2"><label for="texDark2" style="cursor:pointer">暗部透明 · 云图模式（像素越黑越透明）</label></div>
       <h4>自转与形变</h4>
       <div class="hint">渲染层效果：自转决定贴图旋转与自转扁化，潮汐椭化按主导伴星方向绘制。流体系数已并入下方结构参数（k2），内部按质量与密度经验自动（土星 0.64 → 地球 0.97 密度锚定，恒星 0.40 太阳扁率锚定）。</div>
       <label for="bodySpinTilt">自转倾角 · 度（0–180，大于 90 为逆行）</label>
@@ -471,13 +498,13 @@ body.free-touch .pad{display:grid}
 </div>
 
 <div id="padMove" class="pad">
-  <span></span><button data-mv="w">W</button><span></span>
-  <button data-mv="a">A</button><button data-mv="s">S</button><button data-mv="d">D</button>
+  <span></span><button data-mv="w" title="前进">W</button><span></span>
+  <button data-mv="a" title="左移">A</button><button data-mv="s" title="后退">S</button><button data-mv="d" title="右移">D</button>
 </div>
 <div id="padRot" class="pad">
-  <span></span><button data-rt="r">R</button><span></span>
-  <button data-rt="q">Q</button><span></span><button data-rt="e">E</button>
-  <span></span><button data-rt="f">F</button><span></span>
+  <span></span><button data-mv="r" title="上升">R</button><span></span>
+  <button data-rt="q" title="逆时针滚转">Q</button><span></span><button data-rt="e" title="顺时针滚转">E</button>
+  <span></span><button data-mv="f" title="下降">F</button><span></span>
 </div>
 
 <div id="toast" role="status"></div>
@@ -499,6 +526,60 @@ body.free-touch .pad{display:grid}
  * v5：视角/参考系/轨迹参考系三者分离 · 轨迹末端严格对齐修复 ·
  *     高光保护自动曝光 · 星球自转与潮汐形变渲染 ·
  *     三体 8 字解精化初值 · 天空盒 IndexedDB 缓存 · 默认自由视角+透视
+ * v11：自由视角镜像根治（视图矩阵 F·quatToMat 行1取负，与固定视图统一左手
+ *     屏幕基）——“贴图左右反”的真因；「水平镜像」开关随之移除；
+ *     R/F 由俯仰旋转改为升降平移（与 WASD 同类，相机基准）；
+ * v12：「自身」由下拉选项改为独立开关（只决定拖拽旋转中心）——
+ *     关（默认）：拖拽绕视角跟随锚点（星球中心）公转，星球在屏幕上钉死；
+ *     开：绕摄像机自身翻滚（宇航员翻滚式，镜头位置不动）；
+ *     视角跟随回归纯跟随语义（质心/绝对原点/任意天体）；
+ *     移动端按钮恢复 v10 摆法（R/F 回右盘上下位），语义仍为升降平移
+ * v13：拖拽旋转改为恒绕摄像机自身（移除「自身」开关的分支逻辑）；
+ * v14：恢复「自身」开关双模式；镜头光斑按 mu6k Shadertoy 4sX3Rs 移植（去噪声星芒，
+ *     仅 bloom + 光斑），幅度随恒星对相机的物理通量与主体强度变化，行星不参与；
+ *     恒星色温取 Planck 谱 × CIE 1931 配色函数积分；
+ *     恒星温度与平均密度挂钩（同调关系 + Hayashi 下限），亮度按表面积真实计算；
+ *     移动速度按锚点深度自适应、旋转灵敏度按视场与屏内圆面自适应，
+ *     滚轮 deltaMode 归一化（Firefox 行模式过慢修复），Shift/Alt 变速
+ * v15：透视视点模型明确化（eye = ref + camOff + back·D），旋转行为经 Python
+ *     数值验证后重写 ——
+ *     「自身」开：原地转头，视点世界系锁定（camOff 视点锁定补偿），
+ *         星球随视线自由移出眼前，与跟随携行彻底解耦；
+ *     「自身」关：绕跟随锚点公转，锚点屏幕位置逐比特钉死
+ *         （显式共轭矩阵替代轴-角重组，修复非默认姿态下最高 2078 px 漂移）；
+ *     镜头光斑：恢复去噪版中心晕 f0（加深空支撑窗防全屏雾），
+ *         幅度不再乘曝光/解码系数（光学散射与传感器感度物理独立），
+ *         扩散尺度改温和限幅，OKLab 色度压缩 0.94→0.985（中心近纯白）；
+ *     光斑遮挡改屏幕空间视觉半径统一判定（所有模式生效，所见即所得）
+ * v16：辉光/光斑回归上传初版（v12）结构，mu6k 参考着色器移植整体移除
+ *     （final pass 还原为 场景+泛光 合成，色度压缩参数还原初版，
+ *     BRIGHT_FS 移除 v14 软压缩）——遮挡由此回归画家算法逐像素：
+ *     近距行星圆面按像素覆盖恒星亮部，半挡≠全挡、连续无台阶，
+ *     不存在任何「遮挡→整体系数」的全局衰减路径（旧屏幕空间重叠
+ *     连乘即「一挡就整体变暗」根源）；晕尾环绕行星 limb 成冕环。
+ *     远距扩散修正（初版结构内两项，Python 预验证通过后落地）：
+ *     恒星点源 PSF 可见性地板（与行星路径既有 PSF_VIS_FLOOR 一致化，
+ *     极远距恒星不再跌破可见限消失）；新增宽高斯眩光项（veiling
+ *     glare，σ=5·PSF_SIGMA，能量=k_g·记录通量、k_g=2%、加窗有界），
+ *     泛光阈值下仍保留连续衰减的软晕；行星不参与眩光（无镜头光斑）；
+ *     交叉渐变区随 psfW 渐入渐出，与初版圆面路径衔接连续。
+ *     食阴影（月影/凌日，u_ecl/eclipseOcc/eclDrop）与自动曝光链不变
+ * v17：渲染层整体迁移 three.js（用户要求：删除手写辉光后处理，改为导入
+ *     three.js 实现 bloom 辉光；能用 three.js 替代的全部替换）——
+ *     天体改为真实网格（SphereGeometry）：恒星临边昏暗球、行星朗伯多星
+ *     照明球（食阴影弓形公式改为世界系）、云层壳层独立差速自转网格；
+ *     缩小的天体（亚像素/交叉渐变区）切换为高斯点源精灵，行星点源同样
+ *     以 HDR 加性进入泛光；辉光统一由 three.js EffectComposer +
+ *     UnrealBloomPass 完成（阈值 = 1/曝光，等价旧「曝光后阈值 1.0」），
+ *     色调映射 ACES Filmic（OutputPass），v16 手写的亮度提取/五级高斯
+ *     泛光链/OKLab 漂白/恒星 halo/v16 眩光项（GLARE_*）全部删除；
+ *     天空盒/天体贴图经离屏 WebGLCubeRenderTarget 六面直绘（面基表与
+ *     v16 逐字节一致，Catmull-Rom 双三次与分片长条路径保留）；
+ *     轨迹 = LineSegments/Points（相机系顶点，float64 相对化保精度）；
+ *     自动曝光 CPU 计量不变，经 renderer.toneMappingExposure 接入；
+ *     遮挡由深度缓冲天然完成（近距行星圆面按像素覆盖恒星亮部语义等价）；
+ *     three.js 经 importmap 从 CDN 以 ES Module 导入，加载失败自动回退
+ *     极简 Canvas 2D（纯色背景 + 轨迹 + 平色圆点，无任何辉光渐变）。
  * ============================================================ */
 
 /* ---------------- 全景天空盒 ----------------
@@ -565,7 +646,6 @@ const R_SUN = 6.957e8, R_EARTH_M = 6.371e6, R_JUP_M = 7.1492e7;
 const L_SUN = 3.828e26, T_SUN = 5772;
 const SIGMA_SB = 5.670374419e-8;                       // 斯特藩-玻尔兹曼常数 W m^-2 K^-4
 const F_SUN_1AU = L_SUN / (4 * Math.PI * AU * AU);   // 太阳在 1 AU 处辐照度，约 1361 W/m²
-const GLARE_MAG_0 = -18, GLARE_MAG_1 = -27;           // 视星等眩光映射区间（Canvas 2D 回退路径使用）
 
 /* ---------------- HDR 渲染常量（物理相机模拟） ----------------
  * PSF_SIGMA：点源高斯扩散半径（渲染像素）。真实衍射极限远小于 1 像素，
@@ -581,6 +661,13 @@ const GLARE_MAG_0 = -18, GLARE_MAG_1 = -27;           // 视星等眩光映射�
  * EXP_*：自动曝光计量。key 取摄影中灰 0.18，区间与时间常数按相机感度适应标定。
  * METER_STAR_W / METER_BODY_W：计量中点源辐照度与圆面通量权重。 */
 const PSF_SIGMA = 1.1, PSF_VIS_FLOOR = 0.12;
+/* v17 渲染辐射上限：恒星圆面/点源精灵的着色输出统一按比例饱和到此值
+ *（保持色相，仅压亮度）。取物理表面辐射亮度 B 量级（太阳 B=1.47e4），
+ * 自动曝光收敛后（分辨率圆面 meter ≈ B·π·θ²）圆面/点源核心纯白；
+ * ×5 级泛光累加 6e4 < RGBA16F 上限 65504，从机制上杜绝 Inf → NaN →
+ * 黑屏（等效 v16 亮通/模糊通道的 60000 钳制）。泛光强度观感由
+ * UnrealBloomPass strength=0.25 / radius=0.85 控制在柔和星芒区间。 */
+const RENDER_RADIANCE_CAP = 12000;
 const DISK_MIN_PX = 1.7, DISK_FULL_PX = 3.1;
 const STAR_LIMB_U = 0.62;
 /* 渲染侧表面辐射亮度饱和上限：RGBA16F 场景缓冲上限 65504，
@@ -595,9 +682,9 @@ const SKY_NORM_LEVEL = 0.004;
 const EXP_TAME_K = 8;
 const EXP_KEY = 0.18, EXP_MIN = 1e-16, EXP_MAX = 1.2, EXP_TAU = 0.3;
 const METER_STAR_W = 0.3, METER_BODY_W = 0.5;
-const DRAG_SENS = 0.005;                 // 拖拽旋转灵敏度 rad/px
+const DRAG_SENS = 0.005;                 // 拖拽旋转灵敏度上限 rad/px（v13 起按视场自适应收紧）
 const PAD_ROT_RATE = 1.7, PAD_MOVE_RATE = 340;   // 飞行按钮连续运动角速度 rad/s 与屏速 px/s
-
+const NAV_FAST_K = 5, NAV_SLOW_K = 0.2;  // Shift 加速 / Alt 减速倍率
 /* ---------------- 全局状态 ---------------- */
 let meta = [];            // 每天体: {name,color,size,orbits_around,original_input_params}
 let N = 0, CAP = 0;
@@ -664,6 +751,10 @@ function kahanAdd(arr, comp, i, delta) {
 }
 function wrapPi(x) { return (x + Math.PI) % (2 * Math.PI) + (x + Math.PI < 0 ? Math.PI : -Math.PI); }
 function clampNum(x, lo, hi) { return Math.min(hi, Math.max(lo, x)); }
+function smoothStepN(e0, e1, x) {
+  const t = clampNum((x - e0) / (e1 - e0 || 1e-30), 0, 1);
+  return t * t * (3 - 2 * t);
+}
 function fmtTime(sec) {
   const d = sec / DAY_SEC;
   if (Math.abs(d) < 1) return (sec / 3600).toFixed(1) + ' 小时';
@@ -803,19 +894,32 @@ function starLuminosity(m) {
   if (x <= 20) return L_SUN * 1.5 * Math.pow(x, 3.5);
   return L_SUN * 3000 * x;
 }
-/* L=4πR²σT⁴ 反解有效温度 */
+/* 有效温度：质量 + 平均密度共同决定（黑体谱不单看质量）。
+ * 主序基准 T_ms = 质光关系 L(m) 在主序半径 R_ms 处按 L=4πR²σT⁴ 反解；
+ * 实际半径偏离主序时，平均密度 ρ = 3m/(4πr³) 随之偏离 ρ_ms，按同调关系
+ * T ∝ (ρ/ρ_ms)^(1/24) 缓变（指数弱，质量不大而半径很大时温度确实下降，
+ * 但不像 1/√r 那样把巨星压到 500 K 的非物理低温）；
+ * 膨胀进入巨星支时以 Hayashi 下限托底（Hayashi 1961：红巨星/红超巨有效温度
+ * 不能低于 Hayashi 线，观测值 3200~4500 K，随质量微增）。
+ * 亮度由调用方按 L = 4πR²σT⁴ 用新温度与真实表面积计算 —— 巨星因面积
+ * 增大而真实变亮（1 M☉ + 100 R☉ → T≈3600 K，L≈1500 L☉，与观测红巨星同量级）。 */
+const HAYASHI_T0 = 3500, HAYASHI_M_EXP = 0.08, RHO_T_EXP = 1 / 24;
 function starTemperature(m, r) {
   if (!(r > 0)) r = massRadius(m);
-  return T_SUN * Math.pow(starLuminosity(m) / L_SUN, 0.25) * Math.sqrt(R_SUN / r);
+  const Rms = massRadius(m);
+  const Tms = T_SUN * Math.pow(starLuminosity(m) / L_SUN, 0.25) * Math.sqrt(R_SUN / Rms);
+  const Tdens = Tms * Math.pow(Math.pow(Rms / r, 3), RHO_T_EXP);
+  if (r <= Rms) return Tdens;
+  return Math.max(Tdens, HAYASHI_T0 * Math.pow(m / M_SUN, HAYASHI_M_EXP));
 }
 /* ---------------- 恒星物理缓存（亮度一次计算，处处复用） ----------------
  * 按用户要求：根据恒星温度和表面积计算一次亮度，然后再具体计算。
- * 链条：质量 → 半径 R（质径关系）→ 有效温度 T（质光关系 + L=4πR²σT⁴ 反解）
- *       → 亮度 L = 4πR²σT⁴（温度×表面积，一次计算并缓存）
+ * 链条：质量 → 半径 R（质径关系或用户指定）→ 有效温度 T（质光关系 + 密度同调修正 + Hayashi 下限）
+ *       → 亮度 L = 4πR²σT⁴（温度×表面积真实计算，一次缓存；巨星因面积而变亮）
  *       → 表面辐射亮度 B = L/(4π²R²) = σT⁴/π（单位 F_SUN_1AU/sr，距离无关，面元亮度守恒）
- * 之后辐照度（PSF 点源、行星照明、计量、眩光）与圆面渲染全部取自缓存，
- * 不再有各处自设的近似公式。Python 数值校验：太阳 L 偏差 0.000%、
- * B=14719、B·πθ² = L/(4πd²) 全距离闭环、PSF↔圆面切换比恰为 1.00。 */
+ * 之后辐照度（PSF 点源、行星照明、计量、眩光）与圆面渲染全部取自缓存。
+ * Python 数值校验：太阳 L 偏差 0.000%、B=14719、B·πθ² = L/(4πd²) 全距离闭环、
+ * PSF↔圆面切换比恰为 1.00；红巨星支（1 M☉/100 R☉）T≈3600 K、L≈1.5e3 L☉。 */
 let starPhysCache = [];   // 每天体索引 → {R, T, L, B, rgb, rgbLin} 或 null（非恒星）
 function refreshStarPhysics() {
   starPhysCache = new Array(N).fill(null);
@@ -868,32 +972,9 @@ function tideStrainOf(massI, massJ, R, d, k) {
   return clampNum(1.5 * k * (massJ / massI) * Math.pow(R / d, 3), 0, 0.85);
 }
 /* 2×2 对称变形矩阵：R(θ)·diag(sa,sp)·R(−θ)，行主序 [m00,m01,m10,m11] */
-function mat2RotScale(ang, sa, sp) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  return [sa * c * c + sp * s * s, (sa - sp) * s * c, (sa - sp) * s * c, sa * s * s + sp * c * c];
-}
-function mat2Mul(A, B) {
-  return [A[0] * B[0] + A[1] * B[2], A[0] * B[1] + A[1] * B[3],
-          A[2] * B[0] + A[3] * B[2], A[2] * B[1] + A[3] * B[3]];
-}
-function mat3Mul(A, B) {
-  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-  for (let r = 0; r < 3; r++) for (let c2 = 0; c2 < 3; c2++) for (let k2 = 0; k2 < 3; k2++) C[r][c2] += A[r][k2] * B[k2][c2];
-  return C;
-}
-function mat3Transpose(A) { return [[A[0][0], A[1][0], A[2][0]], [A[0][1], A[1][1], A[2][1]], [A[0][2], A[1][2], A[2][2]]]; }
-function mat3RotX(a) { const c = Math.cos(a), s = Math.sin(a); return [[1, 0, 0], [0, c, -s], [0, s, c]]; }
-function mat3RotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [[c, -s, 0], [s, c, 0], [0, 0, 1]]; }
-/* 贴图自转矩阵（每帧每体一次）：上传行主序展开使 shader 内 u_vm = M·Aᵀ，
- * M = Rz(−θ)·Rx(−tilt) 为 world→body 旋转；无自转时 M=I 退化为原 Aᵀ 行为。
- * v6：自转角速度取动态 spinRate（潮汐力矩可演化自转）。 */
-function spinTexMatrix(i, A) {
-  const tilt = meta[i].spinTiltRad || 0;
-  const om = spinRate ? spinRate[i] : 0;
-  const M = mat3Mul(mat3RotZ(-om * simTime), mat3RotX(-tilt));
-  const Z = mat3Mul(A, mat3Transpose(M));
-  return new Float32Array([Z[0][0], Z[0][1], Z[0][2], Z[1][0], Z[1][1], Z[1][2], Z[2][0], Z[2][1], Z[2][2]]);
-}
+/* v17：自转/形变渲染改由 three.js 渲染层以网格四元数 + 非均匀缩放表达
+ *（buildSceneFrame 输出 spinTilt/spinAng/defF/tideDir/tideE，
+ *  CLOUD_SHELL/CLOUD_DRIFT 常量同步于渲染层模块）。 */
 
 /* ---------------- 星球全景表面贴图系统 ----------------
  * 每天体可携带一张等距柱状全景贴图（data URL，导出 JSON 时 base64 嵌入）。
@@ -919,60 +1000,70 @@ function rgbToHex(c) {
   const f = v => Math.round(Math.pow(Math.min(Math.max(v, 0), 1), 1 / 2.2) * 255);
   return '#' + [f(c[0]), f(c[1]), f(c[2])].map(v => v.toString(16).padStart(2, '0')).join('');
 }
-function uploadBodyTexGL(im) {
-  const gl = glr.gl;
-  const t = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  if (glr.gl2) {
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);   // NPOT REPEAT WebGL2 允许 → 经度无缝（UV 连续无 fract）
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    try {
-      gl.generateMipmap(gl.TEXTURE_2D);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    } catch (e) { gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); }
-  } else {
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+/* v17：等距柱状贴图 → 立方体贴图的离屏 GPU 转换移交 three.js 渲染层
+ *（WebGLCubeRenderTarget 六面直绘，见模块脚本 buildCubeFromPano，
+ *  面基表/双三次重采样/分片长条路径与 v16 一致）。 */
+function tjsPushTexture(i, e) {
+  /* v17：立方体贴图转换移交 three.js 渲染层；模块未就绪时挂起，就绪后统一推送 */
+  if (!tjs || !ren.ok) { e.pendingGL = true; return; }
+  try {
+    tjs.setBodyTextures(i, e.img || null, e.img2 || null);
+    e.pendingGL = false;
+  } catch (err) {
+    showToast(err.name === 'SecurityError'
+      ? '浏览器跨域限制：file:// 下本地图无法进 WebGL（贴图以颜色渲染）。用本地 HTTP 服务打开可启用贴图'
+      : '贴图处理失败：' + err.message, 'error', 6000);
   }
-  glrSetAniso(gl, gl.TEXTURE_2D);   // 掠射角清晰：贴图上球后边缘不糊
-  return t;
 }
 function bodyTexEnsure(i) {
   const t = meta[i] && meta[i].texture;
-  if (!t) { bodyTex.cache.delete(i); return; }
+  const t2 = meta[i] && meta[i].texture2;
+  if (!t && !t2) { bodyTex.cache.delete(i); return; }
   let e = bodyTex.cache.get(i);
-  if (e && e.src === t) return;
-  e = { src: t, img: null, tex: null, avg: null, ready: false };
+  if (e && e.src === t && e.src2 === (t2 || null)) return;
+  e = { src: t || null, src2: t2 || null, img: null, img2: null, avg: null, ready: false };
   bodyTex.cache.set(i, e);
-  const im = new Image();
-  im.onload = () => {
-    e.img = im;
-    e.avg = texAvgColor(im);
-    if (meta[i] && meta[i].texture === t) meta[i].color = rgbToHex(e.avg);   // 轨迹/点源代表色
-    if (glr.ok) e.tex = uploadBodyTexGL(im);
-    e.ready = true;
-    skybox.dirty = true;
-    draw();
-  };
-  im.onerror = () => { console.warn('天体贴图解码失败:', meta[i] ? meta[i].name : i); showToast('天体贴图解码失败', 'error', 4000); };
-  im.src = t;
+  if (t) {
+    const im = new Image();
+    im.onload = () => {
+      e.img = im;
+      e.avg = texAvgColor(im);
+      if (meta[i] && meta[i].texture === t) meta[i].color = rgbToHex(e.avg);   // 轨迹/点源代表色
+      tjsPushTexture(i, e);
+      e.ready = true;
+      draw();
+    };
+    im.onerror = () => { console.warn('天体贴图解码失败:', meta[i] ? meta[i].name : i); showToast('天体贴图解码失败', 'error', 4000); };
+    im.src = t;
+  }
+  if (t2) {
+    const im2 = new Image();
+    im2.onload = () => {
+      e.img2 = im2;
+      tjsPushTexture(i, e);
+      draw();
+    };
+    im2.onerror = () => { console.warn('天体上层贴图解码失败:', meta[i] ? meta[i].name : i); showToast('上层贴图解码失败', 'error', 4000); };
+    im2.src = t2;
+  }
+}
+function bodyTexApplyAll() {
+  for (const [i, e] of bodyTex.cache) if (e.img || e.img2) tjsPushTexture(i, e);
 }
 function bodyTexReloadAll() {
   bodyTex.cache.clear();     // 索引随天体增删变化，整体重建
   for (let i = 0; i < N; i++) bodyTexEnsure(i);
 }
-/* ---------------- v7 材质库：textures/ 文件夹扫描 · 预览 · 天空盒/天体应用 ----------------
+/* ---------------- v8 材质库：textures/ 文件夹扫描 · 预览 · 天体贴图应用 ----------------
+ * v8 变更：textures/ 仅用于星球表面贴图（底层/上层双层，各自独立不透明度），
+ *   不再提供天空盒设置；
+ * 预览重构：缩略图 loading=lazy（滚动容器内可视才解码）+ 单一大图预览区（同一 <img> 复用，
+ *   任意数量图片的解码开销有界）；点击缩略图只切换边框不重建网格（保持滚动位置）。
  * 三级发现链：
  *   1) fetch('textures/') 解析服务器目录列表（Apache/nginx/python -m http.server 等）
  *   2) fetch('textures/manifest.json')（JSON 数组，文件名或含子目录路径）
- *   3) 常规名称探测（天体中英文名 + 常见全景名 × 常见扩展名，Image 探测）
- * 全景判定：载入后宽高比 ∈ [1.6, 2.6] 且 w ≥ 2×h·0.8 视为全景（可设天空盒）。
- * 天体自动匹配：天体名（中英文别名表）↔ 文件名主干，一致即应用（用户已设贴图不覆盖）。
+ *   3) 常规名称探测（天体中英文名 × 常见扩展名，Image 探测）
+ * 天体自动匹配：天体名（中英文别名表）↔ 文件名主干，一致即应用底层（用户已设贴图不覆盖）。
  * file:// 限制：目录列表与 WebGL 纹理上传受浏览器同源策略限制——探测与 <img>
  *   预览仍可用；WebGL 上传失败会提示经本地 HTTP 服务打开。 */
 const MAT_DIR = 'textures/';
@@ -983,13 +1074,29 @@ const MAT_ALIAS = {
   saturn: ['saturn', '土星'], uranus: ['uranus', '天王星'], neptune: ['neptune', '海王星'],
   moon: ['moon', 'luna', '月球', '月亮'], pluto: ['pluto', '冥王星']
 };
-const MAT_PANO_NAMES = ['pano', 'panorama', 'skybox', 'sky', 'background', 'eso0932a_mediumQuality'];
-let matItems = [];        /* {name, url, w, h, isPano} */
+let matItems = [];        /* {name, url, w, h} */
 let matSelected = -1;
+let matSelPrev = -1;
+let matCellEls = [];
 let matScanned = false;
 
 function matStem(name) {
   return String(name || '').replace(/\.[a-z0-9]+$/i, '').trim().toLowerCase();
+}
+/* v9：云图类文件名识别（后缀含 cloud/云 等词 → 自动开启暗部透明）。
+ * 覆盖 cloud/clouds/cloudmap/cloudsmap/cloud_texture 以及中文名 云/云层/云图。 */
+function matCloudLike(name) {
+  const s = matStem(name);
+  const tail = s.replace(/[^a-z0-9\u4e00-\u9fff]/g, '');
+  return /cloud/.test(tail) || /云/.test(s);
+}
+/* v9：从文件名主干解析「天体别名 + _后缀 / -后缀」（earth_clouds → earth + clouds）。
+ * 返回 {key, suffix}；无分隔符或主干非别名开头返回 null。 */
+function matSplitSuffix(stem) {
+  const m = String(stem || '').match(/^(.+?)[_\- ]([^_\- ]+)$/);
+  if (!m) return null;
+  const key = matMatchKey(m[1]);
+  return key ? { key, suffix: m[2] } : null;
 }
 function matMatchKey(stem) {
   for (const key of Object.keys(MAT_ALIAS)) {
@@ -1019,50 +1126,86 @@ function matLoadImage(url) {
   });
 }
 function matSetInfo(txt) { if (ui.matInfo) ui.matInfo.textContent = txt; }
+function matShowBig() {
+  const wrap = ui.matBigWrap, big = ui.matBig, info = ui.matBigInfo;
+  if (!wrap) return;
+  const it = matItems[matSelected];
+  if (!it) { wrap.style.display = 'none'; if (big) big.removeAttribute('src'); return; }
+  wrap.style.display = '';
+  if (big.getAttribute('src') !== it.url) big.src = it.url;   /* 同一 <img> 复用：任意数量图片最多同时解码一张大图 */
+  const ratio = it.w / Math.max(it.h, 1);
+  if (info) info.textContent = it.name + ' · ' + it.w + '×' + it.h + (ratio >= 1.6 ? ' · 宽高比≈全景（仍只作星球贴图）' : '');
+}
 function matRenderGrid() {
   const grid = ui.matGrid;
   if (!grid) return;
   grid.innerHTML = '';
+  matCellEls = [];
+  matSelPrev = matSelected;
+  const frag = document.createDocumentFragment();
   matItems.forEach((it, k) => {
     const cell = document.createElement('div');
     cell.style.cssText = 'position:relative;cursor:pointer;border:1px solid ' +
       (k === matSelected ? 'var(--acc,#6aa9ff)' : 'var(--line,#333)') + ';border-radius:6px;overflow:hidden';
     const im = document.createElement('img');
     im.src = it.url;
-    im.style.cssText = 'width:100%;height:56px;object-fit:cover;display:block';
-    im.loading = 'lazy';
+    im.style.cssText = 'width:100%;height:48px;object-fit:cover;display:block';
+    im.loading = 'lazy'; im.decoding = 'async';   /* 滚动容器内可视区域才解码：图片多时开销有界 */
     const tag = document.createElement('span');
-    tag.textContent = (it.isPano ? '全景 ' : '') + it.name;
+    tag.textContent = it.name;
     tag.style.cssText = 'position:absolute;left:0;bottom:0;right:0;font-size:9px;background:rgba(0,0,0,.55);padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
     cell.appendChild(im); cell.appendChild(tag);
-    cell.title = it.name + ' · ' + it.w + '×' + it.h + (it.isPano ? ' · 全景' : '');
-    cell.onclick = () => { matSelected = k; matRenderGrid(); };
-    grid.appendChild(cell);
+    cell.title = it.name + ' · ' + it.w + '×' + it.h;
+    cell.onclick = () => matSelectCell(k);
+    matCellEls.push(cell);
+    frag.appendChild(cell);
   });
+  grid.appendChild(frag);
+  matShowBig();
+}
+function matSelectCell(k) {
+  matSelected = k;
+  if (matCellEls[matSelPrev]) matCellEls[matSelPrev].style.borderColor = 'var(--line,#333)';
+  if (matCellEls[k]) matCellEls[k].style.borderColor = 'var(--acc,#6aa9ff)';
+  matSelPrev = k;
+  matShowBig();
 }
 function matAutoApply() {
-  /* 天体按名自动换贴图：仅在未手动设置贴图时覆盖 */
-  let n = 0;
+  /* v9 天体按名自动应用（仅在用户未手动设置对应层贴图时生效）：
+   *   底层：文件名主干 = 天体别名（earth.jpg / 地球.png）
+   *   上层：文件名主干 = 别名 + _后缀 / -后缀（earth_clouds.jpg / 火星-云.png）
+   *         —— 用户规则：星球名_随意 一律作为该星球第二层；
+   *   后缀含 cloud/云 等词 → 自动开启该层「暗部透明」（越黑越透明） */
+  let n1 = 0, n2 = 0, nCloud = 0;
   for (let i = 0; i < N; i++) {
-    if (meta[i].texture) continue;
     const stem = matStem(meta[i].name);
     if (!stem) continue;
     const key = matFindMatch(stem);
     if (!key) continue;
-    /* 找该天体名对应的贴图（文件名主干含别名即可） */
-    const hit = matItems.find(it => matMatchKey(matStem(it.name)) === key);
-    if (hit) {
-      meta[i].texture = hit.url;
-      bodyTexEnsure(i);
-      n++;
+    if (!meta[i].texture) {
+      const hit = matItems.find(it => matMatchKey(matStem(it.name)) === key);
+      if (hit) { meta[i].texture = hit.url; bodyTexEnsure(i); n1++; }
+    }
+    if (!meta[i].texture2) {
+      const hit2 = matItems.find(it => {
+        const sp = matSplitSuffix(matStem(it.name));
+        return !!sp && sp.key === key;
+      });
+      if (hit2) {
+        meta[i].texture2 = hit2.url;
+        if (matCloudLike(hit2.name)) { meta[i].textureMode2 = 1; nCloud++; }
+        bodyTexEnsure(i);
+        n2++;
+      }
     }
   }
-  if (n > 0) {
-    showToast('已从材质库为 ' + n + ' 个天体自动应用同名贴图', 'success', 4200);
+  if (n1 + n2 > 0) {
+    showToast('材质库自动应用贴图：底层 ×' + n1 + (n2 ? ' · 上层 ×' + n2 : '') +
+      (nCloud ? '（云图已自动暗部透明）' : ''), 'success', 4200);
     saveLocalStorage();
     draw();
   }
-  return n;
+  return n1 + n2;
 }
 async function matScan() {
   matSetInfo('扫描中…');
@@ -1118,14 +1261,18 @@ async function matScan() {
       }
     } catch (e) { /* 无 manifest */ }
   }
-  /* 3) 常规名称探测 */
+  /* 3) 常规名称探测（天体名；v8：textures/ 不再探测全景名）
+   * v9：追加「别名_后缀」探测（cloud/clouds/云/night/夜光 等常见上层命名），
+   *     file:// 无目录列表时也能发现云图并自动挂第二层 */
   if (!listed) {
     const probes = [];
     for (const key of Object.keys(MAT_ALIAS)) for (const a of MAT_ALIAS[key]) probes.push(a);
-    for (const pn of MAT_PANO_NAMES) probes.push(pn);
-    await Promise.all(probes.map(async nm => {
+    const suffixProbes = [];
+    for (const key of Object.keys(MAT_ALIAS)) for (const a of MAT_ALIAS[key])
+      for (const suf of ['cloud', 'clouds', '云', 'night', '夜光']) suffixProbes.push(a + '_' + suf);
+    const probeOne = async nm => {
       for (const ext of MAT_EXT) {
-        const url = MAT_DIR + nm + '.' + ext;
+        const url = MAT_DIR + encodeURIComponent(nm) + '.' + ext;
         const ok = await new Promise(res => {
           const im = new Image();
           im.onload = () => res(true);
@@ -1134,45 +1281,63 @@ async function matScan() {
         });
         if (ok) { push(nm + '.' + ext, url); break; }
       }
-    }));
+    };
+    await Promise.all(probes.map(probeOne));
+    await Promise.all(suffixProbes.map(probeOne));
   }
   if (!found.length) {
+    if (matItems.length) {
+      /* v9：保留缓存清单（可能是 file:// 下目录列表受限），不闪空网格 */
+      matSetInfo('本次扫描未发现图片（file:// 目录列表受限），已保留缓存清单 ' + matItems.length + ' 张。');
+      matScanned = true;
+      return;
+    }
     matSetInfo('未发现图片：请将图片放入 textures/ 文件夹，或提供 textures/manifest.json（文件名数组）。file:// 下目录列表受限，推荐本地 HTTP 服务。');
     matItems = []; matRenderGrid();
     return;
   }
-  /* 载入尺寸并判定全景 */
+  /* 载入尺寸（v8：不做全景分类，全部为星球贴图候选） */
   const items = await Promise.all(found.map(async f => {
     const im = await matLoadImage(f.url);
     if (!im) return null;
-    const w = im.naturalWidth, h = im.naturalHeight;
-    const ratio = w / Math.max(h, 1);
-    return { name: f.name, url: f.url, w, h, isPano: ratio >= 1.6 && ratio <= 2.6 && w >= 512 };
+    return { name: f.name, url: f.url, w: im.naturalWidth, h: im.naturalHeight };
   }));
-  matItems = items.filter(Boolean).sort((a, b) => (b.isPano - a.isPano) || a.name.localeCompare(b.name));
+  matItems = items.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
   matSelected = matItems.length ? 0 : -1;
   matRenderGrid();
-  const nPano = matItems.filter(i => i.isPano).length;
-  matSetInfo('发现 ' + matItems.length + ' 张图片（全景 ' + nPano + ' 张）。点击缩略图选择，下方按钮应用。');
+  matSetInfo('发现 ' + matItems.length + ' 张图片。点击缩略图选择（可预览），下方选择应用到底层/上层。');
   matScanned = true;
+  matCacheSave();   /* v9：清单缓存（名称/URL/尺寸），下次启动秒开并离线可用 */
   matAutoApply();
 }
-function matApplySky() {
-  if (matSelected < 0 || !matItems[matSelected]) { showToast('请先在网格中选择一张图片', 'info', 2500); return; }
-  const it = matItems[matSelected];
-  if (!skyApplyHook) { showToast('天空盒尚未初始化完成，请稍后再试', 'info', 3000); return; }
-  matLoadImage(it.url).then(im => {
-    if (!im) { showToast('图片加载失败', 'error', 3000); return; }
-    try {
-      skyApplyHook(im);
-      skybox.dirty = true; draw();
-      showToast('天空盒已设为 ' + it.name, 'success', 3200);
-    } catch (e) {
-      showToast(e.name === 'SecurityError'
-        ? '浏览器跨域限制：file:// 下无法把本地图传给 WebGL，请用本地 HTTP 服务打开'
-        : '全景应用失败：' + e.message, 'error', 6000);
+
+/* v9 材质库清单缓存：与天空盒同一精神 —— 扫描结果持久化，启动即得（不再等扫描）。
+ * 只缓存「发现链」元数据（文件名/相对 URL/尺寸），不缓存像素字节；
+ * 启动时先载入缓存立即渲染网格并允许自动应用，后台再重新扫描校正。 */
+const MAT_CACHE_KEY = 'mat_lib_cache_v2';
+function matCacheLoad() {
+  try {
+    const j = JSON.parse(localStorage.getItem(MAT_CACHE_KEY) || 'null');
+    if (j && Array.isArray(j.items)) {
+      const items = j.items.filter(it => it && it.name && it.url);
+      if (!items.length) return false;
+      matItems = items;
+      matSelected = 0;
+      matRenderGrid();
+      matScanned = true;   /* 视为已扫描：场景加载即触发自动应用 */
+      matSetInfo('已载入缓存清单（' + matItems.length + ' 张），后台正在重新扫描校验…');
+      return true;
     }
-  });
+  } catch (e) { /* 缓存损坏 → 忽略 */ }
+  return false;
+}
+function matCacheSave() {
+  try {
+    localStorage.setItem(MAT_CACHE_KEY, JSON.stringify({
+      t: Date.now(),
+      items: matItems.map(it => ({ name: it.name, url: it.url, w: it.w, h: it.h }))
+    }));
+  } catch (e) { /* 配额不足放弃缓存（不影响功能） */ }
 }
 function matApplyBody() {
   if (matSelected < 0 || !matItems[matSelected]) { showToast('请先在网格中选择一张图片', 'info', 2500); return; }
@@ -1181,22 +1346,60 @@ function matApplyBody() {
   const name = ui.bodySelect.value;
   const idx = meta.findIndex(m2 => m2.name === name);
   if (idx < 0) { showToast('请先在天体列表选择目标', 'info', 2500); return; }
-  meta[idx].texture = it.url;
+  const layer = ui.matTargetSel && ui.matTargetSel.value === '2' ? 2 : 1;
+  /* v9：文件名含 cloud/云 等词 → 自动开启该层「暗部透明」（可在编辑框取消勾选） */
+  const cloudish = matCloudLike(it.name);
+  if (layer === 2) { meta[idx].texture2 = it.url; if (cloudish) meta[idx].textureMode2 = 1; }
+  else { meta[idx].texture = it.url; if (cloudish) meta[idx].textureMode1 = 1; }
   bodyTexEnsure(idx);
   saveLocalStorage();
   draw();
-  showToast('贴图 ' + it.name + ' 已应用到 ' + name, 'success', 3200);
+  showToast('贴图 ' + it.name + ' 已应用到 ' + name + (layer === 2 ? ' 的上层' : ' 的底层') +
+    (cloudish ? '（云图：已自动暗部透明）' : ''), 'success', 3600);
 }
 
-/* Planckian 色度轨迹近似（Tanner Helland），返回 [r,g,b] 0..255 */
+/* 黑体谱 → CIE 1931 标准观察者 → 线性 sRGB，返回 [r,g,b] 0..255。
+ * Planck 定律 B(λ,T) ∝ λ^-5/(e^{hc/λkT}−1) 与 CIE x̄ȳz̄ 配色函数逐波长积分
+ * （配色函数取 Wyman-Sloan-Shirley 2013 多叶高斯解析拟合，JCGT，360~830 nm 步长 5 nm），
+ * XYZ 经 sRGB 矩阵到线性 RGB。恒星色度略出 sRGB 色域（负分量）时向等能白
+ * 混合收缩至恰好入域 —— 保持色相方向单调，禁止逐通道裁剪导致色相爆炸。 */
+const CIE_H = 6.62607015e-34, CIE_C = 2.99792458e8, CIE_K = 1.380649e-23;
+const CIE_LO = 360, CIE_HI = 830, CIE_STEP = 5;
+function cieLobe(x, mu, s1, s2) {
+  const t = (x - mu) / (x < mu ? s1 : s2);
+  return Math.exp(-0.5 * t * t);
+}
+function cieXYZ(wl, T) {
+  const lam = wl * 1e-9;
+  const planck = Math.pow(lam, -5) / (Math.exp(CIE_H * CIE_C / (lam * CIE_K * T)) - 1);
+  const xb = 1.056 * cieLobe(wl, 599.8, 37.9, 31.0) + 0.362 * cieLobe(wl, 442.0, 16.0, 26.7) - 0.065 * cieLobe(wl, 501.1, 20.4, 26.2);
+  const yb = 0.821 * cieLobe(wl, 568.8, 46.9, 40.5) + 0.286 * cieLobe(wl, 530.9, 16.3, 31.1);
+  const zb = 1.217 * cieLobe(wl, 437.0, 11.8, 36.0) + 0.681 * cieLobe(wl, 459.0, 26.0, 13.8);
+  return [planck * xb, planck * yb, planck * zb];
+}
 function blackbodyRGB(T) {
-  const t = clampNum(T, 1000, 40000) / 100;
-  let r, g, b;
-  if (t <= 66) r = 255; else r = 329.698727446 * Math.pow(t - 60, -0.1332047592);
-  if (t <= 66) g = 99.4708025861 * Math.log(t) - 161.1195681661;
-  else g = 288.1221695283 * Math.pow(t - 60, -0.0755148492);
-  if (t >= 66) b = 255; else if (t <= 19) b = 0; else b = 138.5177312231 * Math.log(t - 10) - 305.0447927307;
-  return [clampNum(r, 0, 255), clampNum(g, 0, 255), clampNum(b, 0, 255)];
+  const t = clampNum(T, 500, 1e6);
+  let X = 0, Y = 0, Z = 0;
+  for (let wl = CIE_LO; wl <= CIE_HI; wl += CIE_STEP) {
+    const c = cieXYZ(wl, t);
+    X += c[0]; Y += c[1]; Z += c[2];
+  }
+  const s = 1 / Math.max(Y, 1e-300);
+  let r = 3.2406 * X * s - 1.5372 * Y * s - 0.4986 * Z * s;
+  let g = -0.9689 * X * s + 1.8758 * Y * s + 0.0415 * Z * s;
+  let b = 0.0557 * X * s - 0.2040 * Y * s + 1.0570 * Z * s;
+  let lo = Math.min(r, g, b);
+  if (lo < 0) {   // 色域收缩：向等能白混合，二分恰好入域（色相方向不变）
+    let a = 0, h = 1;
+    for (let k = 0; k < 24; k++) {
+      const mid = (a + h) / 2;
+      const rr = r + (1 - r) * mid, gg = g + (1 - g) * mid, bb = b + (1 - b) * mid;
+      if (Math.min(rr, gg, bb) < 0) a = mid; else h = mid;
+    }
+    r += (1 - r) * h; g += (1 - g) * h; b += (1 - b) * h;
+  }
+  const mx = Math.max(r, g, b) || 1;
+  return [clampNum(r / mx * 255, 0, 255), clampNum(g / mx * 255, 0, 255), clampNum(b / mx * 255, 0, 255)];
 }
 function fmtRadius(m) {
   if (!(m > 0)) return '';
@@ -1776,6 +1979,11 @@ function resolveBodies(rawArray) {
     const item = { name: b.name, orbits_around: b.orbits_around || orig.orbits_around || '',
       color: b.color || '#FFFFFF', size: Number(b.size) > 0 ? Number(b.size) : 5,
       texture: (typeof b.texture === 'string' && b.texture) ? b.texture : null,
+      textureOp: (typeof b.textureOp === 'number' && isFinite(b.textureOp)) ? Math.min(Math.max(b.textureOp, 0), 1) : 1,
+      texture2: (typeof b.texture2 === 'string' && b.texture2) ? b.texture2 : null,
+      texture2Op: (typeof b.texture2Op === 'number' && isFinite(b.texture2Op)) ? Math.min(Math.max(b.texture2Op, 0), 1) : 1,
+      textureMode1: (b.textureMode1 === 1 || b.textureMode1 === '1' || b.textureMode1 === true) ? 1 : 0,
+      textureMode2: (b.textureMode2 === 1 || b.textureMode2 === '1' || b.textureMode2 === true) ? 1 : 0,
       radius: Number(b.radius) > 0 ? Number(b.radius) : (Number(orig.radius_m) > 0 ? Number(orig.radius_m) : 0),
       original_input_params: b.original_input_params || {} };
     if (isKeplerian) keplerianQueue.push({ item, raw: b });
@@ -1835,6 +2043,11 @@ function initState(list) {
     name: b.name, color: b.color || '#FFFFFF', size: Number(b.size) > 0 ? Number(b.size) : 5,
     radius: Number(b.radius) > 0 ? Number(b.radius) : 0,
     texture: (typeof b.texture === 'string' && b.texture) ? b.texture : null,
+    textureOp: (typeof b.textureOp === 'number' && isFinite(b.textureOp)) ? Math.min(Math.max(b.textureOp, 0), 1) : 1,
+    texture2: (typeof b.texture2 === 'string' && b.texture2) ? b.texture2 : null,
+    texture2Op: (typeof b.texture2Op === 'number' && isFinite(b.texture2Op)) ? Math.min(Math.max(b.texture2Op, 0), 1) : 1,
+    textureMode1: (b.textureMode1 === 1 || b.textureMode1 === '1' || b.textureMode1 === true) ? 1 : 0,
+    textureMode2: (b.textureMode2 === 1 || b.textureMode2 === '1' || b.textureMode2 === true) ? 1 : 0,
     orbits_around: b.orbits_around || '', original_input_params: b.original_input_params || {}
   }));
   N = meta.length; ensureCap(N);
@@ -1909,6 +2122,11 @@ function exportBodiesRaw() {
       color: meta[i].color, size: meta[i].size, radius: meta[i].radius || 0,
       orbits_around: meta[i].orbits_around, original_input_params: meta[i].original_input_params };
     if (meta[i].texture) b.texture = meta[i].texture;
+    if (meta[i].textureOp !== undefined && meta[i].textureOp !== 1) b.textureOp = meta[i].textureOp;
+    if (meta[i].texture2) b.texture2 = meta[i].texture2;
+    if (meta[i].texture2Op !== undefined && meta[i].texture2Op !== 1) b.texture2Op = meta[i].texture2Op;
+    if (meta[i].textureMode1) b.textureMode1 = 1;
+    if (meta[i].textureMode2) b.textureMode2 = 1;
     /* 动态自转回写：spinRate 为动力学变量（潮汐力矩演化），导出/重置时
      * 把当前自转周期写回 original_input_params，保证状态完整往返 */
     const op = b.original_input_params || (b.original_input_params = {});
@@ -1942,7 +2160,7 @@ function computeTotalEnergy() {
         /* IW95 E_PN/E_2PN（成对近似，相对量）：dv = v_j−v_i */
         const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
         const v2rel = dvx * dvx + dvy * dvy + dvz * dvz;
-        const nx = dx / r, ny = dvy / r, nz = dz / r;
+        const nx = dx / r, ny = dy / r, nz = dz / r;   // v10 修复：ny 曾误用速度差分量 dvy → 1PN/2PN 能量账本 rd 失真
         const rd = dvx * nx + dvy * ny + dvz * nz;
         const mi = massA[i], mj = massA[j], M = mi + mj;
         const nu = mi * mj / (M * M);
@@ -2393,6 +2611,10 @@ const PRESETS = {
 /* ---------------- UI 引用集中收集 ---------------- */
 let viewMode = 'free', trailMode = 'line';
 let pendingFollow = null, pendingFrame = null, pendingTrailRef = null, pendingView = 'free';
+/* v14：「自身」开关恢复（v12 语义），决定拖拽旋转中心 ——
+ * 开 = 原地转头（v15：视点世界系锁定，星球随视线移出眼前）；
+ * 关 = 绕视角跟随锚点公转（锚点屏幕位置逐比特钉死）。
+ * 视角旋转与视角跟随（星球选择）彻底解耦，跟随只携行不锁视线 */
 const SCALE_MIN = 1e-12, SCALE_MAX = 1e8;
 
 function collectUI() {
@@ -2401,7 +2623,7 @@ function collectUI() {
    'adaptiveTimeStep', 'integratorSeg', 'gr1pn', 'gr25', 'gr2pn', 'gr35', 'collisionMerge', 'grBodySelect',
    'totalEnergyDisplay', 'energyDeltaDisplay', 'energyLedgerDisplay', 'sinkTideDisplay', 'sinkGWDisplay',
    'totalMomentumDisplay', 'momentumDeltaDisplay', 'totalAngularDisplay', 'sinkGWLDisplay', 'angularLedgerDisplay',
-   'grA', 'grE', 'grP', 'grMeasured', 'grTheory', 'viewSeg', 'followSelect', 'frameSelect', 'trailSeg', 'trailDuration',
+   'grA', 'grE', 'grP', 'grMeasured', 'grTheory', 'viewSeg', 'followSelect', 'selfRotateToggle', 'frameSelect', 'trailSeg', 'trailDuration',
    'trailRefMode', 'skyboxEnabled', 'resSelect', 'perspToggle',
    'physSizeToggle', 'starRadToggle', 'glareToggle', 'headlessToggle', 'snapshotInterval', 'snapCount',
    'headlessRate', 'downloadSnapBtn', 'showConservation', 'conservationInfo', 'totalEnergyDisplay',
@@ -2415,7 +2637,8 @@ function collectUI() {
    'bodyTideK2', 'bodyTideLag',
    'tideToggle', 'tideHeat', 'tideSpinFrac', 'gwWaveToggle', 'gwWaveCanvas', 'gwF', 'gwH', 'gwT',
    'texUploadBtn', 'texClearBtn', 'texFileInput', 'texPreview', 'texInfo',
-   'matScanBtn', 'matGrid', 'matSkyBtn', 'matBodyBtn', 'matInfo',
+   'texUploadBtn2', 'texClearBtn2', 'texPreview2', 'texInfo2', 'texOp1', 'texOp2', 'texOp1Val', 'texOp2Val', 'texDark1', 'texDark2',
+   'matScanBtn', 'matGrid', 'matBodyBtn', 'matInfo', 'matBig', 'matBigInfo', 'matBigWrap', 'matTargetSel',
    'cancelBodyFormBtn', 'cancelX', 'toast', 'backdrop', 'padMove', 'padRot'
   ].forEach(id => { ui[id] = $(id); });
 }
@@ -2443,33 +2666,13 @@ function showToast(msg, type = 'info', duration = 3000) {
  * WebGL 不可用回退 Canvas 2D 网格投影路径（CPU 生成低分辨率六面）。 */
 const skybox = {
   pano: null,          // 解码后的全景 Image
-  cubeReady: false,    // GL 立方体贴图就绪
-  facesReady: false,   // 2D 回退面图就绪
-  faceSize: 0,
-  imgs: new Array(6).fill(null),   // 2D 回退路径面图
-  dirty: true, canvas: document.createElement('canvas'),
+  cubeReady: false,    // three.js 立方体贴图就绪
+  dirty: true,
   skyLum: 0.05, lumCanvas: document.createElement('canvas'),
   source: 'none'       // cache / embedded / sidecar / file / none
 };
-/* 立方体面基（world→方向）：从 GL ES 3.0 规范立方体贴图面选择表反推。
- * d = center + right·sc + up·t̂，sc/t̂ ∈ [-1,1]（sc 图像 x 向右，t̂ 图像 y 向下，
- * 对应“无 FLIP_Y 上传”约定：图像行 0 ↔ t=0）。GL 主路径与 2D 回退共用此表。 */
-const SKY_FACE_DIRS = [
-  { key: 'POS_X', c: [1, 0, 0],  r: [0, 0, -1], u: [0, -1, 0] },
-  { key: 'NEG_X', c: [-1, 0, 0], r: [0, 0, 1],  u: [0, -1, 0] },
-  { key: 'POS_Y', c: [0, 1, 0],  r: [1, 0, 0],  u: [0, 0, 1] },
-  { key: 'NEG_Y', c: [0, -1, 0], r: [1, 0, 0],  u: [0, 0, -1] },
-  { key: 'POS_Z', c: [0, 0, 1],  r: [1, 0, 0],  u: [0, -1, 0] },
-  { key: 'NEG_Z', c: [0, 0, -1], r: [-1, 0, 0], u: [0, -1, 0] }
-];
-/* 等距柱状方向 → UV（GL 主路径与 2D 回退、星球贴图共用同一约定）：
- * lon = atan2(d.x, -d.z)（默认视线 -z ↔ 图像中心），lat = asin(d.y)，
- * u = lon/2π + 0.5，v = 0.5 - lat/π（图像顶部 = +Y 极）。 */
-function panoUVOfDir(dx, dy, dz) {
-  const lon = Math.atan2(dx, -dz);
-  const lat = Math.asin(clampNum(dy, -1, 1));
-  return [lon / (2 * Math.PI) + 0.5, 0.5 - lat / Math.PI];
-}
+/* v17：立方体面基表与等距柱状 UV 约定移入 three.js 渲染层模块
+ *（SKY_FACE_DIRS / PANO_FS，与 v16 GL 管线逐字节一致）。 */
 function skyboxLoad() {
   /* ---- IndexedDB 原始字节缓存：首次加载成功后存入，之后打开直接读缓存，
    * 跳过 10.9 MB 旁车脚本的下载解析与 base64 解码；损坏自动清除回退原三级链 ---- */
@@ -2515,18 +2718,17 @@ function skyboxLoad() {
     skybox.pano = im;
     skybox.source = tag;
     computeSkyLuminance(im);
-    if (skyMode === 'webgl' && glr.ok) {
-      try { glrBuildSkyFromPano(im); }
+    if (tjs && ren.ok) {
+      try { tjs.setSkyPano(im); skybox.cubeReady = true; }
       catch (e) {
         console.warn('天空盒立方体转换失败:', e);
         showToast(e.name === 'SecurityError'
           ? '浏览器跨域限制：请通过本地 HTTP 服务打开，或改用 Firefox 打开'
           : '天空盒立方体转换失败，回退纯色背景', 'error', 6000);
       }
-    } else if (skyMode === 'canvas2d' || !glr.ok) {
-      build2DSkyFaces(im);
+    } else {
+      skybox.cubeReady = false;   // three.js 未就绪：enableThreeJS 后自动补转换
     }
-    skybox.dirty = true;
     draw();
   };
   skyApplyHook = (im) => onPanoReady(im, 'material');   /* v7 材质库注入点 */
@@ -2600,858 +2802,43 @@ function computeSkyLuminance(im) {
   skybox.skyLum = cnt ? sum / cnt : 0.05;
 }
 
-/* ---------------- WebGL 全场景渲染管线（HDR + 泛光 + OKLab 漂白） ----------------
- * 全部视觉元素接入 WebGL：立方体贴图天空盒、轨迹线与点迹、天体圆面与
- * 点源 PSF、亮度提取、UnrealBloomPass 多级高斯泛光链、
- * 自动曝光与 OKLab 高光漂白色调映射，一次合成输出。
- * WebGL2 + EXT_color_buffer_float 使用 RGBA16F 浮点缓冲；仅 WebGL1 时
- * 以 1/6 线性编码的 RGBA8 替代；WebGL 完全不可用回退 Canvas 2D 路径。
- * 天空盒面直接按 OpenGL ES 立方体贴图面映射约定上传，不做镜像。
- * 文献：three.js UnrealBloomPass（LuminosityHighPassShader / GaussianBlurShader
- * / UpsampleShader，MIT）；RasterGrid 线性采样高斯优化；Ottosson 2020 OKLab（公有领域）；
- * 高光漂白对应传感器/胶片的高光去饱和；点源通量守恒参照
- * Hillaire 2016 物理天光渲染中辐照度守恒的亚像素光斑处理。 */
-const glr = {
-  gl: null, cv: null, gl2: false, hdr: false, ok: false, W: 0, H: 0,
-  enc: 1, dec: 1, exposure: 0.6, lastExpT: 0,
-  progs: {}, buf: {}, tex: {}, fbo: {}, bloomLv: [],
-  skyNorm: 1, lastFrame: null, drawCount: 0
-};
-const GLSL_QUAD_VS = 'attribute vec2 a;varying vec2 v;void main(){v=a*0.5+0.5;gl_Position=vec4(a,0.0,1.0);}';
-const GLSL_SKY_VS = 'attribute vec3 a;uniform mat3 u_r;uniform float u_f,u_ar;varying vec3 v_d;' +
-  'void main(){vec3 d=u_r*a;float w=-d.z;gl_Position=vec4(d.x*u_f/u_ar,d.y*u_f,0.99999*w,w);v_d=a;}';
-const GLSL_SKY_FS = 'precision mediump float;varying vec3 v_d;uniform samplerCube u_t;' +
-  'uniform float u_n,u_enc;' +
-  'void main(){vec3 c=textureCube(u_t,normalize(v_d)).rgb;' +
-  'c=pow(max(c,vec3(0.0)),vec3(2.2))*u_n;' +
-  'gl_FragColor=vec4(c*u_enc,1.0);}';
-const GLSL_TRAIL_VS = 'attribute vec2 a_p;attribute vec4 a_c;uniform float u_sz;varying vec4 v_c;' +
-  'void main(){gl_Position=vec4(a_p,0.0,1.0);gl_PointSize=u_sz;v_c=a_c;}';
-const GLSL_TRAIL_FS = 'precision mediump float;varying vec4 v_c;void main(){gl_FragColor=v_c;}';
-const GLSL_BODY_VS = 'attribute vec2 a_p;attribute vec2 a_q;attribute float a_r;attribute vec3 a_c;' +
-  'attribute float a_m;attribute float a_x;attribute vec2 a_l;attribute vec4 a_e;' +
-  'uniform vec2 u_pp;varying vec2 v_q;varying vec3 v_c;varying float v_m;varying float v_x;varying vec2 v_l;varying float v_r;' +
-  'void main(){mat2 E=mat2(a_e.x,a_e.z,a_e.y,a_e.w);' +
-  'gl_Position=vec4(a_p+(E*vec2(a_q.x*a_r,-a_q.y*a_r))*u_pp,0.0,1.0);' +
-  'v_q=a_q;v_c=a_c;v_m=a_m;v_x=a_x;v_l=a_l;v_r=a_r;}';
-/* 天体片元（shader 级物理渲染）：
- * 0 高斯 PSF 点源（峰值 = min(F/Ω_psf, B)，通量守恒且不超表面辐射亮度）
- * 1 行星圆面：逐像素球面法线 N（本地系 x右 y下 z朝观察者）→ 世界法线
- *   → 全景贴图等距柱状采样（有贴图时替代表面颜色）→ 多星朗伯 N·L
- *   （每星辐照度 E 与黑体颜色线性叠加）+ 柔和晨昏线 + 环境光
- * 2 恒星圆面：临边昏暗 I(μ)=I₀(1-u(1-μ)) + 指数边缘辉光（加性混合）
- * 3 平点（回退） */
-const GLSL_BODY_FS = 'precision highp float;' +
-  'varying vec2 v_q;varying vec3 v_c;varying float v_m;varying float v_x;varying vec2 v_l;varying float v_r;' +
-  'uniform float u_enc;' +
-  'uniform mat3 u_vm;' +
-  'uniform int u_nL;' +
-  'uniform vec3 u_lD[8];' +
-  'uniform vec3 u_lC[8];' +
-  'uniform float u_amb;' +
-  'uniform float u_dw;' +
-  'uniform float u_hasTex;' +
-  'uniform float u_trep;' +   // 1：贴图 S 向 REPEAT（WebGL2）→ UV 连续无 fract 断裂
-  'uniform sampler2D u_tex;' +
-  'const float PI_=3.141592653589793;' +
-  'vec3 panoColor(vec3 n){' +
-  'float lon=atan(n.x,-n.z);' +
-  'float lat=asin(clamp(n.y,-1.0,1.0));' +
-  'float u=lon/(2.0*PI_)+0.5;' +
-  'vec2 uv=vec2(u_trep>0.5?u:fract(u),0.5-lat/PI_);' +   // REPEAT 硬件环绕：经线接缝处 UV 导数连续，mip 选择不断裂 → 无糊缝
-  'return pow(texture2D(u_tex,uv).rgb,vec3(2.2));}' +
-  'vec3 sphereN(vec2 qn){' +
-  'float d=clamp(dot(qn,qn),0.0,1.0);' +
-  'return normalize(vec3(qn,sqrt(max(1.0-d,1e-4))));}' +
-  'void main(){' +
-  'vec2 p=v_q*v_r;vec3 c=vec3(0.0);float a=1.0;' +
-  'if(v_m<0.5){float s2=max(2.0*v_x*v_x,1e-5);float r=length(p);' +
-  'float win=1.0-smoothstep(2.2*v_x,3.1*v_x,r);' +   // 圆形支撑窗：四边形边界处严格归零，泛光链只见圆形亮斑（防方形点源辉光）
-  'c=v_c*exp(-dot(p,p)/s2)*win;}' +
-  'else if(v_m<1.5){' +
-  'float r=length(p);' +
-  'float edge=1.0-smoothstep(v_r-1.4,v_r,r);' +
-  'vec3 N=sphereN(v_q);' +
-  'vec3 alb=u_hasTex>0.5?panoColor(u_vm*N):v_c;' +
-  'vec3 lit=u_amb*alb*(0.55+0.45*N.z);' +
-  'for(int i=0;i<8;i++){' +
-  'if(i>=u_nL)break;' +
-  'float ndl=dot(N,u_lD[i]);' +
-  'float dif=smoothstep(-0.015,0.05,ndl);' +
-  'lit+=alb*u_lC[i]*dif;}' +
-  'c=lit*u_dw;a=edge;}' +
-  'else if(v_m<2.5){' +
-  'float r=length(p);' +
-  'float diskR=max(v_x,0.5);' +
-  'vec2 qn=p/diskR;' +
-  'float mu=sphereN(qn).z;' +
-  'float ld=1.0-0.62*(1.0-mu);' +
-  'float disk=1.0-smoothstep(diskR-1.2,diskR,r);' +
-  'vec3 haloC=v_c*(0.16*exp(-max(r-diskR,0.0)/max(diskR*0.22,2.0)));' +
-  'haloC*=1.0-smoothstep(2.0*diskR,3.05*diskR,r);' +   // 辉光圆形支撑窗：到达四边形边界前平滑归零，方形裁剪边不再进入泛光链
-  'haloC=min(haloC,vec3(3000.0));' +   // 辉光上限：极亮恒星(B~14700)的辉光需钳制，泛光链负责大范围光晕
-  'c=v_c*(ld*disk)+haloC;}' +
-  'else{float r=length(p);' +
-  'a=1.0-smoothstep(v_x-0.2,v_x+0.6,r);c=v_c*a;}' +
-  'gl_FragColor=vec4(c*u_enc,a);}';
-/* 亮度提取 —— 移植 three.js UnrealBloomPass 的 LuminosityHighPassShader：
- * smoothstep 软阈值（过渡半宽 0.01），低于阈值不参与泛光。
- * 深空背景（天空盒线性亮度 ≤0.005）远低于阈值 1.0，
- * 太阳入屏也不会把背景推进泛光 —— 满足“深空不随太阳变亮”。 */
-const GLSL_BRIGHT_FS = 'precision highp float;varying vec2 v;uniform sampler2D u_t;' +
-  'uniform float u_exp,u_dec,u_thr;' +
-  'void main(){' +
-  'vec3 c=texture2D(u_t,v).rgb*u_dec*u_exp;' +
-  'c=min(c,vec3(60000.0));' +   // 半浮点溢出防护：物理峰值(如太阳圆面 14700)经多级累加会超 65504 → INF → 黑像素
-  'float l=dot(c,vec3(0.2126,0.7152,0.0722));' +
-  'float w=smoothstep(u_thr-0.01,u_thr+0.01,l);' +
-  'gl_FragColor=vec4(c*w,1.0);}';
-/* 泛光多级滤波 —— 移植 three.js UnrealBloomPass：
- * 下采样链：9-tap 可分离高斯（线性采样优化权重 0.227027/0.316216/0.070270，
- * 抽头偏移 0/1.38462/3.23077 texel，RasterGrid "Efficient Gaussian blur with
- * linear sampling"，即 UnrealBloomPass GaussianBlurShader），u_dir=(1/w,0) 横向、
- * (0,1/h) 纵向各一遍；半分辨率目标经 LINEAR 双线性完成 2× 降采样。
- * 上采样回累加：3×3 tent 核（UnrealBloomPass UpsampleShader，(1,2,1)⊗(1,2,1)/16）
- * 单遍完成，并叠加本级原图（u_t2·u_add）保持能量自底向顶回收。
- * 高斯卷积保证辉光等照线为平滑圆 —— 无盒式滤波的方块感。
- * ⚠ 输出钳制 60000 + highp：恒星圆面物理峰值(B≈14700)经多级累加可超出
- * RGBA16F 半浮点上限(65504) → INF → NaN → 黑像素。 */
-const GLSL_BLUR_FS = 'precision highp float;varying vec2 v;uniform sampler2D u_t,u_t2;' +
-  'uniform vec2 u_dir,u_off;uniform float u_up,u_add;' +
-  'void main(){' +
-  'vec3 c;' +
-  'if(u_up<0.5){' +
-  'vec2 o1=u_dir*1.3846153846,o2=u_dir*3.2307692308;' +
-  'c=texture2D(u_t,v).rgb*0.2270270270;' +
-  'c+=(texture2D(u_t,v+o1).rgb+texture2D(u_t,v-o1).rgb)*0.3162162162;' +
-  'c+=(texture2D(u_t,v+o2).rgb+texture2D(u_t,v-o2).rgb)*0.0702702703;' +
-  '}else{' +
-  'c=(texture2D(u_t,v+vec2(-1.0,-1.0)*u_off).rgb+texture2D(u_t,v+vec2(1.0,-1.0)*u_off).rgb' +
-  '+texture2D(u_t,v+vec2(-1.0,1.0)*u_off).rgb+texture2D(u_t,v+vec2(1.0,1.0)*u_off).rgb)*0.0625' +
-  '+(texture2D(u_t,v+vec2(0.0,-1.0)*u_off).rgb+texture2D(u_t,v+vec2(0.0,1.0)*u_off).rgb' +
-  '+texture2D(u_t,v+vec2(-1.0,0.0)*u_off).rgb+texture2D(u_t,v+vec2(1.0,0.0)*u_off).rgb)*0.125' +
-  '+texture2D(u_t,v).rgb*0.25;' +
-  'c+=texture2D(u_t2,v).rgb*u_add;' +
-  '}' +
-  'c=min(c,vec3(60000.0));' +
-  'gl_FragColor=vec4(c,1.0);}';
-/* 合成：曝光 + 泛光 + OKLab 亮度压缩与色度压缩 + sRGB + 抖动
- * （旧版全屏遮蔽眩光 veil 与水平拉丝已移除：深空背景只由天空盒自身亮度决定，
- *   太阳入屏不再提亮背景；泛光仅叠加高阈值亮部，随恒星辐照度与距离自然衰减）
- * v7 色相爆炸修复：色度压缩不再依赖眩光开关（u_bleach）——关辉光时高亮
- *   像元的 OKLab 色度分量不再无界，未开启漂白时用更高阈值窄压缩保色相，
- *   开启漂白时维持原 0.42–0.95 宽压缩观感；最后做保色调标量钳制
- *   （按 max(R,G,B) 整体缩放，禁止逐通道裁剪导致的色相偏移/爆色）。 */
-const GLSL_FINAL_FS = 'precision highp float;varying vec2 v;' +
-  'uniform sampler2D u_scene,u_bloom;' +
-  'uniform float u_exp,u_dec,u_bleach;' +
-  'void main(){' +
-  'vec3 c=texture2D(u_scene,v).rgb*u_dec*u_exp;' +
-  'c+=texture2D(u_bloom,v).rgb;' +
-  'vec3 ms=vec3(dot(c,vec3(0.4122214708,0.5363325363,0.0514459929)),' +
-  'dot(c,vec3(0.2119034982,0.6806995451,0.1073969566)),' +
-  'dot(c,vec3(0.0883024619,0.2817188376,0.6299787005)));' +
-  'ms=pow(max(ms,vec3(0.0)),vec3(1.0/3.0));' +
-  'vec3 lab=vec3(dot(ms,vec3(0.2104542553,0.7936177850,-0.0040720468)),' +
-  'dot(ms,vec3(1.9779984951,-2.4285922050,0.4505937099)),' +
-  'dot(ms,vec3(0.0259040371,0.7827717662,-0.8086757660)));' +
-  'float L=1.0-exp(-1.1*max(lab.x,0.0));' +
-  'float blWide=smoothstep(0.42,0.95,L);' +
-  'float blNarrow=smoothstep(0.78,1.0,L);' +
-  'float bl=mix(blNarrow,blWide,u_bleach);' +
-  'vec2 ab=lab.yz*(1.0-0.88*bl);' +
-  'vec3 ms2=vec3(L+0.3963377774*ab.x+0.2158037573*ab.y,' +
-  'L-0.1055613458*ab.x-0.0638541728*ab.y,' +
-  'L-0.0894841775*ab.x-1.2914855480*ab.y);' +
-  'ms2=ms2*ms2*ms2;' +
-  'vec3 col=vec3(dot(ms2,vec3(4.0767416621,-3.3077115913,0.2309699292)),' +
-  'dot(ms2,vec3(-1.2684380046,2.6097574011,-0.3413193965)),' +
-  'dot(ms2,vec3(-0.0041960863,-0.7034186147,1.7076147010)));' +
-  'col=max(col,vec3(0.0));' +
-  'float mx=max(col.r,max(col.g,col.b));' +
-  'if(mx>1.0) col*=1.0/mx;' +
-  'col=pow(col,vec3(1.0/2.2));' +
-  'float n=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);' +
-  'gl_FragColor=vec4(col+(n-0.5)/255.0,1.0);}';
-/* ---------------- 全景图 → 立方体面 离屏转换着色器 ----------------
- * 全屏四边形渲染到挂接立方体某一面的 FBO：片元方向 = 面基 center+right·sc+up·t̂
- * （sc/t̂ = 面图像坐标，与 GL 立方体贴图规范采样表严格互逆）。
- * 方向 → 等距柱状 UV（与天空/贴图共用约定）→ 源图采样：
- *   u_bc=1：Catmull-Rom 双三次 16 抽头（可分离：4 列 × 各 4 行抽头，
- *   先 Y 向三次插值、再 X 向跨列插值，锐利无模糊）；
- *   u_bc=0：双线性（分片路径）。u_map = [分片起始u, 分片u宽, 渲染核下界, 上界]，
- *   片元 u 超出核范围即丢弃（配合 2 源像素重叠实现分片无缝）。
- *   u_wrap=1（WebGL1 单纹理路径）：NPOT 不能 REPEAT，逐抽头 fract 环绕。 */
-const GLSL_PANOGEN_FS = 'precision highp float;' +
-  'varying vec2 v;' +
-  'uniform sampler2D u_t;' +
-  'uniform vec3 u_fc,u_fr,u_fu;' +
-  'uniform vec2 u_src;' +
-  'uniform vec4 u_map;' +
-  'uniform float u_bc,u_wrap;' +
-  'vec2 dirUV(vec3 d){' +
-  'float lon=atan(d.x,-d.z);' +
-  'float lat=asin(clamp(d.y,-1.0,1.0));' +
-  'return vec2(lon/6.283185307179586+0.5,0.5-lat/3.141592653589793);}' +
-  'vec3 tap(vec2 uv){' +
-  'float x=uv.x;' +
-  'if(u_wrap>0.5)x=fract(x);' +
-  'if(u_map.y<0.999)x=clamp((x-u_map.x)/u_map.y,0.0,1.0);' +
-  'return texture2D(u_t,vec2(x,uv.y)).rgb;}' +
-  'vec3 cr1(float x,vec3 c0,vec3 c1,vec3 c2,vec3 c3){' +
-  'return c1+0.5*x*(c2-c0+x*(2.0*c0-5.0*c1+4.0*c2-c3+x*(3.0*(c1-c2)+c3-c0)));}' +
-  'void main(){' +
-  'vec2 st=v*2.0-1.0;' +
-  'vec2 uv=dirUV(normalize(u_fc+u_fr*st.x+u_fu*st.y));' +
-  'if(uv.x<u_map.z||uv.x>=u_map.w)discard;' +
-  'vec3 col;' +
-  'if(u_bc>0.5){' +
-  'vec2 tc=uv*u_src;' +
-  'vec2 fl=floor(tc-0.5)+0.5;' +
-  'vec2 f=tc-fl;' +
-  'vec3 cx0=cr1(f.y,tap(vec2((fl.x-1.0)/u_src.x,(fl.y-1.0)/u_src.y)),tap(vec2((fl.x-1.0)/u_src.x,fl.y/u_src.y)),tap(vec2((fl.x-1.0)/u_src.x,(fl.y+1.0)/u_src.y)),tap(vec2((fl.x-1.0)/u_src.x,(fl.y+2.0)/u_src.y)));' +
-  'vec3 cx1=cr1(f.y,tap(vec2(fl.x/u_src.x,(fl.y-1.0)/u_src.y)),tap(vec2(fl.x/u_src.x,fl.y/u_src.y)),tap(vec2(fl.x/u_src.x,(fl.y+1.0)/u_src.y)),tap(vec2(fl.x/u_src.x,(fl.y+2.0)/u_src.y)));' +
-  'vec3 cx2=cr1(f.y,tap(vec2((fl.x+1.0)/u_src.x,(fl.y-1.0)/u_src.y)),tap(vec2((fl.x+1.0)/u_src.x,fl.y/u_src.y)),tap(vec2((fl.x+1.0)/u_src.x,(fl.y+1.0)/u_src.y)),tap(vec2((fl.x+1.0)/u_src.x,(fl.y+2.0)/u_src.y)));' +
-  'vec3 cx3=cr1(f.y,tap(vec2((fl.x+2.0)/u_src.x,(fl.y-1.0)/u_src.y)),tap(vec2((fl.x+2.0)/u_src.x,fl.y/u_src.y)),tap(vec2((fl.x+2.0)/u_src.x,(fl.y+1.0)/u_src.y)),tap(vec2((fl.x+2.0)/u_src.x,(fl.y+2.0)/u_src.y)));' +
-  'col=cr1(f.x,cx0,cx1,cx2,cx3);' +
-  '}else{col=tap(uv);}' +
-  'gl_FragColor=vec4(col,1.0);}';
-/* 单位立方体 36 顶点，面序 PosX NegX PosY NegY PosZ NegZ */
-const CUBE_VERTS = new Float32Array([
-  1,-1,-1, 1,1,-1, 1,1,1,   1,-1,-1, 1,1,1, 1,-1,1,
-  -1,-1,1, -1,1,1, -1,1,-1, -1,-1,1, -1,1,-1, -1,-1,-1,
-  -1,1,-1, -1,1,1, 1,1,1,   -1,1,-1, 1,1,1, 1,1,-1,
-  -1,-1,-1, 1,-1,-1, 1,-1,1, -1,-1,-1, 1,-1,1, -1,-1,1,
-  -1,-1,1, 1,-1,1, 1,1,1,   -1,-1,1, 1,1,1, -1,1,1,
-  1,-1,-1, -1,-1,-1, -1,1,-1, 1,-1,-1, -1,1,-1, 1,1,-1
-]);
-function glrCompile(gl, vsSrc, fsSrc, names) {
-  const mk = (type, src) => {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  };
-  const p = gl.createProgram();
-  gl.attachShader(p, mk(gl.VERTEX_SHADER, vsSrc));
-  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fsSrc));
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  const o = { p, loc: {} };
-  for (const n of names) {
-    o.loc[n] = gl.getUniformLocation(p, n);
-    if (o.loc[n] === null) o.loc[n] = gl.getAttribLocation(p, n);
-  }
-  return o;
-}
-/* 各向异性过滤：掠射角/斜视角下的纹理清晰度（贴图不糊的关键之一） */
-function glrSetAniso(gl, target) {
-  const ext = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
-  if (ext) {
-    const max = gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
-    gl.texParameterf(target, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
-  }
-}
-function glrInit() {
-  try {
-    const cv = document.getElementById('glcanvas');
-    const opts = { preserveDrawingBuffer: true, antialias: false, depth: false, alpha: false, powerPreference: 'high-performance' };
-    let gl = cv.getContext('webgl2', opts);
-    glr.gl2 = !!gl;
-    if (!gl) gl = cv.getContext('webgl', opts) || cv.getContext('experimental-webgl', opts);
-    if (!gl) return false;
-    glr.gl = gl; glr.cv = cv;
-    glr.hdr = glr.gl2 && !!gl.getExtension('EXT_color_buffer_float');
-    glr.enc = glr.hdr ? 1 : 1 / 6;   // LDR 回退：场景以 1/6 线性编码保留动态范围余量
-    glr.dec = glr.hdr ? 1 : 6;
-    glr.progs.sky = glrCompile(gl, GLSL_SKY_VS, GLSL_SKY_FS, ['a', 'u_r', 'u_f', 'u_ar', 'u_t', 'u_n', 'u_enc']);
-    glr.progs.trail = glrCompile(gl, GLSL_TRAIL_VS, GLSL_TRAIL_FS, ['a_p', 'a_c', 'u_sz']);
-    glr.progs.body = glrCompile(gl, GLSL_BODY_VS, GLSL_BODY_FS, ['a_p', 'a_q', 'a_r', 'a_c', 'a_m', 'a_x', 'a_l', 'a_e', 'u_pp', 'u_enc', 'u_vm', 'u_nL', 'u_lD', 'u_lC', 'u_amb', 'u_dw', 'u_hasTex', 'u_trep', 'u_tex']);
-    glr.progs.panogen = glrCompile(gl, GLSL_QUAD_VS, GLSL_PANOGEN_FS, ['a', 'u_t', 'u_fc', 'u_fr', 'u_fu', 'u_src', 'u_map', 'u_bc', 'u_wrap']);
-    glr.progs.bright = glrCompile(gl, GLSL_QUAD_VS, GLSL_BRIGHT_FS, ['a', 'u_t', 'u_exp', 'u_dec', 'u_thr']);
-    glr.progs.blur = glrCompile(gl, GLSL_QUAD_VS, GLSL_BLUR_FS, ['a', 'u_t', 'u_t2', 'u_dir', 'u_off', 'u_up', 'u_add']);
-    glr.progs.final = glrCompile(gl, GLSL_QUAD_VS, GLSL_FINAL_FS, ['a', 'u_scene', 'u_bloom', 'u_exp', 'u_dec', 'u_bleach']);
-    const mkBuf = (data) => {
-      const b = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, b);
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-      return b;
-    };
-    glr.buf.quad = mkBuf(new Float32Array([-1, -1, 3, -1, -1, 3]));
-    glr.buf.cube = mkBuf(CUBE_VERTS);
-    glr.buf.trail = gl.createBuffer();
-    glr.buf.body = gl.createBuffer();
-    const tex1 = (target, data) => {
-      const t = gl.createTexture();
-      gl.bindTexture(target, t);
-      gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      if (target === gl.TEXTURE_CUBE_MAP) {
-        for (let f = 0; f < 6; f++) gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-      } else {
-        gl.texImage2D(target, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-      }
-      return t;
-    };
-    glr.tex.cube = tex1(gl.TEXTURE_CUBE_MAP, new Uint8Array([8, 8, 7, 255]));
-    glr.tex.black = tex1(gl.TEXTURE_2D, new Uint8Array([0, 0, 0, 255]));
-    glr.tex.white = tex1(gl.TEXTURE_2D, new Uint8Array([255, 255, 255, 255]));
-    glr.ok = true;
-    return true;
-  } catch (e) { console.warn('WebGL 渲染管线初始化失败，回退 Canvas 2D:', e); glr.ok = false; return false; }
-}
-function glrResize(W, H) {
-  const gl = glr.gl;
-  const del = (o) => { if (o) { gl.deleteTexture(o.t); gl.deleteFramebuffer(o.fb); } };
-  del(glr.fbo.scene);
-  (glr.bloomLv || []).forEach(l => { del(l.A); del(l.B); });
-  const mk = (w, h) => {
-    const t = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    if (glr.hdr) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    const fb = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-    return { t, fb, w, h };
-  };
-  glr.fbo.scene = mk(W, H);
-  glr.bloomLv = [];
-  for (let i = 1; i <= 5; i++) {
-    const w = Math.max(2, W >> i), h = Math.max(2, H >> i);
-    glr.bloomLv.push({ A: mk(w, h), B: mk(w, h), w, h });
-  }
-  if (glr.cv.width !== W || glr.cv.height !== H) { glr.cv.width = W; glr.cv.height = H; }
-  glr.W = W; glr.H = H;
-}
-/* ---------------- 全景图 → 离屏 Cubemap 转换（一次性，加载时执行） ----------------
- * 面尺寸 F = min(源宽/4, MAX_CUBE_MAP_TEXTURE_SIZE)：水平分辨率守恒
- * （11820 宽 → 2955/面，赤道 90°/面刚好无欠采样、无降尺度）。
- * 转换经 FBO 直绘立方体各面，不经过任何 DOM 纹理上传，不存在
- * FLIP_Y/镜像问题；面方向由 GL 规范采样表反推，与 textureCube 精确互逆。
- * 源图宽 ≤ MAX_TEXTURE_SIZE：单纹理 + Catmull-Rom 双三次；
- * 否则分纵向长条（2 源像素重叠，双线性），逐面逐条带 discard 渲染。
- * WebGL2 在完成后生成 mipmap（MIN_FILTER = LINEAR_MIPMAP_LINEAR）
- * 消除缩小闪烁；WebGL1 保持 LINEAR。 */
-function glrBuildSkyFromPano(img) {
-  if (!glr.ok) return;
-  const gl = glr.gl;
-  const maxCube = gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE);
-  const max2d = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-  const F = Math.min(Math.ceil(img.width / 4), maxCube);
-  if (F < 8) throw new Error('立方体面尺寸过小: ' + F);
-  skybox.faceSize = F;
-  /* 1. 重建立方体纹理为 F×F 六面 */
-  if (glr.tex.cube) gl.deleteTexture(glr.tex.cube);
-  const cube = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
-  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  for (let f = 0; f < 6; f++)
-    gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, gl.RGBA, F, F, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  glr.tex.cube = cube;
-  /* 2. FBO 挂接面 + 分片渲染 */
-  const fb = gl.createFramebuffer();
-  const quadDraw = (P) => {
-    gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.quad);
-    gl.enableVertexAttribArray(P.loc.a);
-    gl.vertexAttribPointer(P.loc.a, 2, gl.FLOAT, false, 0, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-  };
-  const upload2D = (src, w, h, repeat) => {
-    const t = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, (repeat && glr.gl2) ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return t;
-  };
-  const P = glr.progs.panogen;
-  gl.useProgram(P.p);
-  gl.uniform2f(P.loc.u_src, img.width, img.height);
-  const renderStrip = (texObj, map, bicubic, wrapFract) => {
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texObj);
-    gl.uniform1i(P.loc.u_t, 0);
-    gl.uniform4fv(P.loc.u_map, map);
-    gl.uniform1f(P.loc.u_bc, bicubic ? 1 : 0);
-    gl.uniform1f(P.loc.u_wrap, wrapFract ? 1 : 0);
-    quadDraw(P);
-  };
-  const single = img.width <= max2d;
-  const srcTex = single ? upload2D(img, img.width, img.height, true) : null;
-  const strips = [];
-  if (!single) {
-    const overlapPx = 2;
-    const n = Math.ceil(img.width / (max2d - overlapPx - 1));
-    const coreW = Math.ceil(img.width / n);
-    for (let k = 0; k < n; k++) {
-      const a = k * coreW, b = Math.min(img.width, (k + 1) * coreW);
-      const a2 = Math.max(0, a - overlapPx), b2 = Math.min(img.width, b + overlapPx);
-      const c = document.createElement('canvas');
-      c.width = b2 - a2; c.height = img.height;
-      c.getContext('2d').drawImage(img, a2, 0, b2 - a2, img.height, 0, 0, b2 - a2, img.height);
-      strips.push({
-        tex: upload2D(c, c.width, c.height, false),
-        map: [a2 / img.width, (b2 - a2) / img.width, a / img.width, (b / img.width) + (k === n - 1 ? 1e-4 : 0)]
-      });
-    }
-  }
-  const savedFb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-  gl.viewport(0, 0, F, F);
-  gl.disable(gl.BLEND);
-  gl.disable(gl.DEPTH_TEST);
-  for (let f = 0; f < 6; f++) {
-    const face = SKY_FACE_DIRS[f];
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, cube, 0);
-    gl.uniform3fv(P.loc.u_fc, face.c);
-    gl.uniform3fv(P.loc.u_fr, face.r);
-    gl.uniform3fv(P.loc.u_fu, face.u);
-    if (single) {
-      renderStrip(srcTex, [0, 1, 0, 1 + 1e-4], true, !glr.gl2);
-    } else {
-      for (const st of strips) renderStrip(st.tex, st.map, false, false);
-    }
-  }
-  gl.bindFramebuffer(gl.FRAMEBUFFER, savedFb);
-  gl.deleteFramebuffer(fb);
-  if (srcTex) gl.deleteTexture(srcTex);
-  for (const st of strips) gl.deleteTexture(st.tex);
-  /* 3. mipmap + 各向异性过滤（仅 WebGL2，NPOT 允许）：
-   * trilinear + 各向异性消除斜视角缩小模糊与高频闪烁 */
-  gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
-  if (glr.gl2) {
-    try {
-      gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    } catch (e) { console.warn('天空盒 mipmap 生成失败（不影响渲染）:', e); }
-  }
-  glrSetAniso(gl, gl.TEXTURE_CUBE_MAP);
-  skybox.cubeReady = true;
-  skybox.dirty = true;
-}
-/* 天体四边形顶点：16 float/顶点 ×6，[clip xy, 角点, 四边形半径, 峰值辐射 rgb, 模式, 参数, 保留, 变形矩阵 2×2]
- * a_e = 自转扁化+潮汐楰化的屏幕空间对称变形矩阵（行主序），线性映射保持内切，
- * 变形后椭圆恒在四边形内；片元在预像空间工作，着色/贴图/边缘逻辑不变 */
-function bodyQuadData(b, overrideMode, overridePeak, overrideAux) {
-  const W = glr.W, H = glr.H;
-  const cx = 2 * b.sx * resFactor / W - 1, cy = 1 - 2 * b.sy * resFactor / H;
-  const mode = overrideMode !== undefined ? overrideMode : b.mode;
-  const peak = overridePeak || b.peak;
-  const aux = overrideAux !== undefined ? overrideAux : b.aux;
-  const M = (mode === 1 || mode === 2) && b.ellM ? b.ellM : [1, 0, 0, 1];
-  let rQ, xVal;
-  if (mode === 0) { rQ = 3.2 * aux * resFactor; xVal = aux * resFactor; }
-  else if (mode === 3) { rQ = (aux + 1) * resFactor; xVal = aux * resFactor; }
-  else if (mode === 2) { rQ = 3.2 * aux * resFactor; xVal = aux * resFactor; }   // 恒星圆面：四边形外扩容纳辉光，v_x = 圆面半径
-  else { rQ = aux * resFactor; xVal = 0; }
-  const d = new Float32Array(96);
-  const corners = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
-  for (let k = 0; k < 6; k++) {
-    const o = k * 16;
-    d[o] = cx; d[o + 1] = cy;
-    d[o + 2] = corners[k][0]; d[o + 3] = corners[k][1];
-    d[o + 4] = rQ;
-    d[o + 5] = peak[0]; d[o + 6] = peak[1]; d[o + 7] = peak[2];
-    d[o + 8] = mode; d[o + 9] = xVal;
-    d[o + 10] = 0; d[o + 11] = 0;
-    d[o + 12] = M[0]; d[o + 13] = M[1]; d[o + 14] = M[2]; d[o + 15] = M[3];
-  }
-  return d;
-}
-function glrRender(fr) {
-  const gl = glr.gl;
-  const W = Math.max(2, Math.round(viewW * resFactor)), H = Math.max(2, Math.round(viewH * resFactor));
-  if (glr.W !== W || glr.H !== H) glrResize(W, H);
-  /* 天空亮度归一化只衰减不增益：过亮天空盒压向目标亮度，
-   * 偏暗天空盒保持原生观感，避免星空图集的星点被增益推进泛光阈值全面起晕 */
-  glr.skyNorm = Math.min(1, SKY_NORM_LEVEL / Math.max(skybox.skyLum, 1e-5));
-  /* 1. 场景 pass：天空盒 + 轨迹 + 天体（HDR 线性辐射，编码系数 u_enc） */
-  gl.bindFramebuffer(gl.FRAMEBUFFER, glr.fbo.scene.fb);
-  gl.viewport(0, 0, W, H);
-  gl.clearColor(0.0026, 0.0026, 0.0024, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  if (fr.useSky) {
-    gl.disable(gl.BLEND);
-    const P = glr.progs.sky;
-    gl.useProgram(P.p);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, glr.tex.cube);
-    gl.uniform1i(P.loc.u_t, 0);
-    gl.uniform1f(P.loc.u_n, glr.skyNorm);
-    gl.uniform1f(P.loc.u_enc, glr.enc);
-    const R = currentViewMatrix();
-    /* 视空间约定换算：场景视空间 y 向下、z 朝观察者，GL y 向上 → 翻转第二行；列主序 */
-    gl.uniformMatrix3fv(P.loc.u_r, false, new Float32Array([
-      R[0][0], -R[1][0], R[2][0],
-      R[0][1], -R[1][1], R[2][1],
-      R[0][2], -R[1][2], R[2][2]
-    ]));
-    gl.uniform1f(P.loc.u_f, 1 / Math.tan(VIEW_FOV / 2));
-    gl.uniform1f(P.loc.u_ar, W / H);
-    gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.cube);
-    gl.enableVertexAttribArray(P.loc.a);
-    gl.vertexAttribPointer(P.loc.a, 3, gl.FLOAT, false, 0, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 36);
-  }
-  if (fr.trailData && fr.trailData.length) {
-    const P = glr.progs.trail;
-    gl.useProgram(P.p);
-    gl.uniform1f(P.loc.u_sz, Math.max(1, 1.5 * resFactor));
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.trail);
-    gl.bufferData(gl.ARRAY_BUFFER, fr.trailData, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(P.loc.a_p);
-    gl.vertexAttribPointer(P.loc.a_p, 2, gl.FLOAT, false, 24, 0);
-    gl.enableVertexAttribArray(P.loc.a_c);
-    gl.vertexAttribPointer(P.loc.a_c, 4, gl.FLOAT, false, 24, 8);
-    if (trailMode === 'line') {
-      for (const rg of fr.trailRanges) if (rg.cnt > 1) gl.drawArrays(gl.LINE_STRIP, rg.off, rg.cnt);
-    } else {
-      gl.drawArrays(gl.POINTS, 0, fr.dotCount);
-    }
-  }
-  if (fr.bodies.length) {
-    const P = glr.progs.body;
-    gl.useProgram(P.p);
-    gl.uniform2f(P.loc.u_pp, 2 / W, 2 / H);
-    gl.uniform1f(P.loc.u_enc, glr.enc);
-    gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.body);
-    const S = 64;
-    gl.enableVertexAttribArray(P.loc.a_p); gl.vertexAttribPointer(P.loc.a_p, 2, gl.FLOAT, false, S, 0);
-    gl.enableVertexAttribArray(P.loc.a_q); gl.vertexAttribPointer(P.loc.a_q, 2, gl.FLOAT, false, S, 8);
-    gl.enableVertexAttribArray(P.loc.a_r); gl.vertexAttribPointer(P.loc.a_r, 1, gl.FLOAT, false, S, 16);
-    gl.enableVertexAttribArray(P.loc.a_c); gl.vertexAttribPointer(P.loc.a_c, 3, gl.FLOAT, false, S, 20);
-    gl.enableVertexAttribArray(P.loc.a_m); gl.vertexAttribPointer(P.loc.a_m, 1, gl.FLOAT, false, S, 32);
-    gl.enableVertexAttribArray(P.loc.a_x); gl.vertexAttribPointer(P.loc.a_x, 1, gl.FLOAT, false, S, 36);
-    gl.enableVertexAttribArray(P.loc.a_l); gl.vertexAttribPointer(P.loc.a_l, 2, gl.FLOAT, false, S, 40);
-    gl.enableVertexAttribArray(P.loc.a_e); gl.vertexAttribPointer(P.loc.a_e, 4, gl.FLOAT, false, S, 48);
-    gl.enable(gl.BLEND);
-    /* 逐天体 uniforms：视图矩阵（本地→世界，供全景贴图 UV）、多星光照、贴图 */
-    const Rv = currentViewMatrix();
-    /* u_vm = A^T（local→world）：列主序上传序列 = A 的行主序展开；
-     * 自转天体换成 spinMat（M·Aᵀ），贴图随之旋转 */
-    const baseVm = new Float32Array([Rv[0][0], Rv[0][1], Rv[0][2], Rv[1][0], Rv[1][1], Rv[1][2], Rv[2][0], Rv[2][1], Rv[2][2]]);
-    const lD = new Float32Array(24), lC = new Float32Array(24);
-    gl.uniform1f(P.loc.u_amb, (starRadOn && fr.stars.length) ? 0.015 : 0.55);
-    gl.uniform1f(P.loc.u_trep, glr.gl2 ? 1 : 0);   // WebGL2：贴图 REPEAT 环绕，接缝处 UV 连续
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, glr.tex.white || glr.tex.black);
-    gl.uniform1i(P.loc.u_tex, 3);
-    for (const b of fr.bodies) {
-      gl.uniformMatrix3fv(P.loc.u_vm, false, b.spinMat || baseVm);
-      const nL = Math.min(8, (b.lights || []).length);
-      for (let k = 0; k < 8; k++) {
-        const L = k < nL ? b.lights[k] : null;
-        lD[k * 3] = L ? L.d[0] : 0; lD[k * 3 + 1] = L ? L.d[1] : 0; lD[k * 3 + 2] = L ? L.d[2] : 1;
-        lC[k * 3] = L ? L.c[0] : 0; lC[k * 3 + 1] = L ? L.c[1] : 0; lC[k * 3 + 2] = L ? L.c[2] : 0;
-      }
-      gl.uniform1i(P.loc.u_nL, nL);
-      gl.uniform3fv(P.loc.u_lD, lD);
-      gl.uniform3fv(P.loc.u_lC, lC);
-      gl.uniform1f(P.loc.u_dw, b.diskW !== undefined ? b.diskW : 1);
-      const texEntry = b.texIdx !== undefined && b.texIdx >= 0 ? bodyTex.cache.get(b.texIdx) : null;
-      gl.activeTexture(gl.TEXTURE3);
-      gl.bindTexture(gl.TEXTURE_2D, (texEntry && texEntry.tex) ? texEntry.tex : (glr.tex.white || glr.tex.black));
-      gl.uniform1f(P.loc.u_hasTex, (texEntry && texEntry.tex && b.mode === 1) ? 1 : 0);
-      /* PSF↔圆面交叉渐变：先补一层按 psfW 加权的加性点源（aux 用 PSF σ） */
-      if (b.psfW > 0.004) {
-        gl.bufferData(gl.ARRAY_BUFFER, bodyQuadData(b, 0, b.psfPeak, PSF_SIGMA), gl.DYNAMIC_DRAW);
-        gl.blendFunc(gl.ONE, gl.ONE);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      }
-      gl.bufferData(gl.ARRAY_BUFFER, bodyQuadData(b), gl.DYNAMIC_DRAW);
-      /* 点源/恒星圆面为加性辐射（恒星亮度远超背景，遮挡差异不可见且辉光正确叠加）；
-       * 行星圆面遮挡背景走 α 混合 */
-      if (b.mode === 1) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      else gl.blendFunc(gl.ONE, gl.ONE);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
-    gl.disable(gl.BLEND);
-  }
-  /* 2. 泛光链（移植 three.js UnrealBloomPass，仅眩光开启）：
-   * 亮度提取（软阈值）→ 五级 9-tap 可分离高斯下采样 → 3×3 tent 上采样回累加。
-   * 恒星辐照度（L=4πR²σT⁴ 链与相机距离）决定亮部能量，泛光随之强弱/范围变化；
-   * 深空背景亮度低于阈值不参与泛光，太阳入屏不提亮背景。 */
-  let bloomTex = glr.tex.black;
-  if (glareOn) {
-    const lv = glr.bloomLv;
-    const fsq = (P) => {
-      gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.quad);
-      gl.enableVertexAttribArray(P.loc.a);
-      gl.vertexAttribPointer(P.loc.a, 2, gl.FLOAT, false, 0, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    };
-    const bindT = (unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); };
-    const PB = glr.progs.bright;
-    gl.useProgram(PB.p);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, lv[0].A.fb);
-    gl.viewport(0, 0, lv[0].w, lv[0].h);
-    bindT(0, glr.fbo.scene.t);
-    gl.uniform1i(PB.loc.u_t, 0);
-    gl.uniform1f(PB.loc.u_exp, glr.exposure);
-    gl.uniform1f(PB.loc.u_dec, glr.dec);
-    gl.uniform1f(PB.loc.u_thr, 1.0);
-    fsq(PB);
-    const PBL = glr.progs.blur;
-    gl.useProgram(PBL.p);
-    gl.uniform1f(PBL.loc.u_add, 0);
-    for (let i = 0; i < 5; i++) {
-      /* 可分离高斯：横向 → 纵向（偏移取目标 texel，与 UnrealBloomPass 一致，
-       * 低级目标相对源更宽的卷积半径，逐级增大泛光范围）；
-       * 半分辨率渲染由 LINEAR 双线性完成 2× 降采样 */
-      gl.bindFramebuffer(gl.FRAMEBUFFER, lv[i].B.fb);
-      gl.viewport(0, 0, lv[i].w, lv[i].h);
-      bindT(0, lv[i].A.t);
-      gl.uniform1i(PBL.loc.u_t, 0);
-      bindT(1, glr.tex.black);
-      gl.uniform1i(PBL.loc.u_t2, 1);
-      gl.uniform1f(PBL.loc.u_up, 0);
-      gl.uniform2f(PBL.loc.u_dir, 1 / lv[i].w, 0);
-      gl.uniform2f(PBL.loc.u_off, 0, 0);
-      fsq(PBL);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, lv[i].A.fb);
-      gl.viewport(0, 0, lv[i].w, lv[i].h);
-      bindT(0, lv[i].B.t);
-      gl.uniform1i(PBL.loc.u_t, 0);
-      gl.uniform2f(PBL.loc.u_dir, 0, 1 / lv[i].h);
-      fsq(PBL);
-    }
-    /* 上采样回累加：tent(acc) + 本级图 → 写入本级 B（读写分离，无纹理反馈） */
-    let acc = lv[4].A;
-    for (let i = 3; i >= 0; i--) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, lv[i].B.fb);
-      gl.viewport(0, 0, lv[i].w, lv[i].h);
-      bindT(0, acc.t);
-      gl.uniform1i(PBL.loc.u_t, 0);
-      bindT(1, lv[i].A.t);
-      gl.uniform1i(PBL.loc.u_t2, 1);
-      gl.uniform1f(PBL.loc.u_up, 1);
-      gl.uniform2f(PBL.loc.u_dir, 0, 0);
-      gl.uniform2f(PBL.loc.u_off, 1 / acc.w, 1 / acc.h);
-      fsq(PBL);
-      acc = lv[i].B;
-    }
-    bloomTex = acc.t;
-  }
-  /* 3. 合成输出：曝光 + 泛光 + OKLab 漂白色调映射 */
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, W, H);
-  const PF = glr.progs.final;
-  gl.useProgram(PF.p);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, glr.fbo.scene.t);
-  gl.uniform1i(PF.loc.u_scene, 0);
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, bloomTex);
-  gl.uniform1i(PF.loc.u_bloom, 1);
-  gl.uniform1f(PF.loc.u_exp, glr.exposure);
-  gl.uniform1f(PF.loc.u_dec, glr.dec);
-  gl.uniform1f(PF.loc.u_bleach, glareOn ? 1 : 0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, glr.buf.quad);
-  gl.enableVertexAttribArray(PF.loc.a);
-  gl.vertexAttribPointer(PF.loc.a, 2, gl.FLOAT, false, 0, 0);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-}
-function solve3(M, b) {
-  const det = M[0] * (M[4] * M[8] - M[5] * M[7]) - M[1] * (M[3] * M[8] - M[5] * M[6]) + M[2] * (M[3] * M[7] - M[4] * M[6]);
-  if (Math.abs(det) < 1e-12) return null;
-  const s = (c) => {
-    const m = M.slice();
-    m[c] = b[0]; m[c + 3] = b[1]; m[c + 6] = b[2];
-    return (m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6])) / det;
-  };
-  return [s(0), s(1), s(2)];
-}
-/* 顶点 [x,y,z,u,v]（视角空间，u/v 为图像像素坐标），对 z=NEAR 平面做 Sutherland–Hodgman 裁剪 */
-function clipNear(poly, near) {
-  const out = [];
-  const n = poly.length;
-  for (let k = 0; k < n; k++) {
-    const A = poly[k], B = poly[(k + 1) % n];
-    const inA = A[2] >= near, inB = B[2] >= near;
-    if (inA) out.push(A);
-    if (inA !== inB) {
-      const t = (near - A[2]) / (B[2] - A[2]);
-      out.push([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, near,
-        A[3] + (B[3] - A[3]) * t, A[4] + (B[4] - A[4]) * t]);
-    }
-  }
-  return out;
-}
-function skyboxTexTri(g, img, A, B, C, cx, cy, f) {
-  const ax = cx + f * A[0] / A[2], ay = cy + f * A[1] / A[2];
-  const bx = cx + f * B[0] / B[2], by = cy + f * B[1] / B[2];
-  const c2x = cx + f * C[0] / C[2], c2y = cy + f * C[1] / C[2];
-  const M = [A[3], A[4], 1, B[3], B[4], 1, C[3], C[4], 1];
-  const mx = solve3(M, [ax, bx, c2x]);
-  if (!mx) return;
-  const my = solve3(M, [ay, by, c2y]);
-  if (!my) return;
-  /* 三角形按质心方向外扩 1.2px，消除网格间抗锯齿接缝 */
-  const gx = (ax + bx + c2x) / 3, gy = (ay + by + c2y) / 3, EX = 1.2;
-  const ex = (x, y) => { const dx = x - gx, dy = y - gy; const L = Math.hypot(dx, dy) || 1; return [x + dx / L * EX, y + dy / L * EX]; };
-  const p0 = ex(ax, ay), p1 = ex(bx, by), p2 = ex(c2x, c2y);
-  /* 仅绘制三角 uv 包围盒对应的源图区域，限制栅格化成本 */
-  const u0 = Math.max(0, Math.floor(Math.min(A[3], B[3], C[3]) - 2));
-  const v0 = Math.max(0, Math.floor(Math.min(A[4], B[4], C[4]) - 2));
-  const u1 = Math.min(img.width, Math.ceil(Math.max(A[3], B[3], C[3]) + 2));
-  const v1 = Math.min(img.height, Math.ceil(Math.max(A[4], B[4], C[4]) + 2));
-  if (u1 <= u0 || v1 <= v0) return;
-  g.save();
-  g.beginPath();
-  g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]);
-  g.closePath();
-  g.clip();
-  g.transform(mx[0], my[0], mx[1], my[1], mx[2], my[2]);
-  g.drawImage(img, u0, v0, u1 - u0, v1 - v0, u0, v0, u1 - u0, v1 - v0);
-  g.restore();
-}
-function skyboxDrawFace(g, fi, R, f, cx, cy) {
-  const img = skybox.imgs[fi];
-  const face = SKY_FACE_DIRS[fi];
-  const iw = img.width, ih = img.height;
-  const G2 = SKYBOX_GRID, G1 = G2 + 1;
-  const P = new Float64Array(G1 * G1 * 5);
-  for (let a = 0; a <= G2; a++) {
-    const s = (a / G2) * 2 - 1;
-    for (let b = 0; b <= G2; b++) {
-      const t = (b / G2) * 2 - 1;
-      const wx = face.c[0] + face.r[0] * s + face.u[0] * t;
-      const wy = face.c[1] + face.r[1] * s + face.u[1] * t;
-      const wz = face.c[2] + face.r[2] * s + face.u[2] * t;
-      const vxv = R[0][0] * wx + R[0][1] * wy + R[0][2] * wz;
-      const vyv = R[1][0] * wx + R[1][1] * wy + R[1][2] * wz;
-      const vzv = R[2][0] * wx + R[2][1] * wy + R[2][2] * wz;
-      const o = (a * G1 + b) * 5;
-      /* 深度列取反：场景相机沿 −z_view 观察，取 d=−z 为正向深度。
-       * 面图由 build2DSkyFaces 按同一 SKY_FACE_DIRS 基生成（像素 x↔right·s，
-       * 像素 y↔up·t），网格顶点 uv 直接对应面图像素坐标 */
-      P[o] = vxv; P[o + 1] = vyv; P[o + 2] = -vzv;
-      P[o + 3] = (a / G2) * iw; P[o + 4] = (b / G2) * ih;
-    }
-  }
-  for (let a = 0; a < G2; a++) {
-    for (let b = 0; b < G2; b++) {
-      const q = [];
-      const ids = [a * G1 + b, (a + 1) * G1 + b, (a + 1) * G1 + b + 1, a * G1 + b + 1];
-      for (const id of ids) {
-        const o = id * 5;
-        q.push([P[o], P[o + 1], P[o + 2], P[o + 3], P[o + 4]]);
-      }
-      const cl = clipNear(q, SKYBOX_NEAR);
-      if (cl.length < 3) continue;
-      for (let k = 1; k < cl.length - 1; k++) skyboxTexTri(g, img, cl[0], cl[k], cl[k + 1], cx, cy, f);
-    }
-  }
-}
-/* Canvas 2D 回退路径（WebGL 不可用时）：按 1x 分辨率渲染控制开销 */
-function skyboxRender2D() {
-  const SW = Math.max(2, Math.round(viewW)), SH = Math.max(2, Math.round(viewH));
-  const c = skybox.canvas;
-  if (c.width !== SW || c.height !== SH) { c.width = SW; c.height = SH; }
-  const g = c.getContext('2d');
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.fillStyle = '#080807';
-  g.fillRect(0, 0, SW, SH);
-  const R = currentViewMatrix();
-  const f = 0.5 * SH / Math.tan(VIEW_FOV / 2);
-  const cx = SW / 2, cy = SH / 2;
-  /* 凸多面体画家算法：按面中心深度远→近排序 */
-  const order = [];
-  for (let fi = 0; fi < 6; fi++) {
-    if (!skybox.imgs[fi]) continue;
-    const cvec = SKY_FACE_DIRS[fi].c;
-    order.push([R[2][0] * cvec[0] + R[2][1] * cvec[1] + R[2][2] * cvec[2], fi]);
-  }
-  order.sort((a, b) => a[0] - b[0]);
-  for (const [, fi] of order) skyboxDrawFace(g, fi, R, f, cx, cy);
-  skybox.dirty = false;
-}
-/* 2D 回退路径面图生成：CPU 逐像素按面基方向采样全景图（双线性），
- * 与 GL 主路径共用 SKY_FACE_DIRS/panoUVOfDir，几何与采样约定完全一致。
- * 面图分辨率 512（回退路径画质定位：功能等价、可接受的性能与内存）。 */
-function build2DSkyFaces(pano) {
-  const F2 = 512;
-  let src = null;
-  try {
-    const c = document.createElement('canvas');
-    c.width = pano.width; c.height = pano.height;
-    const g = c.getContext('2d', { willReadFrequently: true });
-    g.drawImage(pano, 0, 0);
-    src = g.getImageData(0, 0, pano.width, pano.height);
-  } catch (e) {
-    console.warn('全景图像素读取失败（2D 回退路径降级）:', e);
-  }
-  if (!src) {
-    try {
-      const w2 = Math.min(4096, pano.width), h2 = Math.round(pano.height * w2 / pano.width);
-      const c = document.createElement('canvas');
-      c.width = w2; c.height = h2;
-      const g = c.getContext('2d', { willReadFrequently: true });
-      g.drawImage(pano, 0, 0, w2, h2);
-      src = g.getImageData(0, 0, w2, h2);
-    } catch (e2) { console.warn('2D 回退路径不可用:', e2); return; }
-  }
-  const W = src.width, H = src.height, D = src.data;
-  const sample = (u, v) => {
-    let x = (u % 1 + 1) % 1 * W, y = clampNum(v, 0, 0.999999) * H;
-    const x0 = Math.floor(x), y0 = Math.floor(y);
-    const x1 = (x0 + 1) % W, y1 = Math.min(y0 + 1, H - 1);
-    const fx = x - x0, fy = y - y0;
-    const o0 = (y0 * W + x0) * 4, o1 = (y0 * W + x1) * 4, o2 = (y1 * W + x0) * 4, o3 = (y1 * W + x1) * 4;
-    return [0, 1, 2].map(k => (D[o0 + k] * (1 - fx) * (1 - fy) + D[o1 + k] * fx * (1 - fy) +
-      D[o2 + k] * (1 - fx) * fy + D[o3 + k] * fx * fy) / 255);
-  };
-  for (let fi = 0; fi < 6; fi++) {
-    const face = SKY_FACE_DIRS[fi];
-    const c = document.createElement('canvas');
-    c.width = F2; c.height = F2;
-    const g = c.getContext('2d');
-    const id = g.createImageData(F2, F2);
-    for (let y = 0; y < F2; y++) {
-      const t = 2 * (y + 0.5) / F2 - 1;
-      for (let x = 0; x < F2; x++) {
-        const s = 2 * (x + 0.5) / F2 - 1;
-        const dx = face.c[0] + face.r[0] * s + face.u[0] * t;
-        const dy = face.c[1] + face.r[1] * s + face.u[1] * t;
-        const dz = face.c[2] + face.r[2] * s + face.u[2] * t;
-        const il = 1 / Math.hypot(dx, dy, dz);
-        const uv = panoUVOfDir(dx * il, dy * il, dz * il);
-        const rgb = sample(uv[0], uv[1]);
-        const o = (y * F2 + x) * 4;
-        id.data[o] = rgb[0] * 255; id.data[o + 1] = rgb[1] * 255; id.data[o + 2] = rgb[2] * 255; id.data[o + 3] = 255;
-      }
-    }
-    g.putImageData(id, 0, 0);
-    skybox.imgs[fi] = c;
-  }
-  skybox.facesReady = true;
-  skybox.dirty = true;
-}
+/* ---------------- 渲染层状态（v17：three.js 承担全部 WebGL 渲染） ----------------
+ * 场景图、HDR 后期链（EffectComposer + RenderPass + UnrealBloomPass +
+ * OutputPass）、立方体贴图转换、天体网格/点源精灵、轨迹几何均在模块脚本
+ *（type="module"，经 importmap 从 CDN 导入 three.js）实现。
+ * v16 手写管线（PSF/圆面 billboard 着色器、亮度提取、五级高斯泛光链、
+ * OKLab 漂白合成、离屏 cubemap 转换、Canvas 2D 网格投影天空盒）整体移除。
+ * 此处仅保留经典脚本侧的曝光平滑状态与最近一帧数据（截图/调试/自检用）。 */
+const ren = { ok: false, exposure: 0.6, lastExpT: 0, lastFrame: null, drawCount: 0 };
 
 /* ---------------- 视图矩阵 / 四元数（全自由度相机） ----------------
  * 自由视角以单位四元数累积旋转：拖拽与 R F Q E 按钮把增量
  * 绕相机自身右/上/后轴的前置乘子施加（相机基准而非世界轴），
  * 无欧拉角万向节锁，俯仰不设 clamp，可连续翻转越过极点，
  * 三个旋转自由度始终完整。 */
-const M_TOP   = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-const M_SIDE  = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
-const M_FRONT = [[0, 1, 0], [0, 0, 1], [-1, 0, 0]];
+/* v9 手性修复：固定视图统一为【非镜像 + 北上】真实相机约定。
+ * 旧版 M_TOP=I、M_SIDE 行1=+Z 把世界投到“x右 y下 z朝观察者”的左手屏幕系时
+ * 翻了屏幂 —— 从北极上空俯视时顺行（绕 +Z 逆时针）被画成顺时针，
+ * 球面贴图东经在左（实测：北上时日本在左边）。真实相机约定 right = f × up：
+ *   俯视 TOP  ：相机在 +Z（北极侧）俯看，f=-Z，up=+Y → right=+X，屏幂上行；
+ *               顺行轨道呈逆时针（与从北俯瞰一致），东经逆时针分布
+ *   侧视 SIDE ：相机在 -Y，f=+Y，up=+Z（北朝上）→ right=+X，东经朝右
+ *   前视 FRONT：相机在 -X，f=+X，up=+Z（北朝上；旧版 south-up 滚转 180°）
+ * 行向量 = [right, down, toward-viewer]；分量行列式 -1（世界右手系→屏幕左手系，
+ * 渲染非镜像的必然结果），与 2D 画布路径 sceneProjector 共用，自动一致。
+ * v11 手性根治：自由视角此前直接把 quatToMat(freeQuat) 行向量当屏幕基 ——
+ * 四元数矩阵是纯旋转（r0×r1=r2=朝观察者，右手系），而真实相机屏幕基必须满足
+ * right×down=朝屏幕内（左手系）。任何四元数都无法表达「北上非镜像赤道视图」
+ *（对应矩阵行列式 -1 不可达）：北上时必镜像 —— 这就是“贴图永远左右反”的真因
+ *（v8-v10 的贴图映射本身正确，Python 等价贴合+浏览器像素实测双重复核）。
+ * 修复：自由视图矩阵取 F·quatToMat（F=diag(1,-1,1)，第1行取负），
+ * freeQuat 本地系语义变为 (right, up, back) 标准右手相机系，
+ * 与固定视图、2D 路径、天空盒 row1 翻转约定全部统一；
+ * 拖拽水平分量与 Q/E 滚转符号相应翻转（垂直分量不受水平镜像影响），
+ * 见 dragRotate / freeViewRotate / camNudge 注释。 */
+const M_TOP   = [[1, 0, 0], [0, -1, 0], [0, 0, 1]];
+const M_SIDE  = [[1, 0, 0], [0, 0, -1], [0, -1, 0]];
+const M_FRONT = [[0, -1, 0], [0, 0, -1], [-1, 0, 0]];
 function quatMul(a, b) {
   const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   const bx = b[0], by = b[1], bz = b[2], bw = b[3];
@@ -3480,15 +2867,27 @@ function quatToMat(q) {
     [xz - wy, yz + wx, 1 - (xx + yy)]
   ];
 }
+/* 向量经单位四元数刚体旋转 v' = q·v·q⁻¹（两叉积形式，数值稳定），通用数学工具 */
+function quatRotVec(q, v) {
+  const qx = q[0], qy = q[1], qz = q[2], qw = q[3];
+  const ux = qw * v[0] + qy * v[2] - qz * v[1];
+  const uy = qw * v[1] - qx * v[2] + qz * v[0];
+  const uz = qw * v[2] + qx * v[1] - qy * v[0];
+  return [
+    v[0] + 2 * (qy * uz - qz * uy),
+    v[1] + 2 * (qz * ux - qx * uz),
+    v[2] + 2 * (qx * uy - qy * ux)
+  ];
+}
 /* 默认自由视角 = Rx(0.5)·Ry(0.5)，与历史版本初始观感一致 */
 const DEFAULT_QUAT = quatNormalize(quatMul(quatAxis([1, 0, 0], 0.5), quatAxis([0, 1, 0], 0.5)));
 let freeQuat = DEFAULT_QUAT.slice();
 const PAD_ROT_STEP = 0.045, PAD_MOVE_PX = 80;   // 飞行按钮单步角量与平移像素当量
-function freeAxesWorld() {   // 相机局部轴的世界系向量 = 视图矩阵 R 的行向量；back = +z 视空间，指向观察者
+function freeAxesWorld() {   // 相机局部轴的世界系向量 = 四元数矩阵行向量；back = +z 本地系，指向观察者
   const R = quatToMat(freeQuat);
-  /* R 是 world→local 视图矩阵（行0=屏幕右、行1=屏幕下、行2=朝观察者，均为世界系方向）。
-   * 相机轴在世界的向量必须取【行】；旧版误取列向量（A=I 时偶然正确，
-   * 姿态一变 WASD/飞行按钮即反向或错轴，Python 验证夹角余弦可达 -1） */
+  /* v11：行向量 = [right, up, back]（标准右手相机系，屏幕投影由 currentViewMatrix
+   * 的 F·R 完成行1取负）。相机轴在世界的向量取【行】（行列混用会在姿态变化后
+   * 反向/错轴，Python 随机姿态验证过）。 */
   return { right: [R[0][0], R[0][1], R[0][2]], up: [R[1][0], R[1][1], R[1][2]], back: [R[2][0], R[2][1], R[2][2]] };
 }
 /* 绕相机自身轴旋转：本地轴直接前置乘。
@@ -3505,43 +2904,112 @@ function rotateFree(lx, ly, lz, ang) {
 }
 /* 单次合成旋转：俯仰与偏航合成的四元数一次性前置乘。
  * 旧实现分两次调用、第二次在俯仰已生效后的新姿态上取轴，
- * 拖拽量大时轴偏离屏幕方向，产生额外滚转与方向反相观感 */
+ * 拖拽量大时轴偏离屏幕方向，产生额外滚转与方向反相观感。
+ * v11 符号：本地系 y=上（水平镜像已修），右拖（dx>0）= 绕上轴 +角
+ *（相机左转 ⇒ 内容右移）；dax 俯仰轴（右轴）不受水平镜像影响，符号不变 */
 function freeViewRotate(dax, day) {
   if (viewMode !== 'free') return;
-  const dq = quatMul(quatAxis([0, 1, 0], day), quatAxis([1, 0, 0], dax));
+  const dq = quatMul(quatAxis([0, 1, 0], -day), quatAxis([1, 0, 0], dax));
   freeQuat = quatNormalize(quatMul(dq, freeQuat));
   skybox.dirty = true;
 }
 /* 拖拽旋转：单轴屏幕空间轨迹球。
- * 旋转轴取 (dy, -dx, 0)/len（相机本地系 x 右 y 下 z 朝观察者，恒垂直于拖拽方向），
- * 角度与位移成正比。Python 精确验证：视场中心内容的屏幕位移恒为
- * (dx,dy)·sin(DRAG_SENS·len)/len —— 任意姿态下内容精确跟随手指，无滚转、无反转。 */
+ * 旋转轴取 (dy, dx, 0)/len：v11 本地系 x 右 y 上 z 朝观察者后方（水平镜像已修），
+ * 右拖 dx>0 → 绕上轴 +角；下拖 dy>0 → 绕右轴 +角，恒垂直于拖拽方向，角度与位移成正比。
+ * v15 透视视点模型：eye = ref + camOff + back·D（D = f/scale，视点在锚点平面后方 D 处）。
+ * 「自身」开 = 原地转头：姿态更新后补偿 camOff += (back₀ − back₁)·D，视点 eye
+ *   在世界系锁定（Python 验证 |Δeye|/D < 1e-11）——镜头位置不动、视线自由转，
+ *   选中星球随视线移出眼前（解耦达成）。v14 只转姿态不补偿：back 变化令
+ *   eye 绕锚点公转，camOff=0 时星球永远钉在屏心（“根本没区别”的根源）。
+ * 「自身」关 = 绕视角跟随锚点公转：姿态更新与「开」严格一致，同时施加共轭
+ *   刚体旋转 camOff' = R0ᵀ·Rot(l,-ang)·R0·camOff（显式矩阵乘法）——锚点屏幕
+ *   位置逐比特不动（Python 随机姿态 40 例 drift < 1e-9 px），星球钉在屏上，
+ *   其余世界绕它公转。v14 的轴-角重组（行组合轴 + quatRotVec）在非默认姿态
+ *   下漂移最高 2078 px（旧测试用 camOff=0 是盲区），弃用。
+ * 正交模式无视点，两分支都只转姿态。
+ * 灵敏度自适应：基准 = 1.2 个视场角/整屏高（透视原生 1:1 跟手），屏内有
+ * 大型圆面时按其角径收紧（贴面观察微拖不过敏），下限 = 基准 1/8 防呆滞。 */
+let viewDiskCss = 0;   // 屏内最大已解析圆面半径（CSS px），buildSceneFrame 每帧刷新
+function dragSensitivity() {
+  let sens = 2.4 * Math.tan(VIEW_FOV / 2) / Math.max(viewH, 2);
+  if (viewDiskCss > 0) sens = Math.min(sens, Math.max(1.5 / viewDiskCss, sens / 8));
+  return Math.min(sens, DRAG_SENS);
+}
 function dragRotate(dxPx, dyPx) {
   if (viewMode !== 'free') return;
   const len = Math.hypot(dxPx, dyPx);
   if (len < 0.01) return;
-  rotateFree(dyPx / len, -dxPx / len, 0, DRAG_SENS * len);
+  const ang = dragSensitivity() * len, lx = dyPx / len, ly = dxPx / len;
+  const V0 = quatToMat(freeQuat);   // 更新前姿态（两种模式都要用）
+  const b0 = [V0[2][0], V0[2][1], V0[2][2]];   // back₀
+  if (ui.selfRotateToggle && ui.selfRotateToggle.checked) {
+    rotateFree(lx, ly, 0, ang);   // 开：原地转头（姿态路径与历史逐比特一致）
+    if (projMode === 'persp') {
+      const V1 = quatToMat(freeQuat);
+      const D = 0.5 * viewH / Math.tan(VIEW_FOV / 2) / scale;
+      camOff[0] += (b0[0] - V1[2][0]) * D;   // 视点锁定：eye = ref+camOff+back·D 恒定
+      camOff[1] += (b0[1] - V1[2][1]) * D;
+      camOff[2] += (b0[2] - V1[2][2]) * D;
+    }
+    return;
+  }
+  rotateFree(lx, ly, 0, ang);
+  if (projMode === 'persp') {
+    /* 共轭刚体旋转 M = R0ᵀ·Rot(l,-ang)·R0，camOff' = M·camOff（显式矩阵，锚点钉死） */
+    const Q = quatToMat(quatAxis([lx, ly, 0], -ang));   // Rot(l,-ang)
+    const T = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++)
+      T[i][j] = V0[0][i] * Q[0][j] + V0[1][i] * Q[1][j] + V0[2][i] * Q[2][j];   // R0ᵀ·Q
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++)
+      M[i][j] = T[i][0] * V0[0][j] + T[i][1] * V0[1][j] + T[i][2] * V0[2][j];   // ·R0
+    const c0 = [camOff[0], camOff[1], camOff[2]];
+    camOff[0] = M[0][0] * c0[0] + M[0][1] * c0[1] + M[0][2] * c0[2];
+    camOff[1] = M[1][0] * c0[0] + M[1][1] * c0[1] + M[1][2] * c0[2];
+    camOff[2] = M[2][0] * c0[0] + M[2][1] * c0[1] + M[2][2] * c0[2];
+  }
 }
-/* 相机基准飞行：上下以相机定义而非世界绝对方向 */
+/* 自适应移动速度（世界系 m/s）：
+ * 基准 = 参考平面屏速恒定 PAD_MOVE_RATE/scale（与缩放级别一致）；
+ * v13 修正"放大缩小后移动时快时慢"：透视下参考平面距离 D=f/scale，跟随锚点
+ * 内容深度 d = camOff·back，锚点在参考平面之后（放大越过内容）时基准速度的
+ * 屏上效果按 (1+d/D)⁻¹ 衰减 —— 放大越多滑得越慢、世界速度却不变（松手即过冲）。
+ * 修正：速度按 (D+d) 缩放，锚点内容在屏上恒以 ~PAD_MOVE_RATE px/s 滑动，
+ * 缩放级别只改变视角不改变跟手性；锚点在身后（d<0）按 0.25D 起步防停滞，
+ * 上限 24D 防世界速度爆炸。Shift 临时 ×5（NAV_FAST_K）跨越/撤离。 */
+let navFast = false;
+function camForwardDepth() {
+  const R = quatToMat(freeQuat);
+  return camOff[0] * R[2][0] + camOff[1] * R[2][1] + camOff[2] * R[2][2];
+}
+function moveSpeedWorld() {
+  const base = PAD_MOVE_RATE / scale;
+  if (projMode !== 'persp' || viewMode !== 'free') return base * (navFast ? NAV_FAST_K : 1);
+  const f = 0.5 * viewH / Math.tan(VIEW_FOV / 2), D = f / scale;
+  const d = Math.max(camForwardDepth(), 0);
+  const v = PAD_MOVE_RATE * clampNum(D + d, D * 0.25, D * 24) / f;
+  return v * (navFast ? NAV_FAST_K : 1);
+}
+/* 相机基准飞行：WASD 前后左右 + R/F 升降（用户指定：R/F 是移动不是俯仰），
+ * 全部以相机自身轴为基准；Q/E 为仅存的滚转旋转（绕后轴） */
 function camNudge(kind) {
   if (viewMode !== 'free') return;
-  const a = freeAxesWorld(), s = PAD_MOVE_PX / scale;
+  const a = freeAxesWorld(), s = moveSpeedWorld() * PAD_MOVE_PX / PAD_MOVE_RATE;
   const add = (v, k) => { camOff[0] += v[0] * k; camOff[1] += v[1] * k; camOff[2] += v[2] * k; };
   if (kind === 'w') add(a.back, -s);       // 前进 = 沿视线方向
   else if (kind === 's') add(a.back, s);
   else if (kind === 'a') add(a.right, -s);
   else if (kind === 'd') add(a.right, s);
-  else if (kind === 'r') rotateFree(1, 0, 0, PAD_ROT_STEP);    // 上：抬头，绕相机右轴
-  else if (kind === 'f') rotateFree(1, 0, 0, -PAD_ROT_STEP);   // 下：低头
-  else if (kind === 'q') rotateFree(0, 0, 1, -PAD_ROT_STEP);   // 逆时针：画面逆时针旋
-  else if (kind === 'e') rotateFree(0, 0, 1, PAD_ROT_STEP);    // 顺时针：画面顺时针旋
+  else if (kind === 'r') add(a.up, s);     // 上升：沿相机上轴（与 WASD 同类的平移）
+  else if (kind === 'f') add(a.up, -s);    // 下降
+  else if (kind === 'q') rotateFree(0, 0, 1, PAD_ROT_STEP);    // 逆时针滚转（v11 非镜像屏幕基下 +角=逆时针）
+  else if (kind === 'e') rotateFree(0, 0, 1, -PAD_ROT_STEP);   // 顺时针
   draw();
 }
 /* ---------------- 相机平滑运动系统 ----------------
  * 飞行按钮与键盘按住时写入目标状态，每帧经指数平滑趋近后积分，
  * 位置与角速度连续无级跃；松开后按同一条曲线衰减到零。 */
 const camHeld = { w: 0, a: 0, s: 0, d: 0, r: 0, f: 0, q: 0, e: 0 };
-const camVel = { move: [0, 0, 0], rot: [0, 0] };   // move 世界系 m/s；rot = [俯仰, 滚转] rad/s
+const camVel = { move: [0, 0, 0], rot: [0] };   // move 世界系 m/s；rot = [滚转] rad/s（v11 R/F 改平移后仅剩滚转）
 let camLoopRaf = 0, lastCamT = 0;
 function camHeldClear() { for (const k in camHeld) camHeld[k] = 0; }
 function camMotionActive() {
@@ -3549,34 +3017,32 @@ function camMotionActive() {
   for (const k in camHeld) any += camHeld[k];
   return !!any ||
     Math.hypot(camVel.move[0], camVel.move[1], camVel.move[2]) > 1e-9 ||
-    Math.abs(camVel.rot[0]) + Math.abs(camVel.rot[1]) > 1e-6;
+    Math.abs(camVel.rot[0]) > 1e-6;
 }
 function updateCameraMotion(dt) {
   if (viewMode !== 'free') {
     camHeldClear();
-    camVel.move = [0, 0, 0]; camVel.rot = [0, 0];
+    camVel.move = [0, 0, 0]; camVel.rot = [0];
     return false;
   }
   const a = freeAxesWorld();
-  const spd = PAD_MOVE_RATE / scale;   // 屏速 px/s 换算为世界系 m/s
+  const spd = moveSpeedWorld();   // v13：深度自适应 + Shift 加速
   const tx = (camHeld.d ? 1 : 0) - (camHeld.a ? 1 : 0);
   const tz = (camHeld.w ? 1 : 0) - (camHeld.s ? 1 : 0);
-  const pit = (camHeld.r ? 1 : 0) - (camHeld.f ? 1 : 0);
-  const rol = (camHeld.e ? 1 : 0) - (camHeld.q ? 1 : 0);
+  const tv = (camHeld.r ? 1 : 0) - (camHeld.f ? 1 : 0);   // v11：R/F = 升降平移
+  const rol = (camHeld.q ? 1 : 0) - (camHeld.e ? 1 : 0);  // Q=逆时针(+角) E=顺时针（非镜像屏幕基）
   const k = 1 - Math.exp(-dt / 0.09);
-  const t0 = (a.right[0] * tx - a.back[0] * tz) * spd;
-  const t1 = (a.right[1] * tx - a.back[1] * tz) * spd;
-  const t2 = (a.right[2] * tx - a.back[2] * tz) * spd;
+  const t0 = (a.right[0] * tx - a.back[0] * tz + a.up[0] * tv) * spd;
+  const t1 = (a.right[1] * tx - a.back[1] * tz + a.up[1] * tv) * spd;
+  const t2 = (a.right[2] * tx - a.back[2] * tz + a.up[2] * tv) * spd;
   camVel.move[0] += (t0 - camVel.move[0]) * k;
   camVel.move[1] += (t1 - camVel.move[1]) * k;
   camVel.move[2] += (t2 - camVel.move[2]) * k;
-  camVel.rot[0] += (pit * PAD_ROT_RATE - camVel.rot[0]) * k;
-  camVel.rot[1] += (rol * PAD_ROT_RATE - camVel.rot[1]) * k;
+  camVel.rot[0] += (rol * PAD_ROT_RATE - camVel.rot[0]) * k;
   camOff[0] += camVel.move[0] * dt;
   camOff[1] += camVel.move[1] * dt;
   camOff[2] += camVel.move[2] * dt;
-  if (Math.abs(camVel.rot[0]) > 1e-6) rotateFree(1, 0, 0, camVel.rot[0] * dt);
-  if (Math.abs(camVel.rot[1]) > 1e-6) rotateFree(0, 0, 1, camVel.rot[1] * dt);
+  if (Math.abs(camVel.rot[0]) > 1e-6) rotateFree(0, 0, 1, camVel.rot[0] * dt);
   return camMotionActive();
 }
 function camLoop(now) {
@@ -3596,7 +3062,12 @@ function ensureCamLoop() {
   }
 }
 function currentViewMatrix() {
-  if (viewMode === 'free') return quatToMat(freeQuat);
+  /* v11：自由视角 = F·quatToMat（行1取负）—— 行向量变为 [right, down, toward-viewer]
+   * 左手屏幕基，与固定视图同约定，非镜像；freeQuat 本地系 = (right, up, back) */
+  if (viewMode === 'free') {
+    const R = quatToMat(freeQuat);
+    return [[R[0][0], R[0][1], R[0][2]], [-R[1][0], -R[1][1], -R[1][2]], [R[2][0], R[2][1], R[2][2]]];
+  }
   if (viewMode === 'side') return M_SIDE;
   if (viewMode === 'front') return M_FRONT;
   return M_TOP;
@@ -3707,10 +3178,31 @@ function trailRefOffsets(useRel, refName, nameToIdx) {
  * - 行星 PSF：Fcam = ΣE·(R/d)²·albedo，峰值 = min(Fcam/Ω_psf, B_p)，
  *   B_p = albedo·E/π（与圆面中心亮度一致 → 切换连续，Python 验证比值 1.00）。
  * - 计量：点源通量 F + 圆面辐射亮度×屏幕立体角（与 sumF 同单位闭环）。 */
+/* 圆盘对圆盘的投影重叠面积比（食/凌日/遮挡同一几何，Oser 2016 标准弓形公式）：
+ * d = 盘心距，r1 = 遮挡盘半径，r2 = 光源盘半径，返回被遮面积 / 光源盘面积（0-1） */
+function circleOverlap(d, r1, r2) {
+  if (r1 <= 0 || r2 <= 0) return 0;
+  const a1 = r1 * r1, a2 = r2 * r2;
+  if (d >= r1 + r2) return 0;
+  if (d <= Math.abs(r1 - r2)) return r1 >= r2 ? 1 : a1 / a2;
+  const dd = d * d;
+  const s1 = clampNum((dd + a1 - a2) / (2 * d * r1), -1, 1);
+  const s2 = clampNum((dd + a2 - a1) / (2 * d * r2), -1, 1);
+  const sect = a1 * Math.acos(s1) + a2 * Math.acos(s2)
+    - 0.5 * Math.sqrt(Math.max(0, (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)));
+  return clampNum(sect / (Math.PI * a2), 0, 1);
+}
+/* 遮挡/投影用天体物理半径（米）：用户设定优先，否则按质量-半径关系 */
+function occlRadiusOf(i) {
+  if (meta[i].radius > 0) return meta[i].radius;
+  return massRadius(massA[i]);
+}
 function buildSceneFrame() {
+  viewDiskCss = 0;   // 屏内最大已解析圆面（拖拽灵敏度自适应用），逐帧重计
   const fr = {
     W: viewW, H: viewH, proj: sceneProjector(viewW, viewH),
-    stars: [], lights: [], bodies: [], trailData: null, trailRanges: [], dotCount: 0,
+    stars: [], lights: [], bodies: [], trailLine: null, trailDot: null, trailEnds: null,
+    anchor: [0, 0, 0], eye: [0, 0, 0], orthoSpan: 0,
     sumF: 0, meter: 0, expTarget: 1
   };
   fr.useSky = ui.skyboxEnabled.checked && skybox.cubeReady;
@@ -3726,9 +3218,16 @@ function buildSceneFrame() {
   const Rv = currentViewMatrix();
   const ref = getRefPos();
   const ox = ref[0] + camOff[0], oy = ref[1] + camOff[1], oz = ref[2] + camOff[2];
+  fr.anchor = [ox, oy, oz];
+  /* 视点：透视 = 锚点 + back·D（渲染层相机置于视点、对象按相机系 float64 坐标
+   * 上传，世界坐标 1e13 m 量级下仍亚像素稳定）；正交 = 锚点 */
+  fr.eye = fr.proj.persp
+    ? [ox + Rv[2][0] * fr.proj.D, oy + Rv[2][1] * fr.proj.D, oz + Rv[2][2] * fr.proj.D]
+    : [ox, oy, oz];
   const Hren = Math.max(2, Math.round(viewH * resFactor));
   const thetaPx = 2 * Math.tan(VIEW_FOV / 2) / Hren;      // 每渲染像素弧度
   const omegaPsf = 2 * Math.PI * (PSF_SIGMA * thetaPx) * (PSF_SIGMA * thetaPx);
+  let maxSpread = 0;
   for (let i = 0; i < N; i++) {
     const p = fr.proj.pt(px[i], py[i], pz[i]);
     if (!p) continue;
@@ -3737,13 +3236,29 @@ function buildSceneFrame() {
     const radM = meta[i].radius > 0 ? meta[i].radius : (isStar || physSizeOn ? massRadius(mass) : 0);
     const rCss = (physSizeOn && radM > 0) ? radM * scale * (fr.proj.persp ? p[2] : 1) : (meta[i].size || 5);
     const rRen = rCss * resFactor;                        // 渲染像素半径（模式判定与 PSF σ 同单位）
-    const texE = meta[i].texture ? bodyTex.cache.get(i) : null;
-    const hasTex = !!(texE && texE.tex);
-    const base = hasTex ? [1, 1, 1] : hexToRgb(meta[i].color).map(v => Math.pow(v / 255, 2.2));
-    const b = { i, sx: p[0], sy: p[1], mag: p[2], rCss, mode: 0, peak: [0.3, 0.3, 0.3], aux: PSF_SIGMA,
+    const tzi = Rv[2][0] * (px[i] - ox) + Rv[2][1] * (py[i] - oy) + Rv[2][2] * (pz[i] - oz);   // 视向深度（大 = 靠近观察者）
+    /* v8：peak 恒取天体颜色 —— 底层不透明度 <1 时与贴图在 shader 内混合（op=1 纯贴图），
+     * 有贴图时 meta.color 已被贴图平均色派生，混合观感自然 */
+    const base = hexToRgb(meta[i].color).map(v => Math.pow(v / 255, 2.2));
+    const b = { i, sx: p[0], sy: p[1], mag: p[2], tz: tzi, rCss, mode: 0, peak: [0.3, 0.3, 0.3], aux: PSF_SIGMA,
       lights: [], texIdx: meta[i].texture ? i : -1, psfW: 0, psfPeak: [0, 0, 0], diskW: 1, F: 0,
-      ellM: null, spinMat: null };
-    /* 自转扁化 + 潮汐椭化（屏幕空间复合椭圆）与贴图自转矩阵（渲染层） */
+      texOp1: meta[i].textureOp !== undefined ? meta[i].textureOp : 1,
+      texMode1: meta[i].textureMode1 | 0,
+      texIdx2: meta[i].texture2 ? i : -1, texOp2: meta[i].texture2Op !== undefined ? meta[i].texture2Op : 1,
+      texMode2: meta[i].textureMode2 | 0,
+      wx: px[i], wy: py[i], wz: pz[i],
+      phys: physSizeOn && radM > 0, radM,
+      spinTilt: meta[i].spinTiltRad || 0, spinAng: 0,
+      defF: 0, tideDir: null, tideE: 0 };
+    maxSpread = Math.max(maxSpread, Math.hypot(px[i] - ox, py[i] - oy, pz[i] - oz));
+    /* 自转相位（渲染层以网格四元数旋转；先 mod 2π 防长时浮点误差，v6 语义） */
+    {
+      const om = spinRate ? spinRate[i] : 0;
+      let ang = om * simTime;
+      ang = ang - 2 * Math.PI * Math.floor(ang / (2 * Math.PI));
+      b.spinAng = ang;
+    }
+    /* 自转扁化 + 潮汐椭化（世界系形变参数，渲染层用非均匀缩放表达） */
     const Rdef = radM > 0 ? radM : massRadius(mass);
     const kF = meta[i].spinK || 0.75;
     const omSp = spinRate ? spinRate[i] : 0;
@@ -3765,29 +3280,8 @@ function buildSceneFrame() {
         tideDir = [(px[bj] - px[i]) * dI, (py[bj] - py[i]) * dI, (pz[bj] - pz[i]) * dI];
       }
     }
-    if (fRot > 1e-6 || eTide > 1e-6) {
-      const tiltR = meta[i].spinTiltRad || 0;
-      const axW = [0, -Math.sin(tiltR), Math.cos(tiltR)];   // 自转轴：Rx(tilt)·ẑ
-      const av = [Rv[0][0] * axW[0] + Rv[0][1] * axW[1] + Rv[0][2] * axW[2],
-                  Rv[1][0] * axW[0] + Rv[1][1] * axW[1] + Rv[1][2] * axW[2],
-                  Rv[2][0] * axW[0] + Rv[2][1] * axW[1] + Rv[2][2] * axW[2]];
-      let M = [1, 0, 0, 1];
-      if (fRot > 1e-6) {
-        const cosB = clampNum(-av[2], -1, 1), sinB = Math.sqrt(Math.max(0, 1 - cosB * cosB));
-        const f1 = 1 - fRot;
-        M = mat2RotScale(Math.atan2(av[1], av[0]), Math.sqrt(cosB * cosB + f1 * f1 * sinB * sinB), 1);
-      }
-      if (eTide > 1e-6 && tideDir) {
-        const tv = [Rv[0][0] * tideDir[0] + Rv[0][1] * tideDir[1] + Rv[0][2] * tideDir[2],
-                    Rv[1][0] * tideDir[0] + Rv[1][1] * tideDir[1] + Rv[1][2] * tideDir[2],
-                    Rv[2][0] * tideDir[0] + Rv[2][1] * tideDir[1] + Rv[2][2] * tideDir[2]];
-        const cosP = clampNum(-tv[2], -1, 1), sinP = Math.sqrt(Math.max(0, 1 - cosP * cosP));
-        const rp = 1 - eTide / 2, ra = 1 + eTide;
-        M = mat2Mul(mat2RotScale(Math.atan2(tv[1], tv[0]), Math.sqrt(rp * rp * cosP * cosP + ra * ra * sinP * sinP), rp), M);
-      }
-      b.ellM = M;
-    }
-    if (meta[i].texture) b.spinMat = spinTexMatrix(i, Rv);
+    if (fRot > 1e-6) b.defF = fRot;
+    if (eTide > 1e-6 && tideDir) { b.tideDir = tideDir; b.tideE = eTide; }
     /* 圆面/点源判定（渲染像素），交叉渐变权重 */
     const diskOn = rRen >= DISK_MIN_PX;
     const psfBlend = (rRen > DISK_MIN_PX && rRen < DISK_FULL_PX) ? (DISK_FULL_PX - rRen) / (DISK_FULL_PX - DISK_MIN_PX) : 0;
@@ -3795,28 +3289,25 @@ function buildSceneFrame() {
     if (isStar) {
       const s = starByI.get(i);
       const dx = px[i] - ox, dy = py[i] - oy, dz = pz[i] - oz;
-      const d2 = dx * dx + dy * dy + dz * dz;
+      const d2f = Math.max(dx * dx + dy * dy + dz * dz, 1);   // 贴面跟随（镜头与恒星同点）按 1 m 计：通量封顶而非计量消失
+      const Fcam = s.L / (4 * Math.PI * d2f) / F_SUN_1AU;   // 相机处辐照度（渲染/计量统一）
       const physical = physSizeOn && radM > 0;   // PSF/圆面模式：渲染峰值随 B/F 缩放；否则为示意图标（峰值固定）
-      if (d2 > 0 && inFov) {
-        b.F = s.L / (4 * Math.PI * d2) / F_SUN_1AU;   // 相机处辐照度（眩光用）
+      if (inFov) {
+        b.F = Fcam;
         /* 高光保护计量：物理模式下未分辨点源按表面亮度×PSF 立体角封顶贡献。
          * 若直接用 F，计量与点源峰值同随 F 增长、曝光效果相消，
-         * 致密双星等极亮源的辉光无法被自动曝光压低（v4 白屏根因）。
-         * 图标模式渲染峰值固定不随 B 缩放，按标准太阳辐照度封顶，
-         * 避免曝光追向极亮物理亮度把图标压黑。 */
+         * 致密双星等极亮源的辉光无法被自动曝光压低（v4 白屏根因）。 */
         fr.sumF += physical ? Math.min(b.F, s.B * omegaPsf * EXP_TAME_K) : Math.min(b.F, 1);
       }
-      /* 渲染用通量不加距离门槛：贴近恒星时通量巨大，被辐射亮度 B 封顶
-       * （物理正确且避免旧版 floor hack；旧版在门槛内依赖 0.12 可见性下限） */
-      const Fps = s.L / (4 * Math.PI * Math.max(d2, 1)) / F_SUN_1AU;
+      const Fps = Fcam;
       if (physSizeOn && radM > 0 && diskOn) {
         /* 恒星圆面：表面辐射亮度 B = σT⁴/π，与距离无关（面元亮度守恒） */
         b.mode = 2; b.aux = rCss;
         b.peak = s.rgbLin.map(v => v * s.B);
         b.psfW = psfBlend;
-        b.psfPeak = s.rgbLin.map(v => v * psfBlend * Math.min(Fps / omegaPsf, s.B));
+        b.psfPeak = s.rgbLin.map(v => v * psfBlend * Math.max(Math.min(Fps / omegaPsf, s.B), PSF_VIS_FLOOR));
         b.diskW = 1 - psfBlend;
-        /* 计量：圆面通量按与屏幕的交集占比加权（屏幕外的巨型圆面不应压压曝光） */
+        /* 计量：圆面通量按与屏幕的交集占比加权（屏幕外的巨型圆面不应压曝光） */
         if (inFov) {
           const th = Math.min(rRen * thetaPx, 1.2);
           const ix = Math.max(0, Math.min(p[0] + rCss, viewW) - Math.max(p[0] - rCss, 0));
@@ -3826,7 +3317,8 @@ function buildSceneFrame() {
         }
       } else if (physSizeOn && radM > 0) {
         b.mode = 0; b.aux = PSF_SIGMA;
-        b.peak = s.rgbLin.map(v => v * Math.min(Fps / omegaPsf, s.B));
+        /* 点源可见性地板：极远距离恒星不再跌破可见限消失 */
+        b.peak = s.rgbLin.map(v => v * Math.max(Math.min(Fps / omegaPsf, s.B), PSF_VIS_FLOOR));
       } else if (rRen >= DISK_FULL_PX) {
         b.mode = 2; b.aux = rCss;
         b.peak = s.rgbLin.map(v => v * 2.2);
@@ -3836,7 +3328,7 @@ function buildSceneFrame() {
         b.peak = s.rgbLin.map(v => v * pk);
       }
     } else {
-      /* 行星光照表：每颗恒星的方向（本地系）与辐照度×颜色/π，供 shader 逐像素 N·L */
+      /* 行星光照表：每颗恒星的方向（世界系）与辐照度×颜色/π，供 shader 逐像素 N·L */
       let Ep = 0, albLum = 0.2126 * base[0] + 0.7152 * base[1] + 0.0722 * base[2];
       if (starRadOn && fr.stars.length) {
         for (const s of fr.stars) {
@@ -3846,18 +3338,51 @@ function buildSceneFrame() {
           const E = s.L / (4 * Math.PI * d2) / F_SUN_1AU;   // 行星处辐照度（太阳 1AU = 1）
           Ep += E;
           const dd = Math.sqrt(d2);
-          const ld = [Rv[0][0] * dx + Rv[0][1] * dy + Rv[0][2] * dz,
-                      Rv[1][0] * dx + Rv[1][1] * dy + Rv[1][2] * dz,
-                      Rv[2][0] * dx + Rv[2][1] * dy + Rv[2][2] * dz];
-          const ll = Math.hypot(ld[0], ld[1], ld[2]) || 1;
           b.lights.push({
-            d: [ld[0] / ll, ld[1] / ll, ld[2] / ll],
+            d: [dx / dd, dy / dd, dz / dd],   // 世界系单位方向（渲染层网格法线直接点乘）
             c: [s.rgbLin[0] * E / Math.PI, s.rgbLin[1] * E / Math.PI, s.rgbLin[2] * E / Math.PI],
-            E
+            E, si: s.i
           });
         }
         b.lights.sort((a, c) => c.E - a.E);
         b.lights = b.lights.slice(0, 8);
+      }
+      /* 食阴影（世界系）：每光源至多挑 1 个遮挡体（月影投地球 / 凌日 / 卫星互影）。
+       * p = 遮挡体中心相对行星（行星半径单位），t0 = 遮挡体沿光源轴距；
+       * eclDrop = 被遮面积比连乘，作用于亚像素点源整体减光（凌日观测口径） */
+      b.ecl = [];
+      let eclDrop = 1;
+      if (physSizeOn && radM > 0 && fr.stars.length) {
+        for (const li of b.lights) {
+          const spS = starPhysCache[li.si];
+          const Rs = spS ? spS.R : 0;
+          const wxx = px[li.si] - px[i], wyy = py[li.si] - py[i], wzz = pz[li.si] - pz[i];
+          const dps = Math.hypot(wxx, wyy, wzz) || 1;
+          const ux = wxx / dps, uy = wyy / dps, uz = wzz / dps;
+          let best = 0, bj = -1;
+          for (let j = 0; j < N; j++) {
+            if (j === i || j === li.si) continue;
+            const rj = occlRadiusOf(j);
+            if (rj <= 0) continue;
+            const vx = px[j] - px[i], vy = py[j] - py[i], vz = pz[j] - pz[i];
+            const t = vx * ux + vy * uy + vz * uz;
+            if (t <= 0 || t >= dps) continue;
+            const mx = vx - t * ux, my = vy - t * uy, mz = vz - t * uz;
+            const miss = Math.hypot(mx, my, mz);
+            if (miss >= rj + Rs * t / dps) continue;
+            const ov = circleOverlap(miss, rj, Rs * t / dps);
+            if (ov > best) { best = ov; bj = j; }
+          }
+          if (bj >= 0) {
+            const vx = px[bj] - px[i], vy = py[bj] - py[i], vz = pz[bj] - pz[i];
+            const t0v = vx * li.d[0] + vy * li.d[1] + vz * li.d[2];
+            b.ecl.push({
+              p: [vx / radM, vy / radM, vz / radM],
+              r: occlRadiusOf(bj) / radM, srcR: Rs / radM, dsrc: dps / radM, t0: t0v / radM
+            });
+            eclDrop *= 1 - best;
+          } else b.ecl.push(null);
+        }
       }
       if (physSizeOn && radM > 0 && diskOn) {
         b.mode = 1; b.aux = rCss;
@@ -3867,7 +3392,7 @@ function buildSceneFrame() {
         const cd2 = Math.max(cdx * cdx + cdy * cdy + cdz * cdz, 1);
         const Fcam = Ep * (radM * radM / cd2) * albLum;
         const Bp = albLum * Ep / Math.PI;                // 圆面中心辐射亮度（切换连续性基准）
-        b.psfPeak = base.map(v => v * psfBlend * Math.max(Math.min(Fcam / omegaPsf, Bp), 0));
+        b.psfPeak = base.map(v => v * psfBlend * Math.max(Math.min(Fcam / omegaPsf, Bp), 0) * eclDrop);
         b.diskW = 1 - psfBlend;
         if (inFov) {
           const th = Math.min(rRen * thetaPx, 1.2);
@@ -3878,10 +3403,11 @@ function buildSceneFrame() {
         }
       } else if (physSizeOn && radM > 0) {
         /* 亚像素行星：反射辐照度 = 恒星在行星处辐照度 × 截面比 × 几何反照率，
-         * 同样与缩放无关；峰值封顶圆面中心亮度；叠加可见性下限 */
+         * 同样与缩放无关；峰值封顶圆面中心亮度；叠加可见性下限；
+         * eclDrop 为食/凌日整体减光（月影朝向相机时地球光点按被遮面积比变暗） */
         const cdx = px[i] - ox, cdy = py[i] - oy, cdz = pz[i] - oz;
         const cd2 = Math.max(cdx * cdx + cdy * cdy + cdz * cdz, 1);
-        const Fcam = Ep * (radM * radM / cd2) * albLum;
+        const Fcam = Ep * (radM * radM / cd2) * albLum * eclDrop;
         const Bp = albLum * Ep / Math.PI;
         b.F = Fcam;
         b.mode = 0; b.aux = PSF_SIGMA;
@@ -3901,8 +3427,10 @@ function buildSceneFrame() {
       }
     }
     fr.bodies.push(b);
+    if ((b.mode === 1 || b.mode === 2) && inFov) viewDiskCss = Math.max(viewDiskCss, rCss);
   }
-  /* 透视模式按深度远→近画家算法排序（mag = D/w，小者远） */
+  fr.orthoSpan = maxSpread * 1.3 + 1000;
+  /* 深度排序仅供 2D 标签遮挡判定（three.js 渲染遮挡由深度缓冲完成） */
   if (fr.proj.persp) fr.bodies.sort((a, b2) => a.mag - b2.mag);
   /* 自动曝光计量：天空本底 + 视锥内恒星辐照度 + 圆面通量（同一 F_SUN_1AU 单位闭环） */
   const omega = 1.1 * Math.max(1, viewW / viewH);
@@ -3912,7 +3440,84 @@ function buildSceneFrame() {
   buildTrails(fr);
   return fr;
 }
-/* 轨迹顶点构建：线模式 LINE_STRIP 分段（投影失效处断开），点迹模式 POINTS */
+/* 轨迹顶点构建：线模式 LINE_STRIP 分段（投影失效处断开），点迹模式 POINTS
+ * v8 渲染层平滑：大步长（高每帧推进天数）下相邻快照相距很远，LINE_STRIP 直连
+ * 把圆轨道画成多边形。物理快照不动，仅绘制时用 Catmull-Rom 样条（过型值点、
+ * C1 连续）在世界坐标系细分后逐点投影 —— 细分粒度按屏幕像素长度自适应
+ * （段长 ≤2.5px 不细分，稠密轨迹零开销），全帧细分总点数设预算上限。 */
+const TRAIL_SMOOTH_PX = 2.5, TRAIL_SMOOTH_MAX_SEG = 32, TRAIL_SMOOTH_BUDGET = 24000;
+function trailWorldAt(k, bi, useRel, refOff, sh, out) {
+  if (k < 0 || k >= histCount) return false;
+  const snap = histPos[(histHead - histCount + k + HIST_MAX) % HIST_MAX];
+  if (!snap || bi * 3 + 2 >= snap.length) return false;
+  out[0] = snap[bi * 3] + sh[0]; out[1] = snap[bi * 3 + 1] + sh[1]; out[2] = snap[bi * 3 + 2] + sh[2];
+  if (useRel) {
+    if (k * 3 + 2 >= refOff.off.length) return false;
+    out[0] -= refOff.off[k * 3]; out[1] -= refOff.off[k * 3 + 1]; out[2] -= refOff.off[k * 3 + 2];
+  }
+  return true;
+}
+/* Catmull-Rom 插值（uniform，t∈[0,1)）：P0,P1 为段端点，P0/P3 为邻接型值点（缺则复制端点） */
+function crPoint(P0, P1, P2, P3, t, out) {
+  const t2 = t * t, t3 = t2 * t;
+  for (let c = 0; c < 3; c++) {
+    out[c] = 0.5 * ((2 * P1[c]) + (-P0[c] + P2[c]) * t +
+      (2 * P0[c] - 5 * P1[c] + 4 * P2[c] - P3[c]) * t2 +
+      (-P0[c] + 3 * P1[c] - 3 * P2[c] + P3[c]) * t3);
+  }
+}
+/* 对单个天体的世界坐标折线（wp = [x,y,z,...]，cnt 点）做平滑细分并投影。
+ * 输出屏幕坐标 flat 数组，段断开处以 NaN 分隔（GL 拆 range / 2D 断笔共用）。
+ * 返回细分消耗的点数预算（调用方累计跨天体共享预算）。 */
+/* 轨迹顶点改在【相机系】输出（v17 渲染层为真实 3D 折线，投影交给 three.js）：
+ * 顶点 = 世界坐标 − 视点（float64 CPU 相对化，float32 上传亚像素稳定），
+ * NaN 断段语义保留（渲染层按顶点对展开 LineSegments）。细分决策仍按屏幕像素长度。 */
+const TRAIL_VERT_CAP = 480000;   // 渲染层顶点上限（7 float/顶点，超限截断防缓冲爆炸）
+function trailSmoothBody(wp, cnt, proj, eye, out, budgetLeft) {
+  let used = 0;
+  const P0 = [0, 0, 0], P1 = [0, 0, 0], P2 = [0, 0, 0], P3 = [0, 0, 0], PT = [0, 0, 0];
+  let started = false;
+  const push = (X, Y, Z) => out.push(X - eye[0], Y - eye[1], Z - eye[2]);
+  for (let j = 0; j < cnt; j++) {
+    const ax = wp[j * 3], ay = wp[j * 3 + 1], az = wp[j * 3 + 2];
+    const pa = proj.pt(ax, ay, az);
+    if (!pa) { if (started) { out.push(NaN, NaN, NaN); started = false; } continue; }
+    if (!started) { push(ax, ay, az); started = true; }
+    if (j + 1 >= cnt) break;
+    const bx = wp[(j + 1) * 3], by = wp[(j + 1) * 3 + 1], bz = wp[(j + 1) * 3 + 2];
+    const pb = proj.pt(bx, by, bz);
+    if (!pb) continue;                       /* 下一段起点处理时再断开 */
+    const dx = pb[0] - pa[0], dy = pb[1] - pa[1];
+    const lenPx = Math.hypot(dx, dy);
+    let m = 0;
+    if (lenPx > TRAIL_SMOOTH_PX && budgetLeft - used > 0) {
+      m = Math.min(TRAIL_SMOOTH_MAX_SEG, Math.ceil(lenPx / 3) - 1, budgetLeft - used);
+      if (m < 1) m = 0;
+    }
+    if (m > 0) {
+      /* 邻接型值点：缺（首尾或快照缺失）则复制端点 → 退化为端点切向自然收敛 */
+      const i0 = j - 1, i3 = j + 2;
+      if (i0 >= 0) { P0[0] = wp[i0 * 3]; P0[1] = wp[i0 * 3 + 1]; P0[2] = wp[i0 * 3 + 2]; }
+      else { P0[0] = ax; P0[1] = ay; P0[2] = az; }
+      P1[0] = ax; P1[1] = ay; P1[2] = az;
+      P2[0] = bx; P2[1] = by; P2[2] = bz;
+      if (i3 < cnt) { P3[0] = wp[i3 * 3]; P3[1] = wp[i3 * 3 + 1]; P3[2] = wp[i3 * 3 + 2]; }
+      else { P3[0] = bx; P3[1] = by; P3[2] = bz; }
+      for (let s = 1; s <= m; s++) {
+        const t = s / (m + 1);
+        crPoint(P0, P1, P2, P3, t, PT);
+        const pc = proj.pt(PT[0], PT[1], PT[2]);
+        if (!pc) { if (started) { out.push(NaN, NaN, NaN); started = false; } break; }
+        push(PT[0], PT[1], PT[2]);
+        used++;
+      }
+      if (started) push(bx, by, bz);
+    } else {
+      push(bx, by, bz);
+    }
+  }
+  return used;
+}
 function buildTrails(fr) {
   if (trailMode === 'off' || histCount < 2 || N === 0) return;
   const nameToIdx = new Map();
@@ -3920,118 +3525,122 @@ function buildTrails(fr) {
   const tf = trailFrameName();
   const useRel = tf !== '';
   const refOff = trailRefOffsets(useRel, tf, nameToIdx);
-  const shX = refOff.now[0], shY = refOff.now[1], shZ = refOff.now[2];   // 投影器内部再减镜头锚点，此处不可重复扣
-  const RW = Math.max(2, Math.round(viewW * resFactor)), RH = Math.max(2, Math.round(viewH * resFactor));
-  const arr = [], ranges = [];
-  let dotCount = 0;
+  const shv = refOff.now;
+  const eye = fr.eye;                        // 相机系（与渲染层天体位置同一视点）
+  const linePos = [], dotPos = [], ends = [];
+  let budget = TRAIL_SMOOTH_BUDGET;
+  const wp = [], W1 = [0, 0, 0];
   for (let bi = 0; bi < N; bi++) {
     const c = hexToRgb(meta[bi].color || '#FFFFFF');
     const col = [Math.pow(c[0] / 255, 2.2), Math.pow(c[1] / 255, 2.2), Math.pow(c[2] / 255, 2.2)];
-    let curStart = -1;
+    /* 收集本天体世界坐标折线（参考系偏移逐快照应用；缺帧自然跨越） */
+    wp.length = 0;
     for (let k = 0; k < histCount; k++) {
-      const idxF = (histHead - histCount + k + HIST_MAX) % HIST_MAX;
-      const snap = histPos[idxF];
-      if (!snap || bi * 3 + 2 >= snap.length) continue;
-      let X = snap[bi * 3] + shX, Y = snap[bi * 3 + 1] + shY, Z = snap[bi * 3 + 2] + shZ;
-      if (useRel) { X -= refOff.off[k * 3]; Y -= refOff.off[k * 3 + 1]; Z -= refOff.off[k * 3 + 2]; }
-      const p = fr.proj.pt(X, Y, Z);
-      if (!p) {
-        if (curStart >= 0) {
-          const cnt = arr.length / 6 - curStart;
-          if (cnt > 1) ranges.push({ off: curStart, cnt });
-          curStart = -1;
-        }
-        continue;
-      }
-      const cx = 2 * p[0] * resFactor / RW - 1, cy = 1 - 2 * p[1] * resFactor / RH;
-      if (trailMode === 'line') {
-        if (curStart < 0) curStart = arr.length / 6;
-        arr.push(cx, cy, col[0], col[1], col[2], 0.85);
-      } else {
-        arr.push(cx, cy, col[0], col[1], col[2], 0.9);
-        dotCount++;
-      }
+      if (trailWorldAt(k, bi, useRel, refOff, shv, W1)) wp.push(W1[0], W1[1], W1[2]);
     }
-    if (curStart >= 0) {
-      const cnt = arr.length / 6 - curStart;
-      if (cnt > 1) ranges.push({ off: curStart, cnt });
+    const cnt = wp.length / 3;
+    if (cnt < 2) continue;
+    if (trailMode === 'dot') {
+      for (let k = 0; k < cnt; k++) {
+        const p = fr.proj.pt(wp[k * 3], wp[k * 3 + 1], wp[k * 3 + 2]);
+        if (!p) continue;
+        dotPos.push(wp[k * 3] - eye[0], wp[k * 3 + 1] - eye[1], wp[k * 3 + 2] - eye[2], col[0], col[1], col[2], 0.9);
+        if (dotPos.length / 7 >= TRAIL_VERT_CAP) break;
+      }
+      if (dotPos.length >= 7) ends.push(dotPos[dotPos.length - 7], dotPos[dotPos.length - 6], dotPos[dotPos.length - 5]);
+      continue;
     }
+    /* 线模式：平滑细分后输出相机系坐标（NaN 分段），展开为 LineSegments 顶点对 */
+    const pts = [];
+    budget -= trailSmoothBody(wp, cnt, fr.proj, eye, pts, Math.max(0, budget));
+    let run = [];
+    const flush = () => {
+      for (let j = 1; j < run.length; j++) {
+        linePos.push(run[j - 1][0], run[j - 1][1], run[j - 1][2], col[0], col[1], col[2], 0.85);
+        linePos.push(run[j][0], run[j][1], run[j][2], col[0], col[1], col[2], 0.85);
+      }
+      if (run.length) ends.push(run[run.length - 1][0], run[run.length - 1][1], run[run.length - 1][2]);
+      run = [];
+    };
+    for (let k = 0; k < pts.length; k += 3) {
+      if (isNaN(pts[k])) { flush(); continue; }
+      run.push([pts[k], pts[k + 1], pts[k + 2]]);
+      if (linePos.length / 7 >= TRAIL_VERT_CAP) { run = []; break; }
+    }
+    flush();
   }
-  if (arr.length) {
-    fr.trailData = new Float32Array(arr);
-    fr.trailRanges = ranges;
-    fr.dotCount = dotCount;
-  }
+  if (linePos.length) fr.trailLine = new Float32Array(linePos);
+  if (dotPos.length) fr.trailDot = new Float32Array(dotPos);
+  if (ends.length) fr.trailEnds = ends;
 }
-/* 2D 图层：仅绘制天体名称标签（GL 层之上的清晰 HUD） */
+/* 2D 图层：仅绘制天体名称标签（GL 层之上的清晰 HUD）。
+ * 被更近的已解析圆面盖住的标签不显示（锚点落入其盘内即视为遮挡）——
+ * bodies 已按深度远→近排序，后项可遮挡前项 */
 function drawOverlay2D(fr, c2) {
   const g = c2 || ctx;
   g.fillStyle = 'rgba(232,230,221,.85)';
   g.font = LABEL_FONT;
-  for (const b of fr.bodies) {
-    g.fillText(meta[b.i].name, b.sx + Math.max(b.rCss, 1.2) + 3, b.sy + 4);
+  for (let k = 0; k < fr.bodies.length; k++) {
+    const b = fr.bodies[k];
+    const lx = b.sx + Math.max(b.rCss, 1.2) + 3, ly = b.sy + 4;
+    let hidden = false;
+    for (let m = k + 1; m < fr.bodies.length && !hidden; m++) {
+      const o = fr.bodies[m];
+      if ((o.mode === 1 || o.mode === 2) && Math.hypot(lx - o.sx, ly - o.sy) < o.rCss) hidden = true;
+    }
+    if (hidden) continue;
+    g.fillText(meta[b.i].name, lx, ly);
   }
 }
 
-/* ---------------- Canvas 2D 全套回退路径（WebGL 完全不可用时） ----------------
- * 保留天空盒网格投影、轨迹、圆面与近似眩光的 2D 实现，功能等价、画质降级 */
+/* ---------------- Canvas 2D 应急回退（three.js 不可用时） ----------------
+ * v17 起主渲染完全由 three.js 承担；本路径仅为极端环境（无 WebGL 或
+ * three.js CDN 加载失败）保留最简可视化：纯色背景 + 轨迹 + 平色圆点 +
+ * 名称标签 —— v16 的 2D 径向渐变光晕/近似眩光/网格投影天空盒全部删除。 */
 function drawTo2D(c2, W, H) {
-  const useSky = ui.skyboxEnabled.checked && skybox.facesReady;
-  if (useSky) {
-    if (skybox.dirty) { skyboxRender2D(); skybox.dirty = false; }
-    if (skybox.canvas.width > 0) c2.drawImage(skybox.canvas, 0, 0, W, H);
-  } else {
-    c2.fillStyle = '#080807';
-    c2.fillRect(0, 0, W, H);
-  }
+  c2.fillStyle = '#080807';
+  c2.fillRect(0, 0, W, H);
   const proj = sceneProjector(W, H);
-
-  /* 轨迹（环形缓冲，O(1) 修剪；参考系偏移逐快照预计算一次） */
+  /* 轨迹（环形缓冲；直线连接，不平滑细分） */
   if (trailMode !== 'off' && histCount > 1) {
     const nameToIdx = new Map();
     for (let k = 0; k < N; k++) nameToIdx.set(meta[k].name, k);
     const tf = trailFrameName();
     const useRel = tf !== '';
     const refOff = trailRefOffsets(useRel, tf, nameToIdx);
-    const shX2 = refOff.now[0], shY2 = refOff.now[1], shZ2 = refOff.now[2];   // 投影器内部再减镜头锚点，此处不可重复扣
+    const shv = refOff.now;
     for (let bi = 0; bi < N; bi++) {
-      const color = meta[bi].color || '#FFFFFF';
-      c2.strokeStyle = color; c2.fillStyle = color;
+      c2.strokeStyle = meta[bi].color || '#FFFFFF';
+      c2.fillStyle = meta[bi].color || '#FFFFFF';
       c2.globalAlpha = 0.85;
       c2.lineWidth = 1;
-      if (trailMode === 'line') c2.beginPath();
-      let started = false;
+      const wpt = [];
+      const Wt = [0, 0, 0];
       for (let k = 0; k < histCount; k++) {
-        const idxF = (histHead - histCount + k + HIST_MAX) % HIST_MAX;
-        const snap = histPos[idxF];
-        if (!snap || bi * 3 + 2 >= snap.length) continue;
-        let X = snap[bi * 3] + shX2, Y = snap[bi * 3 + 1] + shY2, Z = snap[bi * 3 + 2] + shZ2;
-        if (useRel) { X -= refOff.off[k * 3]; Y -= refOff.off[k * 3 + 1]; Z -= refOff.off[k * 3 + 2]; }
-        const p = proj.pt(X, Y, Z);
-        if (!p) { started = false; continue; }
-        if (trailMode === 'line') {
+        if (trailWorldAt(k, bi, useRel, refOff, shv, Wt)) wpt.push(Wt[0], Wt[1], Wt[2]);
+      }
+      const cntT = wpt.length / 3;
+      if (cntT < 2) continue;
+      if (trailMode === 'line') {
+        c2.beginPath();
+        let started = false;
+        for (let k = 0; k < cntT; k++) {
+          const p = proj.pt(wpt[k * 3], wpt[k * 3 + 1], wpt[k * 3 + 2]);
+          if (!p) { started = false; continue; }
           if (!started) { c2.moveTo(p[0], p[1]); started = true; }
           else c2.lineTo(p[0], p[1]);
-        } else {
-          c2.fillRect(p[0] - 0.75, p[1] - 0.75, 1.5, 1.5);
+        }
+        c2.stroke();
+      } else {
+        for (let k = 0; k < cntT; k++) {
+          const p = proj.pt(wpt[k * 3], wpt[k * 3 + 1], wpt[k * 3 + 2]);
+          if (p) c2.fillRect(p[0] - 0.75, p[1] - 0.75, 1.5, 1.5);
         }
       }
-      if (trailMode === 'line' && started) c2.stroke();
     }
     c2.globalAlpha = 1;
   }
-
-  /* 恒星辐射表（每帧一次，取自一次计算的物理缓存） */
-  const stars = [];
-  if (starRadOn) {
-    for (let i = 0; i < N; i++) {
-      const sp = starPhysCache[i];
-      if (!sp) continue;
-      stars.push({ i, L: sp.L, B: sp.B, rgb: sp.rgb });
-    }
-  }
-
-  /* 天体：透视模式按深度远→近画家算法排序绘制 */
+  /* 天体：平色圆点/圆面（恒星光色，行星本色），透视按深度远→近 */
   let order = null;
   if (proj.persp) {
     order = [];
@@ -4043,164 +3652,52 @@ function drawTo2D(c2, W, H) {
     }
     order.sort((a, b) => b[0] - a[0]);
   }
+  c2.font = LABEL_FONT;
   for (let oi = 0; oi < N; oi++) {
     const i = order ? order[oi][1] : oi;
     const p = proj.pt(px[i], py[i], pz[i]);
     if (!p) continue;
-    drawBody2D(c2, i, p[0], p[1], p[2], proj, stars);
-  }
-
-  /* 近似眩光（降级路径）：视星等映射的径向渐变与整帧发白 */
-  if (glareOn && starRadOn && stars.length) {
-    const ref = getRefPos();
-    const ox = ref[0] + camOff[0], oy = ref[1] + camOff[1], oz = ref[2] + camOff[2];
-    let Ftot = 0;
-    c2.save();
-    c2.globalCompositeOperation = 'lighter';
-    for (const s of stars) {
-      const dx = px[s.i] - ox, dy = py[s.i] - oy, dz = pz[s.i] - oz;
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < 0.01 * AU * AU) continue;   // 跟随贴面恒星不参与眩光与发白
-      const p = proj.pt(px[s.i], py[s.i], pz[s.i]);
-      if (!p) continue;                    // 机身后方不参与
-      if (p[0] < -0.12 * W || p[0] > 1.12 * W || p[1] < -0.12 * H || p[1] > 1.12 * H) continue;   // 视锥外不参与
-      const F = s.L / (4 * Math.PI * Math.max(d2, 1e-8));
-      Ftot += F;
-      const mApp = -26.74 - 2.5 * Math.log10(Math.max(F / F_SUN_1AU, 1e-30));
-      const wI = clampNum((GLARE_MAG_0 - mApp) / (GLARE_MAG_0 - GLARE_MAG_1), 0, 1);
-      if (wI <= 0.004) continue;
-      const R0 = (26 + 230 * wI) * (H / 800);
-      const g = c2.createRadialGradient(p[0], p[1], 0, p[0], p[1], R0);
-      g.addColorStop(0, rgbStr(s.rgb, 0.10 + 0.32 * wI));
-      g.addColorStop(0.25, rgbStr(s.rgb, 0.04 + 0.10 * wI));
-      g.addColorStop(1, rgbStr(s.rgb, 0));
-      c2.fillStyle = g;
-      c2.beginPath(); c2.arc(p[0], p[1], R0, 0, Math.PI * 2); c2.fill();
-      c2.save();
-      c2.translate(p[0], p[1]); c2.scale(2.4, 0.045);   // 变形镜头式水平光斑
-      const g2 = c2.createRadialGradient(0, 0, 0, 0, 0, R0);
-      g2.addColorStop(0, rgbStr(s.rgb, 0.16 * wI));
-      g2.addColorStop(1, rgbStr(s.rgb, 0));
-      c2.fillStyle = g2;
-      c2.beginPath(); c2.arc(0, 0, R0, 0, Math.PI * 2); c2.fill();
-      c2.restore();
-    }
-    c2.restore();
-    if (Ftot > 0) {
-      const mTot = -26.74 - 2.5 * Math.log10(Math.max(Ftot / F_SUN_1AU, 1e-30));
-      const wT = clampNum((GLARE_MAG_0 - mTot) / (GLARE_MAG_0 - GLARE_MAG_1), 0, 1);
-      if (wT > 0) {
-        c2.fillStyle = 'rgba(255,249,240,' + (0.68 * wT * wT).toFixed(3) + ')';
-        c2.fillRect(0, 0, W, H);
-      }
-    }
+    const isStar = starRadOn && massA[i] >= STAR_M_MIN;
+    const sp = starPhysCache[i];
+    const rad = meta[i].radius > 0 ? meta[i].radius : (isStar || physSizeOn ? massRadius(massA[i]) : 0);
+    const r = (physSizeOn && rad > 0)
+      ? Math.min(80, Math.max(0.6, rad * scale * (proj.persp ? p[2] : 1)))
+      : Math.min(10, Math.max(1.2, (meta[i].size || 5) * 0.5));
+    c2.fillStyle = (isStar && sp) ? rgbStr(sp.rgb) : (meta[i].color || '#FFFFFF');
+    c2.beginPath(); c2.arc(p[0], p[1], r, 0, Math.PI * 2); c2.fill();
+    c2.fillStyle = 'rgba(232,230,221,.85)';
+    c2.fillText(meta[i].name, p[0] + r + 3, p[1] + 4);
   }
 }
 
-/* 2D 回退单体绘制：真实尺寸 / 亚像素点源 / 恒星光晕 / 朗伯照明（线性辐照度，非幂压缩） */
-function drawBody2D(c2, i, sx, sy, mag, proj, stars) {
-  const mass = massA[i];
-  const isStar = starRadOn && mass >= STAR_M_MIN;
-  const rad = meta[i].radius > 0 ? meta[i].radius : (isStar || physSizeOn ? massRadius(mass) : 0);
-  const sp = starPhysCache[i];
-  let r;
-  if (physSizeOn && rad > 0) r = rad * scale * (proj.persp ? mag : 1);
-  else r = meta[i].size || 5;
-  if (r < 1.2) {
-    /* 亚像素点源：按面积比例降低不透明度（降级路径的近似处理） */
-    const a = clampNum(r * r / 1.44, 0.05, 1);
-    c2.globalAlpha = a;
-    c2.fillStyle = isStar ? (sp ? rgbStr(sp.rgb) : '#FFFFFF') : (meta[i].color || '#FFFFFF');
-    c2.fillRect(sx - 0.6, sy - 0.6, 1.2, 1.2);
-    c2.globalAlpha = 1;
-    return;
-  }
-  if (isStar && sp) {
-    const rgb = sp.rgb;
-    const glowR = Math.max(r * 3.2, r + 7);
-    c2.save();
-    c2.globalCompositeOperation = 'lighter';
-    const g = c2.createRadialGradient(sx, sy, r * 0.3, sx, sy, glowR);
-    g.addColorStop(0, rgbStr(rgb, 0.42));
-    g.addColorStop(1, rgbStr(rgb, 0));
-    c2.fillStyle = g;
-    c2.beginPath(); c2.arc(sx, sy, glowR, 0, Math.PI * 2); c2.fill();
-    c2.restore();
-    c2.fillStyle = rgbStr(rgb);
-    c2.beginPath(); c2.arc(sx, sy, r, 0, Math.PI * 2); c2.fill();
-  } else if (stars.length) {
-    /* 朗伯点光源照明：线性辐照度 + 可见半球因子的软压缩（回退路径近似，无曝光链） */
-    let F = 0, lvz = 0, ldx = 0, ldy = 0, ldLen = 0;
-    const Rv = currentViewMatrix();
-    for (const s of stars) {
-      const dx = px[s.i] - px[i], dy = py[s.i] - py[i], dz = pz[s.i] - pz[i];
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 <= 0) continue;
-      F += s.L / (4 * Math.PI * d2);
-      if (!ldLen) {
-        const d = Math.sqrt(d2);
-        ldx = Rv[0][0] * dx + Rv[0][1] * dy + Rv[0][2] * dz;
-        ldy = Rv[1][0] * dx + Rv[1][1] * dy + Rv[1][2] * dz;
-        lvz = (Rv[2][0] * dx + Rv[2][1] * dy + Rv[2][2] * dz) / d;
-        ldLen = Math.hypot(ldx, ldy);
-      }
-    }
-    if (F <= 0) {
-      c2.fillStyle = meta[i].color || '#FFFFFF';
-      c2.beginPath(); c2.arc(sx, sy, r, 0, Math.PI * 2); c2.fill();
-    } else {
-      const front = clampNum(lvz, 0, 1);
-      /* 线性 E（太阳1AU=1）→ 对数软显示映射（回退路径无 HDR 链，保持可见性） */
-      const b = clampNum(0.09 + 1.1 * Math.log10(1 + F / F_SUN_1AU) * front, 0.09, 1.25);
-      const texE = meta[i].texture ? bodyTex.cache.get(i) : null;
-      const base = hexToRgb(meta[i].color);
-      const dlx = ldLen > 1e-9 ? ldx / ldLen : 0, dly = ldLen > 1e-9 ? ldy / ldLen : 0;
-      const gx = sx + dlx * r * 0.45, gy = sy + dly * r * 0.45;
-      c2.save();
-      c2.beginPath(); c2.arc(sx, sy, r, 0, Math.PI * 2); c2.clip();
-      if (texE && texE.img) {
-        /* 有贴图：用贴图代替表面颜色，剪裁到圆内（回退路径近似等距柱状外观） */
-        c2.drawImage(texE.img, sx - r, sy - r, r * 2, r * 2);
-        const g2 = c2.createRadialGradient(gx, gy, r * 0.08, gx, gy, r * 1.9);
-        g2.addColorStop(0, 'rgba(255,255,255,' + Math.min(0.5, b * 0.4).toFixed(3) + ')');
-        g2.addColorStop(1, 'rgba(0,0,0,0.88)');
-        c2.fillStyle = g2;
-        c2.fillRect(sx - r, sy - r, r * 2, r * 2);
-      } else {
-        const g = c2.createRadialGradient(gx, gy, r * 0.08, gx, gy, r * 1.9);
-        g.addColorStop(0, rgbStr(shadeRgb(base, Math.min(1.25, b))));
-        g.addColorStop(0.55, rgbStr(shadeRgb(base, Math.max(0.05, b * 0.5))));
-        g.addColorStop(1, rgbStr(shadeRgb(base, 0.05)));
-        c2.fillStyle = g;
-        c2.fillRect(sx - r, sy - r, r * 2, r * 2);
-      }
-      c2.restore();
-    }
-  } else {
-    c2.fillStyle = meta[i].color || '#FFFFFF';
-    c2.beginPath(); c2.arc(sx, sy, r, 0, Math.PI * 2); c2.fill();
-  }
-  c2.fillStyle = 'rgba(232,230,221,.85)';
-  c2.font = LABEL_FONT;
-  c2.fillText(meta[i].name, sx + r + 3, sy + 4);
-}
-
-/* 主绘制入口：GL 管线渲染全场景，2D 图层仅叠加标签；WebGL 不可用走全 2D 回退 */
+/* 主绘制入口：three.js 渲染全场景，2D 图层仅叠加标签；three.js 不可用走极简 2D 回退 */
 function draw() {
   if (headlessOn) { drawHeadlessBadge(); return; }
-  glr.drawCount++;
+  ren.drawCount++;
   const now = performance.now();
   const fr = buildSceneFrame();
   /* 曝光时间平滑：模拟相机感度适应，避免亮度突变。
    * 跨越 2 个数量级以上时改按几何平滑（对数空间趋近），
    * 否则从普通场景切到致密双星要线性爬 14 个数量级、全白数秒 */
-  const dtE = glr.lastExpT ? Math.min(0.25, (now - glr.lastExpT) / 1000) : 0.25;
-  const expRatio = fr.expTarget / Math.max(glr.exposure, 1e-300);
-  if (expRatio > 100 || expRatio < 0.01) glr.exposure = Math.max(glr.exposure * Math.pow(expRatio, 1 - Math.exp(-dtE / EXP_TAU)), 1e-300);
-  else glr.exposure += (fr.expTarget - glr.exposure) * (1 - Math.exp(-dtE / EXP_TAU));
-  glr.lastExpT = now;
-  if (glr.ok) {
-    glrRender(fr);
+  const dtE = ren.lastExpT ? Math.min(0.25, (now - ren.lastExpT) / 1000) : 0.25;
+  const expRatio = fr.expTarget / Math.max(ren.exposure, 1e-300);
+  if (expRatio > 100 || expRatio < 0.01) ren.exposure = Math.max(ren.exposure * Math.pow(expRatio, 1 - Math.exp(-dtE / EXP_TAU)), 1e-300);
+  else ren.exposure += (fr.expTarget - ren.exposure) * (1 - Math.exp(-dtE / EXP_TAU));
+  ren.lastExpT = now;
+  if (tjs && ren.ok) {
+    /* 自愈式天体同步：增删天体后下一帧自动重建渲染对象 */
+    if (tjs.bodyCount() !== N) { try { tjs.syncBodies(N); } catch (e) { console.warn('天体同步失败:', e); } }
+    try {
+      tjs.renderFrame(fr, {
+        rows: currentViewMatrix(), projMode, scale, D: fr.proj.D,
+        anchor: fr.anchor, eye: fr.eye, orthoSpan: fr.orthoSpan,
+        viewW, viewH, resFactor,
+        exposure: ren.exposure, bloomOn: glareOn, useSky: fr.useSky,
+        skyNorm: fr.useSky ? Math.min(1, SKY_NORM_LEVEL / Math.max(skybox.skyLum, 1e-5)) : 1,
+        starLit: starRadOn && fr.stars.length > 0,
+        trailMode
+      });
+    } catch (e) { console.error('three.js 渲染失败:', e); }
     ctx.setTransform(resFactor, 0, 0, resFactor, 0, 0);
     ctx.clearRect(0, 0, viewW, viewH);
     drawOverlay2D(fr);
@@ -4210,7 +3707,7 @@ function draw() {
   /* HUD */
   ui.timeDisplay.textContent = fmtTime(simTime);
   ui.scaleDisplay.textContent = '1px ≈ ' + (1 / scale).toExponential(2) + ' m';
-  glr.lastFrame = fr;
+  ren.lastFrame = fr;
 }
 function resizeCanvas() {
   viewW = window.innerWidth; viewH = window.innerHeight;
@@ -4224,7 +3721,7 @@ function resizeCanvas() {
   glc.style.height = viewH + 'px';
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(resFactor, resFactor);
-  skybox.dirty = true;
+  if (tjs && ren.ok) tjs.setSize(viewW, viewH, resFactor);
   draw();
 }
 
@@ -4235,12 +3732,12 @@ function takeScreenshot() {
   c.width = canvas.width; c.height = canvas.height;
   const c2 = c.getContext('2d');
   c2.setTransform(1, 0, 0, 1, 0, 0);
-  if (glr.ok) {
+  if (tjs && ren.ok) {
     c2.fillStyle = '#080807';
     c2.fillRect(0, 0, c.width, c.height);
     c2.drawImage(document.getElementById('glcanvas'), 0, 0);
     c2.setTransform(resFactor, 0, 0, resFactor, 0, 0);
-    if (glr.lastFrame) drawOverlay2D(glr.lastFrame, c2);
+    if (ren.lastFrame) drawOverlay2D(ren.lastFrame, c2);
   } else {
     c2.scale(resFactor, resFactor);
     drawTo2D(c2, viewW, viewH);
@@ -4314,7 +3811,8 @@ function fitView() {
 }
 
 /* ---------------- 下拉框重建（保留选择） ----------------
- * 视角跟随 / 参考系：质心、绝对原点与全部天体；
+ * 视角跟随：质心、绝对原点与全部天体（拖拽旋转中心由「自身」开关独立决定，v14）；
+ * 参考系：质心、绝对原点与全部天体；
  * 轨迹参考系：跟随参考系、绝对原点、质心与全部天体。 */
 function populateSelects() {
   const prevBody = ui.bodySelect.dataset.lastSelected || '';
@@ -4323,6 +3821,7 @@ function populateSelects() {
   const prevTrail = pendingTrailRef !== null ? pendingTrailRef : ui.trailRefMode.value;
   const prevGr = ui.grBodySelect.value;
   const okFrame = v => v === 'center_of_mass' || v === '' || meta.some(m2 => m2.name === v);
+  const okFollow = okFrame;   // v12：跟随下拉不再有 __self
   const okTrail = v => v === 'follow' || okFrame(v);
   ui.bodySelect.innerHTML = '';
   ui.bodySelect.appendChild(new Option('选择天体…', ''));
@@ -4345,7 +3844,7 @@ function populateSelects() {
     ui.grBodySelect.appendChild(new Option(m2.name, m2.name));
   });
   if (prevBody && meta.some(m2 => m2.name === prevBody)) ui.bodySelect.value = prevBody;
-  if (okFrame(prevFollow)) ui.followSelect.value = prevFollow;
+  if (okFollow(prevFollow)) ui.followSelect.value = prevFollow;
   if (okFrame(prevFrame)) ui.frameSelect.value = prevFrame;
   if (okTrail(prevTrail)) ui.trailRefMode.value = prevTrail;
   pendingFollow = null; pendingFrame = null; pendingTrailRef = null;
@@ -4685,9 +4184,9 @@ function updateSpinPreview() {
   if (ui.tideAuto) ui.tideAuto.textContent = '自动 k2 = ' + k2Auto.toFixed(3) + ' · 自动 Δt = ' + (lagAuto > 0 ? lagAuto.toPrecision(3) + ' s' : '0') + (k2Str !== '' || lagStr !== '' ? '（当前手动输入优先）' : '');
 }
 /* ---------------- 星球全景贴图表单状态 ----------------
- * 新增与编辑共用：上传后 formTex 保存 data URL，保存时写入天体并随
- * 导出 JSON base64 嵌入；有贴图时表面颜色不参与渲染（颜色控件禁用）。 */
-let formTex = null;
+ * 新增与编辑共用：上传后 formTex/formTex2 保存 data URL，保存时写入天体并随
+ * 导出 JSON base64 嵌入；底层与表面颜色按不透明度混合，上层叠加（云层/夜光等）。 */
+let formTex = null, formTex2 = null;
 function texSizeStr(dataUrl) {
   if (!dataUrl) return '';
   const b64 = dataUrl.indexOf(',') >= 0 ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
@@ -4695,16 +4194,31 @@ function texSizeStr(dataUrl) {
   return mb >= 1 ? mb.toFixed(1) + ' MB' : Math.round(mb * 1024) + ' KB';
 }
 function updateTexFormUI() {
+  /* v8 修复：旧版把 opacity 加在 bodyColor.parentElement（即整个 form）上，
+   * 导致设贴图后整个编辑框内容像蒙了层黑纱；现只对颜色输入本身降不透明度 */
   const has = !!formTex;
   ui.texPreview.style.display = has ? '' : 'none';
   if (has) ui.texPreview.src = formTex;
+  const op1 = ui.texOp1 ? parseFloat(ui.texOp1.value) : 1;
+  if (ui.texOp1Val) ui.texOp1Val.textContent = Math.round(op1 * 100) + '%';
+  if (ui.texDark1) ui.texDark1.disabled = !has;
   ui.texInfo.textContent = has
-    ? '已使用贴图（' + texSizeStr(formTex) + '）· 表面颜色不参与渲染'
-    : '未使用贴图 · 以表面颜色渲染';
+    ? '已使用底层贴图（' + texSizeStr(formTex) + '）· 与表面颜色按不透明度混合'
+    : '未使用底层贴图 · 以表面颜色渲染';
   ui.bodyColor.disabled = has;
-  ui.bodyColor.parentElement.style.opacity = has ? '0.35' : '';
+  ui.bodyColor.style.opacity = has ? String(0.35 + 0.65 * (1 - op1)) : '';
+  /* 上层 */
+  const has2 = !!formTex2;
+  ui.texPreview2.style.display = has2 ? '' : 'none';
+  if (has2) ui.texPreview2.src = formTex2;
+  const op2 = ui.texOp2 ? parseFloat(ui.texOp2.value) : 1;
+  if (ui.texOp2Val) ui.texOp2Val.textContent = Math.round(op2 * 100) + '%';
+  if (ui.texDark2) ui.texDark2.disabled = !has2;
+  ui.texInfo2.textContent = has2
+    ? '已使用上层贴图（' + texSizeStr(formTex2) + '）· 按 不透明度 叠加在底层之上'
+    : '未使用上层贴图';
 }
-function importTexFile(e) {
+function importTexFile(e, layer) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!file) return;
@@ -4714,9 +4228,9 @@ function importTexFile(e) {
     const url = String(ev.target.result);
     const im = new Image();
     im.onload = () => {
-      formTex = url;
+      if (layer === 2) formTex2 = url; else formTex = url;
       updateTexFormUI();
-      showToast('贴图已载入 ' + im.width + '×' + im.height + ' · 保存后生效', 'success', 3200);
+      showToast((layer === 2 ? '上层' : '底层') + '贴图已载入 ' + im.width + '×' + im.height + ' · 保存后生效', 'success', 3200);
     };
     im.onerror = () => showToast('贴图解码失败', 'error');
     im.src = url;
@@ -4735,6 +4249,11 @@ function openBodyForm(idx) {
     ui.bodyRadius.value = orig.radius || (meta[editingIndex].radius > 0 ? fmtRadius(meta[editingIndex].radius) : '');
     ui.bodyColor.value = /^#[0-9a-fA-F]{6}$/.test(meta[editingIndex].color) ? meta[editingIndex].color : '#FFFFFF';
     formTex = meta[editingIndex].texture || null;
+    formTex2 = meta[editingIndex].texture2 || null;
+    ui.texOp1.value = meta[editingIndex].textureOp !== undefined ? meta[editingIndex].textureOp : 1;
+    ui.texOp2.value = meta[editingIndex].texture2Op !== undefined ? meta[editingIndex].texture2Op : 1;
+    if (ui.texDark1) ui.texDark1.checked = !!meta[editingIndex].textureMode1;
+    if (ui.texDark2) ui.texDark2.checked = !!meta[editingIndex].textureMode2;
     ui.bodyOrbitsAround.value = orig.orbits_around || meta[editingIndex].orbits_around || '';
     ui.bodySemiMajorAxis.value = orig.semimajor_axis || '';
     ui.bodyEccentricity.value = orig.eccentricity ?? '0.0';
@@ -4756,7 +4275,10 @@ function openBodyForm(idx) {
     ui.bodyMass.value = '1 earth';
     ui.bodyRadius.value = '';
     ui.bodyColor.value = '#FFFFFF';
-    formTex = null;
+    formTex = null; formTex2 = null;
+    ui.texOp1.value = '1'; ui.texOp2.value = '1';
+    if (ui.texDark1) ui.texDark1.checked = false;
+    if (ui.texDark2) ui.texDark2.checked = false;
     ui.bodyEccentricity.value = '0.0';
     ui.bodyInclination.value = '0.0';
     ui.bodyLongitudeOfAscendingNode.value = '0.0';
@@ -4852,11 +4374,22 @@ function saveBodyForm(e) {
     tide_k2: isFinite(tideK2) ? String(tideK2) : '',
     tide_lag: tideLagStr };
   if (formTex) origParams.texture = formTex;   // 贴图随导出 JSON base64 嵌入
+  if (formTex && parseFloat(ui.texOp1.value) !== 1) origParams.texture_op = String(parseFloat(ui.texOp1.value));
+  else delete origParams.texture_op;
+  if (formTex2) origParams.texture2 = formTex2;
+  if (formTex2 && parseFloat(ui.texOp2.value) !== 1) origParams.texture2_op = String(parseFloat(ui.texOp2.value));
+  else delete origParams.texture2_op;
+  if (formTex && ui.texDark1 && ui.texDark1.checked) origParams.texture_mode = '1'; else delete origParams.texture_mode;
+  if (formTex2 && ui.texDark2 && ui.texDark2.checked) origParams.texture2_mode = '1'; else delete origParams.texture2_mode;
+  /* v11：镜像开关已移除；旧存档里的 texture_mirror / texMirror 字段读取时直接忽略 */
+  delete origParams.texture_mirror;
+  delete origParams.texture2_mirror;
 
   /* 保留既有显示尺寸兜底；新建天体取 5 */
   const keepSize = editingIndex >= 0 ? meta[editingIndex].size : 5;
   const rawBody = { name, mass, pos, vel, color, size: keepSize, radius, orbits_around: orbitsAround, original_input_params: origParams };
-  if (formTex) rawBody.texture = formTex;
+  if (formTex) { rawBody.texture = formTex; rawBody.textureOp = parseFloat(ui.texOp1.value); rawBody.textureMode1 = ui.texDark1 && ui.texDark1.checked ? 1 : 0; }
+  if (formTex2) { rawBody.texture2 = formTex2; rawBody.texture2Op = parseFloat(ui.texOp2.value); rawBody.textureMode2 = ui.texDark2 && ui.texDark2.checked ? 1 : 0; }
   const list = exportBodiesRaw();
   if (editingIndex >= 0) { list[editingIndex] = rawBody; showToast('天体 \'' + name + '\' 已更新', 'success'); }
   else { list.push(rawBody); showToast('天体 \'' + name + '\' 已添加', 'success'); }
@@ -4921,7 +4454,7 @@ function saveLocalStorage() {
   catch (e) {
     /* 贴图 base64 可能超出 localStorage 配额：剥离贴图后重存（导出 JSON 始终完整携带贴图） */
     try {
-      const stripped = exportBodiesRaw().map(b => { const c = { ...b }; delete c.texture; return c; });
+      const stripped = exportBodiesRaw().map(b => { const c = { ...b }; delete c.texture; delete c.texture2; return c; });
       localStorage.setItem(LS_KEY, JSON.stringify(stripped));
       console.warn('localStorage 超出配额，已剥离天体贴图保存（导出 JSON 仍完整含贴图）:', e);
     } catch (e2) { console.error('localStorage 保存失败:', e2); showToast('浏览器存储保存失败', 'error'); }
@@ -4952,7 +4485,8 @@ function savePrefs() {
       persp: projMode === 'persp', psize: physSizeOn, starrad: starRadOn, glare: glareOn,
       snapInt: ui.snapshotInterval.value,
       conservation: ui.showConservation.checked,
-      follow: ui.followSelect.value, frameRef: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked
+      follow: ui.followSelect.value, selfRot: ui.selfRotateToggle.checked,
+      frameRef: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked
     }));
   } catch (e) { /* 存储不可用时静默 */ }
 }
@@ -4986,10 +4520,13 @@ function loadPrefs() {
     if (p.snapInt !== undefined) ui.snapshotInterval.value = p.snapInt;
     ui.showConservation.checked = p.conservation !== false;
     ui.includeInfoOnShot.checked = p.includeInfo !== false;
-    /* 视角跟随 / 参考系：v4 的 frame（镜头锚定）迁移到两者 */
+    /* 视角跟随 / 参考系：v4 的 frame（镜头锚定）迁移到两者；
+     * v14：「自身」开关恢复，v11 的 follow='__self' 存档仍迁移为「绝对原点」+ 自身开 */
     const legacyFrame = (p.frame === 'center_of_mass' || p.frame === '' || typeof p.frame === 'string') ? p.frame : null;
-    pendingFollow = p.follow !== undefined ? p.follow : legacyFrame;
+    pendingFollow = p.follow === '__self' ? '' : (p.follow !== undefined ? p.follow : legacyFrame);
     pendingFrame = p.frameRef !== undefined ? p.frameRef : legacyFrame;
+    if (p.selfRot !== undefined) ui.selfRotateToggle.checked = !!p.selfRot;
+    else if (p.follow === '__self') ui.selfRotateToggle.checked = true;
     pendingView = ['top', 'side', 'front', 'free'].includes(p.view) ? p.view : 'free';
     ui.speedVal.textContent = ui.speed.value;
   } catch (e) { /* 偏好损坏时忽略 */ }
@@ -5105,7 +4642,10 @@ function runSelfTest() {
     const errT = Math.abs(sp.T - T_SUN) / T_SUN;
     const errB = Math.abs(sp.B - (SIGMA_SB * Math.pow(sp.T, 4) / Math.PI) / F_SUN_1AU) / sp.B;
     const rgb = sp.rgb.map(x => x | 0);
-    const neutral = rgb[0] > 240 && Math.abs(rgb[0] - rgb[1]) < 26 && Math.abs(rgb[1] - rgb[2]) < 26;
+    /* v13 CIE 积分：太阳物理色度 xy≈(0.327,0.335) 略暖于 D65，暖白序 r≥g≥b；
+     * 旧 Tanner Helland 近似（近纯白）的 |r−g|<26 判据不再适用 */
+    const neutral = rgb[0] > 240 && rgb[0] >= rgb[1] && rgb[1] >= rgb[2] &&
+      rgb[0] - rgb[1] < 40 && rgb[1] - rgb[2] < 30;
     const pass = errL < 1e-3 && errR < 0.06 && errT < 0.06 && errB < 1e-9 && neutral;
     results.push({ name: 'T6 恒星辐射物理链 L=4πR²σT⁴', pass, detail: 'L/L☉=' + (sp.L / L_SUN).toFixed(4) + ' · R/R☉=' + (sp.R / R_SUN).toFixed(4) + ' · T=' + sp.T.toFixed(0) + 'K · B=' + sp.B.toFixed(0) + ' · rgb=' + rgb.join(',') });
   } catch (e) { results.push({ name: 'T6', pass: false, detail: e.message }); }
@@ -5653,6 +5193,51 @@ function runSelfTest() {
       detail: '有限 ' + finite35 + ' · 与纯 2.5PN 4000 步轨迹差 ' + (relDiff * 100).toFixed(2) + '%（γ₀=' + gamma0.toExponential(1) + '，应 O(γ) 量级）· 文献间 O(γ) 系数存在规范差异，详见 About' });
   } catch (e) { results.push({ name: 'T22', pass: false, detail: e.message }); }
 
+  /* T23 恒星温度-密度链：主序回归（太阳 5772 K 精确复现）+ 巨星支密度降温
+   * 与表面积亮度（1 M☉ + 100 R☉ → T 降至 Hayashi 附近、L 按表面积真实放大） */
+  try {
+    const sp0 = starPhysOf(M_SUN);
+    const errT0 = Math.abs(sp0.T - T_SUN) / T_SUN;
+    const spG = starPhysOf(M_SUN, 100 * R_SUN);
+    const Texp = HAYASHI_T0;                                   // 1 M☉ 密度修正早已低于 Hayashi 下限
+    const Lexp = 4 * Math.PI * Math.pow(100 * R_SUN, 2) * SIGMA_SB * Math.pow(Texp, 4);
+    const errLG = Math.abs(spG.L - Lexp) / Lexp;               // 亮度 = 表面积 × 黑体谱（非质光关系钉死）
+    const dT = (spG.T - T_SUN) / T_SUN;                        // 大半径必须降温
+    const ok23 = errT0 < 1e-9 && errLG < 1e-9 && dT < -0.2 && spG.L > 500 * L_SUN && spG.L < 1e4 * L_SUN;
+    results.push({ name: 'T23 恒星温度-密度链（主序回归 + 巨星降温增亮）', pass: ok23,
+      detail: '太阳 T=' + sp0.T.toFixed(1) + ' K（偏差 ' + (errT0 * 100).toExponential(1) + '%）· 1M☉+100R☉: T=' + spG.T.toFixed(0) + ' K（降温 ' + (dT * 100).toFixed(0) + '%）· L=' + (spG.L / L_SUN).toFixed(0) + ' L☉（表面积×σT⁴ 精确）' });
+  } catch (e) { results.push({ name: 'T23', pass: false, detail: e.message }); }
+
+  /* T24 黑体 CIE 颜色链：太阳近中性（T6 兼容）+ 色温方向单调（冷红热蓝）+ 色域安全 */
+  try {
+    const cS = blackbodyRGB(5772), cC = blackbodyRGB(3000), cH = blackbodyRGB(12000);
+    /* CIE 太阳 xy≈(0.327,0.335) 物理暖白：r≥g≥b 且偏差在暖白带内（同 T6 判据） */
+    const neutral = cS[0] >= cS[1] && cS[1] >= cS[2] && cS[0] - cS[1] < 40 && cS[1] - cS[2] < 30;
+    const coldRed = cC[0] > cC[2] * 3, hotBlue = cH[2] >= cH[0];
+    const gamut = [3000, 5772, 12000, 40000].every(t => blackbodyRGB(t).every(v => v >= 0 && v <= 255));
+    results.push({ name: 'T24 黑体谱 CIE 颜色（中性/方向/色域）', pass: neutral && coldRed && hotBlue && gamut,
+      detail: '太阳 ' + cS.join(',') + ' · 3000K ' + cC.join(',') + '（红端）· 12000K ' + cH.join(',') + '（蓝端）· 全温区 0..255 入域' });
+  } catch (e) { results.push({ name: 'T24', pass: false, detail: e.message }); }
+
+  /* T25 点源 PSF 链：切换点比值 1（PSF↔圆面连续）、远距地板生效；
+   * v17 起辉光由 three.js UnrealBloomPass 后处理完成（阈值 = 1/曝光，
+   * 等价旧「曝光后阈值 1.0」语义），v16 手写眩光项（GLARE_*）已整体移除；
+   * 渲染辐射上限 ×5 级泛光累加 < RGBA16F 上限 65504（半浮点安全） */
+  try {
+    const thPx = 2 * Math.tan(VIEW_FOV / 2) / 1080;
+    const omP = 2 * Math.PI * Math.pow(PSF_SIGMA * thPx, 2);
+    const Bv = starPhysOf(1 * M_SUN).B;
+    const starPeak = (F) => Math.max(Math.min(F / omP, Bv), PSF_VIS_FLOOR);
+    const Fs = Bv * omP;                              // 切换点：min(F/Ω,B) 开始低于 B
+    const ratio = starPeak(Fs) / Bv;                  // 地板不得干扰切换连续性
+    const floorOn = starPeak(1e-9) === PSF_VIS_FLOOR; // 极远距地板生效（不再消失）
+    const capSafe = RENDER_RADIANCE_CAP * 5 < 65504;
+    results.push({ name: 'T25 点源 PSF 链（切换比 1/地板/泛光饱和安全）',
+      pass: Math.abs(ratio - 1) < 1e-9 && floorOn && capSafe,
+      detail: '切换比 ' + ratio.toFixed(6) + ' · F=1e-9 地板 ' + starPeak(1e-9).toFixed(2) +
+        ' · 渲染辐射上限 ' + RENDER_RADIANCE_CAP + '（ACES 白饱和 + bloom 由 three.js UnrealBloomPass 完成）' });
+  } catch (e) { results.push({ name: 'T25', pass: false, detail: e.message }); }
+
 
   /* 恢复现场 */
   gr1pnOn = savedFlags.g1; gr25On = savedFlags.g2; gr2pnOn = savedFlags.g2pn; gr35On = savedFlags.g35; integrator = savedFlags.itg;
@@ -5758,7 +5343,9 @@ function wireEvents() {
   ui.collisionMerge.addEventListener('change', savePrefs);
   ui.grBodySelect.addEventListener('change', () => { grSamples = []; });
 
+  /* v14：视角跟随只管镜头携行；「自身」开关独立决定拖拽旋转中心，互不干扰 */
   ui.followSelect.addEventListener('change', () => { draw(); savePrefs(); });
+  ui.selfRotateToggle.addEventListener('change', savePrefs);
   ui.frameSelect.addEventListener('change', () => { draw(); savePrefs(); });
   ui.trailDuration.addEventListener('change', savePrefs);
   ui.trailRefMode.addEventListener('change', () => { draw(); savePrefs(); });
@@ -5812,13 +5399,17 @@ function wireEvents() {
   ui.bodyRadius.addEventListener('input', updateSpinPreview);
   ui.bodyTideK2.addEventListener('input', updateSpinPreview);
   ui.bodyTideLag.addEventListener('input', updateSpinPreview);
-  /* 星球全景贴图：上传 / 清除（新增与编辑表单共用） */
-  ui.texUploadBtn.addEventListener('click', () => ui.texFileInput.click());
+  /* 星球全景贴图：上传 / 清除（新增与编辑表单共用；v8 双层各自独立） */
+  let texFileLayer = 1;
+  ui.texUploadBtn.addEventListener('click', () => { texFileLayer = 1; ui.texFileInput.click(); });
+  ui.texUploadBtn2.addEventListener('click', () => { texFileLayer = 2; ui.texFileInput.click(); });
+  ui.texFileInput.addEventListener('change', e => importTexFile(e, texFileLayer));
+  ui.texOp1.addEventListener('input', updateTexFormUI);
+  ui.texOp2.addEventListener('input', updateTexFormUI);
   ui.matScanBtn.addEventListener('click', () => { matScan(); });
-  ui.matSkyBtn.addEventListener('click', matApplySky);
   ui.matBodyBtn.addEventListener('click', matApplyBody);
   ui.texClearBtn.addEventListener('click', () => { formTex = null; updateTexFormUI(); });
-  ui.texFileInput.addEventListener('change', importTexFile);
+  ui.texClearBtn2.addEventListener('click', () => { formTex2 = null; updateTexFormUI(); });
   ui.bodyFormContent.addEventListener('click', e => {
     if (!e.target.classList.contains('reset-btn')) return;
     const wrap = e.target.parentElement;
@@ -5836,11 +5427,12 @@ function wireEvents() {
 
   window.addEventListener('keydown', e => {
     const tag = (e.target && e.target.tagName || '').toLowerCase();
+    navFast = e.shiftKey && viewMode === 'free';   // Shift 临时加速（任意键同步状态，抬起即恢复）
     if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
     if (e.code === 'Space') { e.preventDefault(); togglePlay(); return; }
     const k = (e.key || '').toLowerCase();
     if (e.shiftKey && k === 'r') { resetSim(); return; }
-    if (viewMode === 'free' && !e.shiftKey && !e.ctrlKey && !e.altKey && 'wasdqrfe'.includes(k) && k !== '') {
+    if (viewMode === 'free' && !e.ctrlKey && !e.altKey && 'wasdqrfe'.includes(k) && k !== '') {
       e.preventDefault();
       if (!e.repeat) camHeld[k] = 1;   // 按住连续运动，由平滑系统每帧积分
       ensureCamLoop();
@@ -5850,10 +5442,11 @@ function wireEvents() {
     else if (k === '0') resetView();
   });
   window.addEventListener('keyup', e => {
+    navFast = e.shiftKey && viewMode === 'free';
     const k = (e.key || '').toLowerCase();
     if ('wasdqrfe'.includes(k) && k !== '') camHeld[k] = 0;
   });
-  window.addEventListener('blur', () => { camHeldClear(); dragging = false; canvas.classList.remove('dragging'); });
+  window.addEventListener('blur', () => { camHeldClear(); dragging = false; navFast = false; canvas.classList.remove('dragging'); });
 
   /* 鼠标：自由视角拖拽（单轴屏幕空间轨迹球，四元数相机） */
   let dragging = false, lastX = 0, lastY = 0;
@@ -5868,10 +5461,12 @@ function wireEvents() {
   });
   window.addEventListener('mouseup', () => { dragging = false; canvas.classList.remove('dragging'); });
 
-  /* 滚轮缩放 */
+  /* 滚轮缩放：deltaMode 归一化（Firefox 行模式 = 33px/行，页模式按视口高），
+   * 否则同样幅度的滚动在不同浏览器下缩放速度差数十倍 */
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    scale = clampNum(scale * Math.exp(-e.deltaY * 0.0015), SCALE_MIN, SCALE_MAX);
+    const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * Math.max(viewH, 2) : e.deltaY;
+    scale = clampNum(scale * Math.exp(-dy * 0.0015), SCALE_MIN, SCALE_MAX);
     draw();
   }, { passive: false });
 
@@ -5904,7 +5499,7 @@ function wireEvents() {
 
 /* ---------------- 调试/测试 API（供自动化测试与脚本调用） ---------------- */
 window.__SIM__ = {
-  glr: glr,   // 调试：暴露 GL 管线内部（FBO/纹理/程序），供自动化测试逐层诊断
+  tjs: () => tjs,   // v17：three.js 渲染层句柄（模块脚本注入）
   getState: () => ({ n: N, time: simTime, playing, lastDt, lastSteps, integrator, gr1pn: gr1pnOn, gr25: gr25On, gr2pn: gr2pnOn, gr35: gr35On, view: viewMode }),
   getBodies: () => exportBodiesRaw(),
   importBodies: arr => { setSystem(arr); },
@@ -5939,12 +5534,13 @@ window.__SIM__ = {
   dragStep: (dx, dy) => { dragRotate(dx, dy); draw(); },
   camHeldState: () => ({ held: { ...camHeld }, vel: { move: camVel.move.slice(), rot: camVel.rot.slice() } }),
   renderDebug: () => ({
-    ok: glr.ok, gl2: glr.gl2, hdr: glr.hdr, W: glr.W, H: glr.H,
-    exposure: glr.exposure, skyLum: skybox.skyLum, skyNorm: glr.skyNorm,
-    drawCount: glr.drawCount, expTarget: glr.lastFrame ? glr.lastFrame.expTarget : 1,
-    meter: glr.lastFrame ? glr.lastFrame.meter : 0,
-    sumF: glr.lastFrame ? glr.lastFrame.sumF : 0,
-    bodies: glr.lastFrame ? glr.lastFrame.bodies.map(b => ({ mode: b.mode, rCss: +b.rCss.toFixed(2), peak: b.peak.map(v => +v.toPrecision(3)), psfW: b.psfW ? +b.psfW.toFixed(3) : 0, diskW: b.diskW !== undefined ? +b.diskW.toFixed(3) : 1, psfPeak: b.psfPeak ? b.psfPeak.map(v => +v.toPrecision(3)) : null, texIdx: b.texIdx, ellM: b.ellM ? b.ellM.map(v => +v.toFixed(4)) : null })) : []
+    ok: !!(tjs && ren.ok), renderer: ren.ok ? 'three.js' : 'canvas2d', W: viewW, H: viewH,
+    exposure: ren.exposure, skyLum: skybox.skyLum,
+    skyNorm: ren.lastFrame && ren.lastFrame.useSky ? Math.min(1, SKY_NORM_LEVEL / Math.max(skybox.skyLum, 1e-5)) : 1,
+    drawCount: ren.drawCount, expTarget: ren.lastFrame ? ren.lastFrame.expTarget : 1,
+    meter: ren.lastFrame ? ren.lastFrame.meter : 0,
+    sumF: ren.lastFrame ? ren.lastFrame.sumF : 0,
+    bodies: ren.lastFrame ? ren.lastFrame.bodies.map(b => ({ mode: b.mode, rCss: +b.rCss.toFixed(2), peak: b.peak.map(v => +v.toPrecision(3)), psfW: b.psfW ? +b.psfW.toFixed(3) : 0, diskW: b.diskW !== undefined ? +b.diskW.toFixed(3) : 1, psfPeak: b.psfPeak ? b.psfPeak.map(v => +v.toPrecision(3)) : null, texIdx: b.texIdx, phys: b.phys, radM: b.radM, ecl: b.ecl ? b.ecl.map(e => e ? +e.r.toPrecision(3) : 0) : null })) : []
   }),
   setQuat: (x, y, z, w) => { freeQuat = quatNormalize([x, y, z, w]); skybox.dirty = true; draw(); },
   getQuat: () => freeQuat.slice(),
@@ -5952,14 +5548,14 @@ window.__SIM__ = {
   camNudge: k => { camNudge(k); },
   setCamOff: v => { camOff = v.slice(); draw(); },
   renderState: () => ({ projMode, physSizeOn, starRadOn, glareOn, headlessOn, resFactor,
-    skyMode: skyMode === 'webgl' ? (glr.hdr ? 'webgl-hdr' : 'webgl-ldr') : skyMode, trailMode }),
+    skyMode, renderer: ren.ok ? 'three.js' : 'canvas2d', trailMode }),
   setProj: v => { projMode = v === 'persp' ? 'persp' : 'ortho'; ui.perspToggle.checked = projMode === 'persp'; draw(); },
   headless: () => ({ on: headlessOn, snapshots: snapLog.length, types: snapLog.map(s => s.type), rate: ui.headlessRate.textContent }),
   snapshotNow: (t, d) => { takeSnapshot(t || 'manual', d || ''); },
   skyboxStatus: () => ({
-    mode: skyMode, cubeReady: skybox.cubeReady, facesReady: skybox.facesReady,
+    mode: skyMode, cubeReady: skybox.cubeReady,
     panoWidth: skybox.pano ? skybox.pano.width : 0, panoHeight: skybox.pano ? skybox.pano.height : 0,
-    faceSize: skybox.faceSize, skyLum: skybox.skyLum, skyNorm: glr.skyNorm, dirty: skybox.dirty,
+    skyLum: skybox.skyLum,
     source: skybox.source
   }),
   frames: () => ({ follow: ui.followSelect.value, frame: ui.frameSelect.value, trail: ui.trailRefMode.value }),
@@ -5969,21 +5565,31 @@ window.__SIM__ = {
     if (trail !== undefined) ui.trailRefMode.value = trail;
     draw();
   },
-  trailTip: () => {   // 调试：各天体轨迹末端与当前位置的偏差（渲染像素）
-    const fr = glr.lastFrame;
-    if (!fr || !fr.trailData || !fr.trailRanges) return null;
-    return fr.trailRanges.map(rg => {
-      const o = (rg.off + rg.cnt - 1) * 6;
-      return [fr.trailData[o], fr.trailData[o + 1]];
+  trailTip: () => {   // 调试：各天体轨迹末端屏幕位置（相机系顶点重投影）
+    const fr = ren.lastFrame;
+    if (!fr || !fr.trailEnds) return null;
+    const proj = sceneProjector(viewW, viewH);
+    return fr.trailEnds.map(p => {
+      const s = proj.pt(p[0] + fr.eye[0], p[1] + fr.eye[1], p[2] + fr.eye[2]);
+      return s ? [+s[0].toFixed(2), +s[1].toFixed(2)] : null;
     });
   },
   /* 天空盒为内置全景图离屏转换，不再支持运行时替换 */
-  setBodyTexture: (name, dataUrl) => {
+  setBodyTexture: (name, dataUrl, layer, opacity, dark) => {
     const i = meta.findIndex(m => m.name === name);
     if (i < 0) return false;
-    meta[i].texture = dataUrl || null;
     const op = meta[i].original_input_params || (meta[i].original_input_params = {});
-    if (dataUrl) op.texture = dataUrl; else delete op.texture;
+    if (layer === 2) {
+      meta[i].texture2 = dataUrl || null;
+      if (typeof opacity === 'number') meta[i].texture2Op = Math.min(Math.max(opacity, 0), 1);
+      if (dark !== undefined) meta[i].textureMode2 = dark ? 1 : 0;   // v9：暗部透明开关
+      if (dataUrl) op.texture2 = dataUrl; else { delete op.texture2; }
+    } else {
+      meta[i].texture = dataUrl || null;
+      if (typeof opacity === 'number') meta[i].textureOp = Math.min(Math.max(opacity, 0), 1);
+      if (dark !== undefined) meta[i].textureMode1 = dark ? 1 : 0;
+      if (dataUrl) op.texture = dataUrl; else delete op.texture;
+    }
     bodyTexEnsure(i);
     draw();
     return true;
@@ -5991,7 +5597,8 @@ window.__SIM__ = {
   removeBodyTexture: name => {
     const i = meta.findIndex(m => m.name === name);
     if (i < 0) return false;
-    meta[i].texture = null;
+    meta[i].texture = null; meta[i].texture2 = null;
+    meta[i].textureMode1 = 0; meta[i].textureMode2 = 0;
     bodyTex.cache.delete(i);
     draw();
     return true;
@@ -6013,22 +5620,778 @@ window.__SIM__ = {
   meta: () => meta
 };
 
-/* ---------------- 初始化 ---------------- */
-function init() {
+/* ---------------- 初始化 ----------------
+ * v17：three.js 渲染层以 ES Module 异步加载（importmap → CDN）。
+ * 模块先到：直接带 WebGL 启动；轮询窗口内未到：以极简 2D 先行启动，
+ * 模块随后到达时热切换；超时仍失败：维持 2D 并提示。 */
+let tjs = null;   // three.js 渲染层（window.__TJS__，模块脚本注入）
+function enableThreeJS() {
+  if (!window.__TJS__) return false;
+  tjs = window.__TJS__;
+  try {
+    if (!tjs.init('glcanvas', VIEW_FOV * 180 / Math.PI)) throw new Error('renderer init failed');
+  } catch (e) {
+    console.warn('three.js 渲染层初始化失败:', e);
+    tjs = null;
+    return false;
+  }
+  ren.ok = true;
+  if (skybox.pano) {
+    try { tjs.setSkyPano(skybox.pano); skybox.cubeReady = true; }
+    catch (e) { console.warn('天空盒转换失败:', e); }
+  }
+  bodyTexApplyAll();
+  return true;
+}
+let simBooted = false;
+function bootRest() {
+  if (simBooted) return;
+  simBooted = true;
   collectUI();
   loadPrefs();
   wireEvents();
-  skyMode = glrInit() ? 'webgl' : 'canvas2d';
+  skyMode = ren.ok ? 'webgl' : 'fallback';
   skyboxLoad();
   loadSystemFromLocalStorage();
+  matCacheLoad();   /* v9：材质库清单缓存秒开，随后的 matScan 后台校验更新 */
+  matScan();        /* v9：启动自动扫描 textures/（异步，不阻塞首帧） */
   setViewMode(pendingView); pendingView = 'free';
   if (window.matchMedia('(min-width: 761px)').matches) ui.panel.classList.add('open');
   resizeCanvas();
   updateConservationUI(true);
   updateHeadlessInfo();
-  showToast('就绪，点击播放开始模拟', 'info', 2600);
+  showToast(ren.ok ? '就绪，点击播放开始模拟（渲染：three.js）' : '就绪（three.js 未加载，简化 2D 渲染）',
+    ren.ok ? 'info' : 'error', 2600);
 }
-init();
+window.__onTJSReady = () => {
+  if (simBooted) {
+    if (!ren.ok && enableThreeJS()) {   // 已以 2D 启动 → 热切换 three.js
+      skyMode = 'webgl';
+      resizeCanvas();
+      showToast('three.js 已加载，切换到 WebGL 渲染', 'success');
+    }
+    return;
+  }
+  if (enableThreeJS()) bootRest();
+};
+if (window.__TJS__) {
+  enableThreeJS();
+  bootRest();
+} else {
+  setTimeout(() => { if (!simBooted && window.__TJS__ && enableThreeJS()) bootRest(); }, 60);
+  setTimeout(() => { if (!simBooted && window.__TJS__ && enableThreeJS()) bootRest(); }, 600);
+  setTimeout(() => {
+    if (!simBooted) {
+      bootRest();
+      if (!ren.ok) showToast('three.js 加载失败（检查网络），使用简化 2D 渲染', 'error', 6000);
+    }
+  }, 6000);
+}
+</script>
+
+<script type="module">
+/* ============================================================
+ * v17 three.js 渲染层（ES Module，经 importmap 从 CDN 导入）
+ * ------------------------------------------------------------
+ * 全部 WebGL 渲染改由 three.js 承担（替换 v16 手写管线）：
+ *   - 场景图：天体 = 真实网格（恒星临边昏暗 / 行星朗伯多星照明 + 食阴影
+ *     + 等距柱状贴图立方体采样 + 云层壳层），缩小的天体切换为点源精灵；
+ *   - 天空盒：全景图经离屏 WebGLCubeRenderTarget 六面直绘（面基表与
+ *     v16 GL 管线逐字节一致，Catmull-Rom 双三次 + 分片长条路径保留）；
+ *   - 辉光：EffectComposer + RenderPass + UnrealBloomPass + OutputPass
+ *     —— v16 手写的亮度提取/五级高斯链/OKLab 漂白后处理全部删除；
+ *   - 自动曝光保留（CPU 计量不变），经 renderer.toneMappingExposure 接入，
+ *     ACES Filmic 色调映射在 OutputPass 完成；
+ *   - 轨迹 = LineSegments/Points（相机系顶点，float64 CPU 相对化保精度）。
+ * 精度方案：相机置于视点（透视）或锚点后方（正交），全部动态几何按
+ * float64 相机系坐标上传 —— 世界坐标 1e13 m 量级下仍亚像素稳定。
+ * 文献：three.js UnrealBloomPass（MIT）；ACES Filmic tone mapping。
+ * ============================================================ */
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const RADIANCE_CAP = 12000;          // 半浮点安全硬上限（×5 级泛光累加 6e4 < 65504）
+/* BLOOM_WHITE_K：着色输出的「曝光无关白点」。
+ * 自动曝光把分辨率圆面的像素亮度归一到 B·exp ≈ 1e2~1e3（物理正确），但
+ * UnrealBloomPass 对 ≥10² 的源会在近核 mip 形成饱和平台（方形辉光伪影）。
+ * 圆面/点源着色输出因此钳制在 K/曝光（ACES 在 ≥10 即饱和纯白 —— 视觉上
+ * 与物理值不可区分），核心依旧全白，泛光能量回落到柔和星芒区间。 */
+const BLOOM_WHITE_K = 12;
+const CLOUD_SHELL = 1.015, CLOUD_DRIFT = 0.97;
+const AMBIENT_LIT = 0.015, AMBIENT_UNLIT = 0.55;
+
+/* ---------------- 全景图 → 立方体贴图 ----------------
+ * 面基（world→方向）：从 GL ES 3.0 规范立方体贴图面选择表反推，
+ * 与 v16 SKY_FACE_DIRS 逐字节一致 —— 天空/贴图方向约定零漂移。 */
+const SKY_FACE_DIRS = [
+  { c: [1, 0, 0],  r: [0, 0, -1], u: [0, -1, 0] },
+  { c: [-1, 0, 0], r: [0, 0, 1],  u: [0, -1, 0] },
+  { c: [0, 1, 0],  r: [1, 0, 0],  u: [0, 0, 1] },
+  { c: [0, -1, 0], r: [1, 0, 0],  u: [0, 0, -1] },
+  { c: [0, 0, 1],  r: [1, 0, 0],  u: [0, -1, 0] },
+  { c: [0, 0, -1], r: [-1, 0, 0], u: [0, -1, 0] }
+];
+/* 片元：方向 = fc + fr·st.x + fu·st.y → 等距柱状 UV（与 v16 GLSL_PANOGEN_FS
+ * 逐行一致）。u_zup=0 天空（Y-up）/ 1 天体贴图（图顶=自转北极 +Z）；
+ * u_map=[分片起始u, 分片u宽, 渲染核下界, 上界]；u_bc=1 双三次 16 抽头。
+ * 源纹理经 SRGBColorSpace 采样已解码为线性 → 转换直接写线性值（不再 pow2.2）。 */
+const PANO_FS = `
+precision highp float;
+varying vec2 v;
+uniform sampler2D u_t;
+uniform vec3 u_fc, u_fr, u_fu;
+uniform vec2 u_src;
+uniform vec4 u_map;
+uniform float u_bc, u_wrap, u_zup, u_mirror;
+vec2 dirUV(vec3 d) {
+  float lon = u_zup > 0.5 ? atan(d.y, d.x) : atan(d.x, -d.z);
+  float lat = u_zup > 0.5 ? asin(clamp(d.z, -1.0, 1.0)) : asin(clamp(d.y, -1.0, 1.0));
+  float uu = lon / 6.283185307179586 + 0.5;
+  if (u_mirror > 0.5) uu = 1.0 - uu;
+  return vec2(uu, 0.5 - lat / 3.141592653589793);
+}
+vec3 tap(vec2 uv) {
+  float x = uv.x;
+  if (u_wrap > 0.5) x = fract(x);
+  if (u_map.y < 0.999) x = clamp((x - u_map.x) / u_map.y, 0.0, 1.0);
+  return texture2D(u_t, vec2(x, uv.y)).rgb;
+}
+vec3 cr1(float x, vec3 c0, vec3 c1, vec3 c2, vec3 c3) {
+  return c1 + 0.5 * x * (c2 - c0 + x * (2.0 * c0 - 5.0 * c1 + 4.0 * c2 - c3 + x * (3.0 * (c1 - c2) + c3 - c0)));
+}
+void main() {
+  vec2 st = v * 2.0 - 1.0;
+  vec2 uv = dirUV(normalize(u_fc + u_fr * st.x + u_fu * st.y));
+  if (uv.x < u_map.z || uv.x >= u_map.w) discard;
+  vec3 col;
+  if (u_bc > 0.5) {
+    vec2 tc = uv * u_src;
+    vec2 fl = floor(tc - 0.5) + 0.5;
+    vec2 f = tc - fl;
+    vec3 cx0 = cr1(f.y, tap(vec2((fl.x - 1.0) / u_src.x, (fl.y - 1.0) / u_src.y)), tap(vec2((fl.x - 1.0) / u_src.x, fl.y / u_src.y)), tap(vec2((fl.x - 1.0) / u_src.x, (fl.y + 1.0) / u_src.y)), tap(vec2((fl.x - 1.0) / u_src.x, (fl.y + 2.0) / u_src.y)));
+    vec3 cx1 = cr1(f.y, tap(vec2(fl.x / u_src.x, (fl.y - 1.0) / u_src.y)), tap(vec2(fl.x / u_src.x, fl.y / u_src.y)), tap(vec2(fl.x / u_src.x, (fl.y + 1.0) / u_src.y)), tap(vec2(fl.x / u_src.x, (fl.y + 2.0) / u_src.y)));
+    vec3 cx2 = cr1(f.y, tap(vec2((fl.x + 1.0) / u_src.x, (fl.y - 1.0) / u_src.y)), tap(vec2((fl.x + 1.0) / u_src.x, fl.y / u_src.y)), tap(vec2((fl.x + 1.0) / u_src.x, (fl.y + 1.0) / u_src.y)), tap(vec2((fl.x + 1.0) / u_src.x, (fl.y + 2.0) / u_src.y)));
+    vec3 cx3 = cr1(f.y, tap(vec2((fl.x + 2.0) / u_src.x, (fl.y - 1.0) / u_src.y)), tap(vec2((fl.x + 2.0) / u_src.x, fl.y / u_src.y)), tap(vec2((fl.x + 2.0) / u_src.x, (fl.y + 1.0) / u_src.y)), tap(vec2((fl.x + 2.0) / u_src.x, (fl.y + 2.0) / u_src.y)));
+    col = cr1(f.x, cx0, cx1, cx2, cx3);
+  } else { col = tap(uv); }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+/* ---------------- 天体着色器 ----------------
+ * 共用顶点：世界法线（光照/临边）+ 物体法线（贴图随自转旋转）。
+ * 圆面为真实网格：深度缓冲天然完成遮挡（近距行星圆面按像素覆盖
+ * 恒星亮部 —— v16 画家算法语义由 depth test 等价实现）。 */
+const BODY_VS = `
+varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+void main() {
+  vNO = normal;
+  vNW = normalize(mat3(modelMatrix) * normal);
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWP = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+/* 恒星圆面：临边昏暗 I(μ)=I₀(1−u(1−μ))，u=0.62；
+ * uRad = rgbLin·B（表面辐射亮度，HDR）——辉光交给 UnrealBloomPass。 */
+const STAR_FS = `
+precision highp float;
+uniform vec3 uRad; uniform float uCap;
+varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+void main() {
+  vec3 V = normalize(cameraPosition - vWP);
+  float mu = clamp(dot(normalize(vNW), V), 0.0, 1.0);
+  float ld = 1.0 - 0.62 * (1.0 - mu);
+  gl_FragColor = vec4(min(uRad * ld, vec3(uCap)), 1.0);
+}`;
+/* 行星圆面：贴图立方体方向采样（无接缝无极区伪影）+ 多星朗伯 N·L
+ * （每星辐照度×黑体颜色/π）+ 食阴影（弓形公式，世界系）+ 环境光。 */
+const PLANET_FS = `
+precision highp float;
+uniform samplerCube uTex;
+uniform float uHasTex, uOp1, uTm1, uAmb, uCap;
+uniform vec3 uAlb;
+uniform int uNL;
+uniform vec3 uLD[8];
+uniform vec3 uLC[8];
+uniform vec4 uEcl[8];
+uniform vec3 uLAux[8];
+varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+vec4 cubeSample(vec3 d, samplerCube t) {
+  vec3 c = max(textureCube(t, d).rgb, vec3(0.0));
+  return vec4(c, dot(c, vec3(0.2126, 0.7152, 0.0722)));
+}
+/* 食阴影：表面点沿光源方向看遮挡盘与光源盘的角重叠比（弓形公式，
+ * 与 CPU circleOverlap 同一几何）。ec.xyz=遮挡体中心（世界系，行星半径单位），
+ * la=(遮挡体沿轴距, 光源半径比, 光源距离比)（行星半径单位）。 */
+float eclipseOcc(vec3 N, vec3 lD, vec4 ec, vec3 la) {
+  float tpN = dot(N, lD);
+  float t = la.x - tpN;
+  if (t <= 0.0) return 1.0;
+  vec3 dv = (ec.xyz - la.x * lD) - (N - tpN * lD);
+  float dd = sqrt(dot(dv, dv));
+  float rc = la.y * t / la.z;
+  float rr = ec.w;
+  float ov = 0.0;
+  if (dd < rr + rc) {
+    if (dd <= abs(rr - rc)) ov = rr >= rc ? 1.0 : min(rr * rr / (rc * rc), 1.0);
+    else {
+      float dd2 = dd * dd; float r2 = rr * rr; float q2 = rc * rc;
+      float ar = r2 * acos(clamp((dd2 + r2 - q2) / (2.0 * dd * rr), -1.0, 1.0))
+               + q2 * acos(clamp((dd2 + q2 - r2) / (2.0 * dd * rc), -1.0, 1.0))
+               - 0.5 * sqrt(max(0.0, (-dd + rr + rc) * (dd + rr - rc) * (dd - rr + rc) * (dd + rr + rc)));
+      ov = ar / (3.14159265 * q2);
+    }
+  }
+  return 1.0 - clamp(ov, 0.0, 1.0);
+}
+void main() {
+  vec3 N = normalize(vNW);
+  vec3 V = normalize(cameraPosition - vWP);
+  vec3 alb = uAlb;
+  if (uHasTex > 0.5) {
+    vec4 s1 = cubeSample(normalize(vNO), uTex);
+    float a1 = uTm1 > 0.5 ? s1.a * uOp1 : uOp1;
+    alb = mix(uAlb, s1.rgb, clamp(a1, 0.0, 1.0));
+  }
+  vec3 lit = uAmb * alb * (0.55 + 0.45 * clamp(dot(N, V), 0.0, 1.0));
+  for (int i = 0; i < 8; i++) {
+    if (i >= uNL) break;
+    float ndl = dot(N, uLD[i]);
+    float dif = smoothstep(-0.015, 0.05, ndl);
+    float occ = dif > 0.0 ? eclipseOcc(N, uLD[i], uEcl[i], uLAux[i]) : 1.0;
+    lit += alb * uLC[i] * dif * occ;
+  }
+  gl_FragColor = vec4(min(lit, vec3(uCap)), 1.0);
+}`;
+/* 云层壳层：1.015× 外壳独立差速自转，自身为半透明覆盖层参与光照；
+ * 暗部透明（uTm2）：亮度作 alpha，越黑越透明（云图模式）。 */
+const SHELL_FS = `
+precision highp float;
+uniform samplerCube uTex;
+uniform float uOp2, uTm2, uAmb, uCap;
+uniform int uNL;
+uniform vec3 uLD[8];
+uniform vec3 uLC[8];
+uniform vec4 uEcl[8];
+uniform vec3 uLAux[8];
+varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+vec4 cubeSample(vec3 d, samplerCube t) {
+  vec3 c = max(textureCube(t, d).rgb, vec3(0.0));
+  return vec4(c, dot(c, vec3(0.2126, 0.7152, 0.0722)));
+}
+float eclipseOcc(vec3 N, vec3 lD, vec4 ec, vec3 la) {
+  float tpN = dot(N, lD);
+  float t = la.x - tpN;
+  if (t <= 0.0) return 1.0;
+  vec3 dv = (ec.xyz - la.x * lD) - (N - tpN * lD);
+  float dd = sqrt(dot(dv, dv));
+  float rc = la.y * t / la.z;
+  float rr = ec.w;
+  float ov = 0.0;
+  if (dd < rr + rc) {
+    if (dd <= abs(rr - rc)) ov = rr >= rc ? 1.0 : min(rr * rr / (rc * rc), 1.0);
+    else {
+      float dd2 = dd * dd; float r2 = rr * rr; float q2 = rc * rc;
+      float ar = r2 * acos(clamp((dd2 + r2 - q2) / (2.0 * dd * rr), -1.0, 1.0))
+               + q2 * acos(clamp((dd2 + q2 - r2) / (2.0 * dd * rc), -1.0, 1.0))
+               - 0.5 * sqrt(max(0.0, (-dd + rr + rc) * (dd + rr - rc) * (dd - rr + rc) * (dd + rr + rc)));
+      ov = ar / (3.14159265 * q2);
+    }
+  }
+  return 1.0 - clamp(ov, 0.0, 1.0);
+}
+void main() {
+  vec3 N = normalize(vNW);
+  vec3 V = normalize(cameraPosition - vWP);
+  vec4 s2 = cubeSample(normalize(vNO), uTex);
+  float a2 = uTm2 > 0.5 ? s2.a * uOp2 : uOp2;
+  vec3 lit = uAmb * s2.rgb * (0.55 + 0.45 * clamp(dot(N, V), 0.0, 1.0));
+  for (int i = 0; i < 8; i++) {
+    if (i >= uNL) break;
+    float ndl = dot(N, uLD[i]);
+    float dif = smoothstep(-0.015, 0.05, ndl);
+    float occ = dif > 0.0 ? eclipseOcc(N, uLD[i], uEcl[i], uLAux[i]) : 1.0;
+    lit += s2.rgb * uLC[i] * dif * occ;
+  }
+  gl_FragColor = vec4(min(lit, vec3(uCap)), clamp(a2, 0.0, 1.0));
+}`;
+/* 轨迹：LineSegments（顶点对展开支持分段断开）/ Points，相机系顶点。 */
+const TRAIL_VS = `
+attribute vec4 aColor;
+varying vec4 vC;
+void main() { vC = aColor; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const TRAIL_VS_PTS = `
+attribute vec4 aColor;
+uniform float uSz;
+varying vec4 vC;
+void main() { vC = aColor; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = uSz; }`;
+const TRAIL_FS = `
+precision mediump float;
+varying vec4 vC;
+void main() { gl_FragColor = vC; }`;
+
+/* ---------------- 状态 ---------------- */
+let renderer = null, scene = null, cameraP = null, cameraO = null, activeCam = null;
+let composer = null, renderPass = null, bloomPass = null, outputPass = null;
+let gaussTex = null, sphereGeo = null;
+let skyRT = null, skyReady = false;
+let fovDeg = 66;
+const bodies = [];                       // 每天体: {mesh, shell, spin, def, sprite, starMat, planetMat, shellMat, rt1, rt2}
+let lineObj = null, ptsObj = null, lineGeo = null, ptsGeo = null, ptsMat = null;
+const _m4 = new THREE.Matrix4();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+const _v1 = new THREE.Vector3();
+const X_AXIS = new THREE.Vector3(1, 0, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
+
+function capRadiance(v) {
+  const m = Math.max(v[0], v[1], v[2]);
+  if (m > RADIANCE_CAP) { const k = RADIANCE_CAP / m; return [v[0] * k, v[1] * k, v[2] * k]; }
+  return v;
+}
+
+/* ---------------- 全景 → 立方体贴图（离屏六面直绘） ---------------- */
+function stripTexture(cv) {
+  const t = new THREE.Texture(cv);
+  t.flipY = false;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.ClampToEdgeWrapping;
+  t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
+function buildCubeFromPano(img, F, zup) {
+  const max2d = renderer.capabilities.maxTextureSize || 4096;
+  const rt = new THREE.WebGLCubeRenderTarget(F, {
+    generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter
+  });
+  try { rt.texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); } catch (e) { /* 默认 */ }
+  const tex = new THREE.Texture(img);
+  tex.flipY = false;                          // 与 v16 约定一致：图像行 0 = v 0（不翻转）
+  tex.colorSpace = THREE.SRGBColorSpace;      // 采样时 GPU 解码为线性
+  tex.wrapS = img.width <= max2d ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      u_t: { value: tex },
+      u_fc: { value: new THREE.Vector3() }, u_fr: { value: new THREE.Vector3() }, u_fu: { value: new THREE.Vector3() },
+      u_src: { value: new THREE.Vector2(img.width, img.height) },
+      u_map: { value: new THREE.Vector4(0, 1, 0, 1.0001) },
+      u_bc: { value: img.width <= max2d ? 1 : 0 },
+      u_wrap: { value: 0 }, u_zup: { value: zup ? 1 : 0 }, u_mirror: { value: 0 }
+    },
+    vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: PANO_FS,
+    depthTest: false, depthWrite: false
+  });
+  const geo = new THREE.PlaneGeometry(2, 2);
+  const sc = new THREE.Scene();
+  sc.add(new THREE.Mesh(geo, mat));
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  /* 源宽 > MAX_TEXTURE_SIZE：分纵向长条（2 源像素重叠，双线性），与 v16 一致 */
+  let strips = null;
+  if (img.width > max2d) {
+    strips = [];
+    const overlapPx = 2;
+    const n = Math.ceil(img.width / (max2d - overlapPx - 1));
+    const coreW = Math.ceil(img.width / n);
+    for (let k = 0; k < n; k++) {
+      const a = k * coreW, b = Math.min(img.width, (k + 1) * coreW);
+      const a2 = Math.max(0, a - overlapPx), b2 = Math.min(img.width, b + overlapPx);
+      const c = document.createElement('canvas');
+      c.width = b2 - a2; c.height = img.height;
+      c.getContext('2d').drawImage(img, a2, 0, b2 - a2, img.height, 0, 0, b2 - a2, img.height);
+      strips.push({ tex: stripTexture(c), map: [a2 / img.width, (b2 - a2) / img.width, a / img.width, (b / img.width) + (k === n - 1 ? 1e-4 : 0)] });
+    }
+  }
+  const prevRT = renderer.getRenderTarget();
+  for (let f = 0; f < 6; f++) {
+    const face = SKY_FACE_DIRS[f];
+    mat.uniforms.u_fc.value.set(face.c[0], face.c[1], face.c[2]);
+    mat.uniforms.u_fr.value.set(face.r[0], face.r[1], face.r[2]);
+    mat.uniforms.u_fu.value.set(face.u[0], face.u[1], face.u[2]);
+    if (!strips) {
+      mat.uniforms.u_t.value = tex;
+      renderer.setRenderTarget(rt, f);
+      renderer.render(sc, cam);
+    } else {
+      for (const st of strips) {
+        mat.uniforms.u_t.value = st.tex;
+        mat.uniforms.u_map.value.fromArray(st.map);
+        renderer.setRenderTarget(rt, f);
+        renderer.render(sc, cam);
+      }
+    }
+  }
+  renderer.setRenderTarget(prevRT);
+  if (strips) for (const st of strips) st.tex.dispose();
+  tex.dispose(); mat.dispose(); geo.dispose();
+  return rt;
+}
+function setSkyPano(img) {
+  if (!renderer) throw new Error('renderer 未初始化');
+  if (skyRT) { skyRT.dispose(); skyRT = null; skyReady = false; }
+  const maxCube = renderer.capabilities.maxCubemapTextureSize || 4096;
+  const F = Math.max(8, Math.min(Math.ceil(img.width / 4), maxCube));
+  skyRT = buildCubeFromPano(img, F, false);
+  scene.background = skyRT.texture;           // CubeTexture 背景：方向采样，与 v16 textureCube 逐字节同约定
+  skyReady = true;
+}
+function cubeFaceSizeFor(img) {
+  const maxCube = renderer.capabilities.maxCubemapTextureSize || 4096;
+  const max2d = renderer.capabilities.maxTextureSize || 4096;
+  return Math.max(8, Math.min(Math.max(64, Math.ceil(img.width / 4)), 2048, maxCube, max2d));
+}
+function setBodyTextures(i, img1, img2) {
+  if (i < 0 || i >= bodies.length) return;
+  const rec = bodies[i];
+  if (rec.rt1) { rec.rt1.dispose(); rec.rt1 = null; }
+  if (rec.rt2) { rec.rt2.dispose(); rec.rt2 = null; }
+  if (img1) rec.rt1 = buildCubeFromPano(img1, cubeFaceSizeFor(img1), true);
+  if (img2) rec.rt2 = buildCubeFromPano(img2, cubeFaceSizeFor(img2), true);
+}
+
+/* ---------------- 天体对象同步 ---------------- */
+function makeStarMat() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uRad: { value: new THREE.Vector3(1, 1, 1) }, uCap: { value: 12000 } },
+    vertexShader: BODY_VS, fragmentShader: STAR_FS
+  });
+}
+function makeLitUniforms() {
+  return {
+    uTex: { value: null },
+    uNL: { value: 0 },
+    uLD: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 1)) },
+    uLC: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 0)) },
+    uEcl: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+    uLAux: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 1, 1)) }
+  };
+}
+function makePlanetMat() {
+  return new THREE.ShaderMaterial({
+    uniforms: Object.assign(makeLitUniforms(), {
+      uHasTex: { value: 0 }, uOp1: { value: 1 }, uTm1: { value: 0 },
+      uAmb: { value: AMBIENT_UNLIT }, uAlb: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+      uCap: { value: 12000 }
+    }),
+    vertexShader: BODY_VS, fragmentShader: PLANET_FS
+  });
+}
+function makeShellMat() {
+  return new THREE.ShaderMaterial({
+    uniforms: Object.assign(makeLitUniforms(), {
+      uOp2: { value: 1 }, uTm2: { value: 0 }, uAmb: { value: AMBIENT_UNLIT },
+      uCap: { value: 12000 }
+    }),
+    vertexShader: BODY_VS, fragmentShader: SHELL_FS,
+    transparent: true, depthWrite: false
+  });
+}
+function syncBodies(n) {
+  while (bodies.length > n) {
+    const rec = bodies.pop();
+    scene.remove(rec.def); scene.remove(rec.sprite);
+    if (rec.rt1) rec.rt1.dispose();
+    if (rec.rt2) rec.rt2.dispose();
+    rec.starMat.dispose(); rec.planetMat.dispose(); rec.shellMat.dispose();
+    rec.sprite.material.dispose();
+  }
+  while (bodies.length < n) {
+    const starMat = makeStarMat(), planetMat = makePlanetMat(), shellMat = makeShellMat();
+    const mesh = new THREE.Mesh(sphereGeo, starMat);
+    const shell = new THREE.Mesh(sphereGeo, shellMat);
+    const spin = new THREE.Group(); spin.add(mesh); spin.add(shell);
+    const def = new THREE.Group(); def.add(spin);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: gaussTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    sprite.frustumCulled = false;
+    scene.add(def); scene.add(sprite);
+    bodies.push({ mesh, shell, spin, def, sprite, starMat, planetMat, shellMat, rt1: null, rt2: null });
+  }
+}
+
+/* ---------------- 点源高斯精灵纹理（HDR 颜色由 material.color 携带） ---------------- */
+function makeGaussianTex() {
+  const S = 128, half = S / 2, sigma = half / 3.2;
+  const data = new Uint8Array(S * S * 4);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (x + 0.5 - half) / sigma, dy = (y + 0.5 - half) / sigma;
+    const r2 = dx * dx + dy * dy, r = Math.sqrt(r2);
+    let v = Math.exp(-r2 / 2);
+    const t = Math.min(Math.max((r - 2.2) / 0.9, 0), 1);   // 圆形支撑窗：1−smoothstep(2.2σ,3.1σ,r)
+    v *= 1 - t * t * (3 - 2 * t);
+    const o = (y * S + x) * 4, q = Math.round(v * 255);
+    data[o] = q; data[o + 1] = q; data[o + 2] = q; data[o + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+  t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
+/* ---------------- 轨迹 ---------------- */
+function initTrails() {
+  const mkGeo = () => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 4096), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(4 * 4096), 4).setUsage(THREE.DynamicDrawUsage));
+    g.setDrawRange(0, 0);
+    return g;
+  };
+  lineGeo = mkGeo();
+  lineObj = new THREE.LineSegments(lineGeo, new THREE.ShaderMaterial({
+    vertexShader: TRAIL_VS, fragmentShader: TRAIL_FS, transparent: true, depthWrite: false
+  }));
+  lineObj.frustumCulled = false;
+  ptsGeo = mkGeo();
+  ptsMat = new THREE.ShaderMaterial({
+    vertexShader: TRAIL_VS_PTS, fragmentShader: TRAIL_FS, transparent: true, depthWrite: false,
+    uniforms: { uSz: { value: 1.5 } }
+  });
+  ptsObj = new THREE.Points(ptsGeo, ptsMat);
+  ptsObj.frustumCulled = false;
+  scene.add(lineObj); scene.add(ptsObj);
+}
+function uploadTrail(geo, arr, stride) {
+  const vcount = arr ? (arr.length / stride) : 0;
+  if (vcount === 0) { geo.setDrawRange(0, 0); return; }
+  let pos = geo.attributes.position, col = geo.attributes.aColor;
+  if (pos.array.length < vcount * 3) {
+    const cap = vcount * 3 * 2;
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap), 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(cap * 4 / 3), 4).setUsage(THREE.DynamicDrawUsage));
+    pos = geo.attributes.position; col = geo.attributes.aColor;
+  }
+  const P = pos.array, C = col.array;
+  for (let i = 0, j = 0, k = 0; i < arr.length; i += stride, j += 3, k += 4) {
+    P[j] = arr[i]; P[j + 1] = arr[i + 1]; P[j + 2] = arr[i + 2];
+    C[k] = arr[i + 3]; C[k + 1] = arr[i + 4]; C[k + 2] = arr[i + 5]; C[k + 3] = arr[i + 6];
+  }
+  pos.needsUpdate = true; col.needsUpdate = true;
+  geo.setDrawRange(0, vcount);
+}
+function updateTrails(fr, trailMode, resFactor) {
+  ptsMat.uniforms.uSz.value = Math.max(1, 1.5 * resFactor);
+  const showLine = trailMode === 'line' && fr.trailLine && fr.trailLine.length >= 14;
+  const showDot = trailMode === 'dot' && fr.trailDot && fr.trailDot.length >= 7;
+  lineObj.visible = !!showLine;
+  ptsObj.visible = !!showDot;
+  if (showLine) uploadTrail(lineGeo, fr.trailLine, 7); else lineGeo.setDrawRange(0, 0);
+  if (showDot) uploadTrail(ptsGeo, fr.trailDot, 7); else ptsGeo.setDrawRange(0, 0);
+}
+
+/* ---------------- 相机（视行基 → 四元数；相机系渲染保精度） ----------------
+ * rows = [right, down, back]（与 currentViewMatrix 行基一致）；
+ * 相机本地轴 = [right, −down, back]。透视：相机置于视点（env.eye = 锚点+back·D，
+ * 全部对象按 float64 相机系坐标上传，世界系 1e13 m 下仍亚像素）；正交：相机
+ * 置于 back·3·span 后方，锚点系坐标，深度范围覆盖 ±span。 */
+function updateCamera(env) {
+  const rows = env.rows;
+  _m4.set(
+    rows[0][0], -rows[1][0], rows[2][0], 0,
+    rows[0][1], -rows[1][1], rows[2][1], 0,
+    rows[0][2], -rows[1][2], rows[2][2], 0,
+    0, 0, 0, 1);
+  _q1.setFromRotationMatrix(_m4);
+  const back = rows[2];
+  if (env.projMode === 'persp') {
+    const D = env.D;
+    cameraP.position.set(0, 0, 0);
+    cameraP.quaternion.copy(_q1);
+    cameraP.fov = fovDeg;
+    cameraP.aspect = env.viewW / env.viewH;
+    cameraP.near = Math.max(1e-9, 0.02 * D);
+    cameraP.far = Math.max(cameraP.near * 100, D * 1e7);
+    cameraP.updateProjectionMatrix();
+    activeCam = cameraP;
+  } else {
+    const halfW = 0.5 * env.viewW / env.scale, halfH = 0.5 * env.viewH / env.scale;
+    const span2 = Math.max(1000, 2 * halfW, 2 * halfH, env.orthoSpan || 0);
+    cameraO.position.set(back[0] * span2 * 3, back[1] * span2 * 3, back[2] * span2 * 3);
+    cameraO.quaternion.copy(_q1);
+    cameraO.left = -halfW; cameraO.right = halfW;
+    cameraO.top = halfH; cameraO.bottom = -halfH;
+    cameraO.near = span2 * 1.5; cameraO.far = span2 * 4.5;
+    cameraO.updateProjectionMatrix();
+    activeCam = cameraO;
+  }
+  renderPass.camera = activeCam;
+}
+
+/* ---------------- 每帧渲染 ---------------- */
+function copyLights(U, b) {
+  const nl = Math.min(8, (b.lights || []).length);
+  U.uNL.value = nl;
+  for (let k = 0; k < 8; k++) {
+    const L = k < nl ? b.lights[k] : null;
+    if (L) { U.uLD.value[k].set(L.d[0], L.d[1], L.d[2]); U.uLC.value[k].set(L.c[0], L.c[1], L.c[2]); }
+    else { U.uLD.value[k].set(0, 0, 1); U.uLC.value[k].set(0, 0, 0); }
+    const E = (b.ecl && k < nl) ? b.ecl[k] : null;
+    if (E) { U.uEcl.value[k].set(E.p[0], E.p[1], E.p[2], E.r); U.uLAux.value[k].set(E.t0, E.srcR, E.dsrc); }
+    else { U.uEcl.value[k].set(0, 0, 0, 0); U.uLAux.value[k].set(0, 1, 1); }
+  }
+}
+let _frameId = 0;
+function renderFrame(fr, env) {
+  const frameId = ++_frameId;
+  updateCamera(env);
+  scene.backgroundIntensity = (env.useSky && skyReady) ? env.skyNorm : 1;
+  updateTrails(fr, env.trailMode, env.resFactor);
+  const eye = env.eye;
+  const fCss = 0.5 * env.viewH / Math.tan(fovDeg * Math.PI / 360);
+  const amb = env.starLit ? AMBIENT_LIT : AMBIENT_UNLIT;
+  for (const b of fr.bodies) {
+    const rec = bodies[b.i];
+    if (!rec) continue;
+    rec._f = frameId;                      // 本帧已处理标记（帧外对象统一隐藏）
+    const relX = b.wx - eye[0], relY = b.wy - eye[1], relZ = b.wz - eye[2];
+    const w = (env.projMode === 'persp' && b.mag > 0) ? env.D / b.mag : 0;
+    /* 潮汐椭化：形变组 X 轴对齐伴星方向（世界系），scale = (1+e, 1−e/2, 1−e/2) */
+    if (b.tideDir && b.tideE > 1e-6) {
+      _v1.set(b.tideDir[0], b.tideDir[1], b.tideDir[2]).normalize();
+      rec.def.quaternion.setFromUnitVectors(X_AXIS, _v1);
+      rec.def.scale.set(1 + b.tideE, 1 - b.tideE / 2, 1 - b.tideE / 2);
+    } else { rec.def.quaternion.set(0, 0, 0, 1); rec.def.scale.set(1, 1, 1); }
+    rec.def.position.set(relX, relY, relZ);
+    /* 自转：Rx(tilt)·Rz(−ang)；自转扁化沿本地 z（自转轴）非均匀缩放 */
+    _q1.setFromAxisAngle(Z_AXIS, -b.spinAng);
+    _q2.setFromAxisAngle(X_AXIS, b.spinTilt || 0);
+    rec.spin.quaternion.copy(_q2).multiply(_q1);
+    rec.spin.scale.set(1, 1, 1 - Math.min(0.9, Math.max(0, b.defF || 0)));
+    /* 圆面网格（真实尺寸 or 图标尺寸） */
+    let radWorld = 0;
+    if (b.phys) radWorld = b.radM;
+    else if (env.projMode === 'persp') radWorld = b.rCss * w / fCss;
+    else radWorld = b.rCss / env.scale;
+    const mesh = rec.mesh;
+    mesh.visible = (b.mode === 1 || b.mode === 2) && radWorld > 0;
+    const uCapVal = Math.min(RADIANCE_CAP, BLOOM_WHITE_K / Math.max(env.exposure, 1e-6));
+    if (mesh.visible) {
+      mesh.scale.setScalar(radWorld);
+      if (b.mode === 2) {
+        mesh.material = rec.starMat;
+        const pk = capRadiance(b.peak);
+        const km = uCapVal / Math.max(pk[0], pk[1], pk[2], 1e-9);
+        rec.starMat.uniforms.uRad.value.set(pk[0] * Math.min(1, km), pk[1] * Math.min(1, km), pk[2] * Math.min(1, km));
+        rec.starMat.uniforms.uCap.value = uCapVal;
+      } else {
+        mesh.material = rec.planetMat;
+        const U = rec.planetMat.uniforms;
+        U.uAlb.value.set(b.peak[0], b.peak[1], b.peak[2]);
+        U.uAmb.value = amb;
+        U.uHasTex.value = rec.rt1 ? 1 : 0;
+        U.uTex.value = rec.rt1 ? rec.rt1.texture : null;
+        U.uOp1.value = b.texOp1 !== undefined ? b.texOp1 : 1;
+        U.uTm1.value = b.texMode1 ? 1 : 0;
+        U.uCap.value = uCapVal;
+        copyLights(U, b);
+      }
+    }
+    /* 云层壳层：组内补偿 +（1−CLOUD_DRIFT)·ang → 总自转 = −CLOUD_DRIFT·ang */
+    const shell = rec.shell;
+    shell.visible = mesh.visible && b.mode === 1 && !!rec.rt2 && (b.texOp2 === undefined || b.texOp2 > 0) && b.rCss >= 3;
+    if (shell.visible) {
+      shell.scale.setScalar(radWorld * CLOUD_SHELL);
+      shell.quaternion.setFromAxisAngle(Z_AXIS, (1 - CLOUD_DRIFT) * b.spinAng);
+      const U = rec.shellMat.uniforms;
+      U.uTex.value = rec.rt2.texture;
+      U.uOp2.value = b.texOp2 !== undefined ? b.texOp2 : 1;
+      U.uTm2.value = b.texMode2 ? 1 : 0;
+      U.uAmb.value = amb;
+      U.uCap.value = uCapVal;
+      copyLights(U, b);
+    }
+    /* 点源精灵（亚像素/交叉渐变）：HDR 加性，缩小的行星同样进入 bloom 辉光 */
+    const sp = rec.sprite;
+    const pk = capRadiance(b.mode === 0 ? b.peak : (b.psfPeak || [0, 0, 0]));
+    const pkMax = Math.max(pk[0], pk[1], pk[2]);
+    sp.visible = pkMax > 1e-6;
+    if (sp.visible) {
+      const ks = Math.min(1, uCapVal / pkMax);
+      sp.material.color.setRGB(pk[0] * ks, pk[1] * ks, pk[2] * ks);
+      const sigCss = (b.aux || 1.1) / env.resFactor;
+      const sw = env.projMode === 'persp' ? 2 * 3.2 * sigCss * w / fCss : 2 * 3.2 * sigCss / env.scale;
+      sp.scale.set(sw, sw, 1);
+      sp.position.set(relX, relY, relZ);
+    }
+  }
+  /* 视锥外/投影失效天体：隐藏网格与精灵（否则残留上一帧状态 ——
+   * 陈旧 HDR 精灵会以旧尺寸/旧颜色滞留屏幕，v17 调试中确认的方形亮斑根因） */
+  for (let i = 0; i < bodies.length; i++) {
+    const rec = bodies[i];
+    const fresh = rec._f === frameId;
+    rec.def.visible = fresh;
+    if (!fresh) rec.sprite.visible = false;
+  }
+  /* 曝光 + 泛光：阈值 = 1/曝光（等价 v16 的「曝光后阈值 1.0」语义） */
+  renderer.toneMappingExposure = env.exposure;
+  bloomPass.enabled = !!env.bloomOn;
+  if (env.bloomOn) bloomPass.threshold = Math.min(1e15, 1 / Math.max(env.exposure, 1e-12));
+  composer.render();
+}
+
+/* ---------------- 初始化 / 尺寸 ---------------- */
+function init(canvasId, fov) {
+  try {
+    const cv = document.getElementById(canvasId);
+    if (!cv) return false;
+    fovDeg = fov || 66;
+    renderer = new THREE.WebGLRenderer({
+      canvas: cv, antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance'
+    });
+    if (!renderer.getContext()) return false;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.6;
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0.0026, 0.0026, 0.0024);
+    cameraP = new THREE.PerspectiveCamera(fovDeg, 1, 0.1, 1e15);
+    cameraO = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1e15);
+    const rt = new THREE.WebGLRenderTarget(8, 8, {
+      type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 ? 4 : 0
+    });
+    composer = new EffectComposer(renderer, rt);
+    renderPass = new RenderPass(scene, cameraP);
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.25, 0.85, 1.0);
+    outputPass = new OutputPass();
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+    composer.addPass(outputPass);
+    gaussTex = makeGaussianTex();
+    sphereGeo = new THREE.SphereGeometry(1, 48, 28);
+    initTrails();
+    return true;
+  } catch (e) { console.error('three.js 渲染层初始化失败:', e); return false; }
+}
+function setSize(w, h, rf) {
+  if (!renderer) return;
+  renderer.setPixelRatio(rf);
+  renderer.setSize(w, h, false);
+  composer.setPixelRatio(rf);
+  composer.setSize(w, h);
+}
+
+window.__TJS__ = {
+  init, setSize, renderFrame, syncBodies,
+  bodyCount: () => bodies.length,
+  setSkyPano, setBodyTextures,
+  bloom: (k, v) => { if (k === 'strength') bloomPass.strength = v; else if (k === 'radius') bloomPass.radius = v; else if (k === 'threshold') bloomPass.threshold = v; else if (k === 'on') bloomPass.enabled = !!v; else return { strength: bloomPass.strength, radius: bloomPass.radius, threshold: bloomPass.threshold, resolution: bloomPass.resolution ? [bloomPass.resolution.x, bloomPass.resolution.y] : null, enabled: bloomPass.enabled }; },
+  info: () => ({ w: renderer.domElement.width, h: renderer.domElement.height, dpr: renderer.getPixelRatio(), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, rtSize: composer.renderTarget1.width + 'x' + composer.renderTarget1.height, bloomRes: bloomPass.resolution.x + 'x' + bloomPass.resolution.y }),
+  dbgDirect: (v) => { if (v) { activeCam.updateMatrixWorld(); renderer.render(scene, activeCam); } else composer.render(); },
+  dbgVis: (kind, v) => { for (const r of bodies) { if (kind === 'mesh') r.mesh.visible = !!v; else if (kind === 'sprite') r.sprite.visible = !!v; else if (kind === 'shell') r.shell.visible = !!v; } },
+  dbgInfo: (i) => { const r = bodies[i]; if (!r) return null; const wp = new THREE.Vector3(); r.def.getWorldPosition(wp); const s = new THREE.Vector3(); r.def.getWorldScale(s); return { defPos: [wp.x, wp.y, wp.z], defScale: [s.x, s.y, s.z], spinScale: [r.spin.scale.x, r.spin.scale.y, r.spin.scale.z], meshScale: r.mesh.scale.x, meshVis: r.mesh.visible, sprVis: r.sprite.visible, sprScale: r.sprite.scale.x, sprPos: [r.sprite.position.x, r.sprite.position.y, r.sprite.position.z] }; },
+  bloomDbg: () => ({ res: [bloomPass.resolution.x, bloomPass.resolution.y], mips: bloomPass.renderTargetsHorizontal.map(t => t.width + 'x' + t.height), bright: bloomPass.renderTargetBright.width + 'x' + bloomPass.renderTargetBright.height, rt1: composer.renderTarget1.width + 'x' + composer.renderTarget1.height, rt1samples: composer.renderTarget1.samples, strength: bloomPass.strength, radius: bloomPass.radius, threshold: bloomPass.threshold, enabled: bloomPass.enabled }),
+  spriteDbg: (i) => { const r = bodies[i]; if (!r) return null; const m = r.sprite.material; return { visible: r.sprite.visible, scale: [r.sprite.scale.x, r.sprite.scale.y], pos: [r.sprite.position.x, r.sprite.position.y, r.sprite.position.z], color: [m.color.r, m.color.g, m.color.b], map: m.map ? [m.map.image.width, m.map.image.height, m.map.image.data ? m.map.image.data.length : null] : null, texId: m.map ? m.map.id : null, meshVisible: r.mesh.visible, meshScale: r.mesh.scale.x }; }
+};
+if (typeof window.__onTJSReady === 'function') window.__onTJSReady();
+
 </script>
 </body>
 </html>
