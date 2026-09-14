@@ -396,7 +396,7 @@ body.free-touch .pad{display:grid}
     <div class="kicker">About</div>
     <h2>关于与自检</h2>
     <div class="hint" style="margin-top:2px">
-      <span class="em">物理模型</span> 牛顿引力 + 后牛顿 GR（1PN/1.5PN 自旋 Kidder/2PN/2.5PN，3.5PN 实验性）+ 潮汐（保守潮 + 时滞耗散 + 自转演化）；速度相关力以逐阶段隐式中点积分；积分器 Yoshida 4 阶辛 / IAS15 15 阶 Gauss-Radau（Rein-Spiegel 自适应）；Kahan 补偿求和；自适应步长多判据联合控制。<br><span class="em">黑洞渲染 v22</span> 逐像素视线重建 + Python 光线追踪对照（Schwarzschild 95~99%、Kerr 96% NCC）；影子/偏折同源 b=D·sinθ/√(1−rs/D)；Kerr 位移场 LUT 内嵌 309KB（a*×incl 网格）+ Bardeen 解析影界。<br>
+      <span class="em">物理模型</span> 牛顿引力 + 后牛顿 GR（1PN/1.5PN 自旋 Kidder/2PN/2.5PN，3.5PN 实验性）+ 潮汐（保守潮 + 时滞耗散 + 自转演化）；速度相关力以逐阶段隐式中点积分；积分器 Yoshida 4 阶辛 / IAS15 15 阶 Gauss-Radau（Rein-Spiegel 自适应）；Kahan 补偿求和；自适应步长多判据联合控制。<br><span class="em">黑洞渲染 v23</span> 逐像素视线重建 + Python 光线追踪对照（Synge 1966 逃逸锥 / James+2015 CQG 32 065001 近距相机 / Bardeen 1973 临界曲线口径）；影子/偏折同源 b=D·sinθ/√(1−rs/D)；成像距离下限 4.2rs（近距不再吞没全屏，天空环恒可见）；天空盒显式 LOD0 + ρ 平滑上限 2.5π（消除 mip 黑环/散点）+ 全球透镜无接缝 + 影缘 1.5px 软边；Kerr 位移场 LUT 内嵌（a*×incl 网格）+ Bardeen 解析影界。<br>
       <span class="em">渲染</span> three.js WebGL：真实网格天体、多星朗伯照明与食阴影、临边昏暗、HDR 自动曝光 + 泛光、全景天空盒；恒星亮度按 质量→半径→温度→光度 物理链计算；加载失败回退 2D。<br>
       <span class="em">视角 / 参考系</span> 视角跟随、参考系、轨迹参考系三者分离；轨迹末端与天体当前位置严格对齐。<br>
       <span class="em">贴图</span> 等距柱状贴图按自转轴约定映射（图顶 = 北极），全部视图非镜像；双层贴图各有不透明度与「暗部透明」云图模式。<br>
@@ -8427,7 +8427,7 @@ uniform mat3 uSkyRot;
 uniform float uSkyNorm;
 uniform vec2 uRes;
 uniform int uLN;
-uniform vec3 uLBH[8];       /* 黑洞相机空间位置（z 前向），米 */
+uniform vec3 uLBH[8];       /* 黑洞视点相对位置（世界系方向，相机=原点），米 */
 uniform vec4 uLPar[8];      /* x: rs(m), y: rg(m), z: aStar, w: 有效(1/0) */
 uniform vec3 uLEu[8];       /* Kerr 像平面基 ê_u（相机空间） */
 uniform vec3 uLEv[8];       /* ê_v（自转轴屏投影方向） */
@@ -8452,12 +8452,26 @@ vec2 unpack12(vec4 c) {   /* 12bit 半字节：R=(u_hi<<4)|v_hi, G=u_lo, B=v_lo 
   float v = (floor(mod(Rd, 16.0))*256.0 + floor(c.b*255.0 + 0.5));
   return vec2(u, v)/4095.0;
 }
+/* v23：ρ 平滑上限（soft-min，K=8）。b→b_crit 时总偏转 ρ→∞（光子缠绕），
+ * 任何有限 LUT 分辨率都在影子边缘最后 1~3px 内方向发散 → 散点伪影；
+ * 上限 2.5π 后映射方向饱和成平滑拉伸环（初阶像 ρ<6 rad 逐位不变，
+ * 高阶光子环按口径允许不解析）。soft-min 在 ρ≪CAP 时误差 exp 量级为零，
+ * ρ≫CAP 时收敛到 CAP，C¹ 连续。 */
+float rhoSoftCap(float r) {
+  const float CAP = 7.853982;   /* 2.5π */
+  const float K = 8.0;
+  return r - log(1.0 + exp(K*(r - CAP)))/K;
+}
 float rhoOfB(float bN) {  /* bN 单位 r_g（=M）→ 总偏转角（弧度），连续含缠绕 */
   float x = bN/5.196152423;
-  if (x >= 11.547) return 4.0/bN + 11.780972/(bN*bN);
-  float s = clamp((x - 1.0005)/10.5465, 0.0, 1.0);
-  float t = log(1.0 + s*402.428)/6.0;
-  return unpack12(texture2D(uRho, vec2(t, 0.5), 0.0)).x*12.566371;
+  float r;
+  if (x >= 11.547) r = 4.0/bN + 11.780972/(bN*bN);
+  else {
+    float s = clamp((x - 1.0005)/10.5465, 0.0, 1.0);
+    float t = log(1.0 + s*402.428)/6.0;
+    r = unpack12(texture2D(uRho, vec2(t, 0.5), 0.0)).x*12.566371;
+  }
+  return rhoSoftCap(r);
 }
 vec3 rotToward(vec3 dir, vec3 wH, float rho) {
   vec3 ax = cross(dir, wH);
@@ -8472,22 +8486,40 @@ vec3 projectPx(vec3 d) {
   vec2 ndc = vec2(dot(d, uCamR)/(zf*uTanH*uAspect), dot(d, uCamU)/(zf*uTanH));
   return vec3((ndc.x*0.5 + 0.5)*uRes.x, (ndc.y*0.5 + 0.5)*uRes.y, dot(d, uCamF));
 }
+/* v23 LENS_STEP：
+ * ① 成像距离下限 Dme = max(D, 4.2rs)（静态观测者捕获锥随 D→rs 吞没全屏，
+ *    Synge 1966 逃逸锥物理 —— 「放大到一点突然全屏黑」的根因；钳制后最近
+ *    保持 4.2rs 视角：影 ~35°，天空环可见，且天然消除 D≤rs 负数开方）；
+ * ② 全球透镜：删 cosT>0.02 硬截止（近距偏轴黑洞在截止线处方向跳变接缝），
+ *    背侧（cosT≤0）冲击参数取半线最近距 b=Dm（cosT=0 处与前侧 sinT→1 的
+ *    b=Dm·1 连续，C¹）；背侧只偏转不捕获（背向视线不穿过洞）；
+ * ③ 影子边缘 1.5px 解析软边 capT（dbN/dpx = Dme·cosT/(√f·rg·ppx)，
+ *    ppx = 0.5·uRes.y/uTanH），消除硬布尔捕获边锯齿；
+ * ④ Kerr LUT 仍限前侧（位移场按前侧几何预计算），背侧解析弱场。 */
 #define LENS_STEP(K) { \
   if (!captured && !occluded && K < uLN && uLPar[K].w > 0.5) { \
     float Dm = length(uLBH[K]); \
+    float rsK = uLPar[K].x; \
+    float rgK = uLPar[K].y; \
+    float Dme = max(Dm, 4.2*rsK); \
     vec3 wH = uLBH[K]/max(Dm, 1e-9); \
     float cosT = dot(dir, wH); \
-    if (cosT > 0.02) { \
-      float sinT = sqrt(max(1.0 - cosT*cosT, 0.0)); \
-      float bN = Dm*sinT/max(sqrt(max(1.0 - uLPar[K].x/Dm, 0.02)), 1e-3)/uLPar[K].y; \
-      vec3 tv = dir - cosT*wH; \
-      tv /= max(length(tv), 1e-9); \
-      vec2 uv = vec2(dot(tv, uLEu[K]), dot(tv, uLEv[K]))*bN; \
+    float sinT = sqrt(max(1.0 - cosT*cosT, 0.0)); \
+    float fK = sqrt(max(1.0 - rsK/Dme, 1e-4)); \
+    float bN = cosT > 0.0 ? Dme*sinT/max(fK, 1e-3)/rgK : Dme/rgK; \
+    float ppx = max(0.5*uRes.y/max(uTanH, 1e-4), 1.0); \
+    float edgeB = 1.5*Dme*abs(cosT)/(max(fK, 1e-3)*rgK*ppx) + 1e-4; \
+    vec3 tv = dir - cosT*wH; \
+    tv /= max(length(tv), 1e-9); \
+    vec2 uv = vec2(dot(tv, uLEu[K]), dot(tv, uLEv[K]))*bN; \
+    if (cosT > 0.0) { \
       if (uLPar[K].z > 0.03) { \
         float psi = atan(uv.y, uv.x); \
         float Rsh = unpack12(texture2D(uBar[K], vec2(clamp(abs(psi)*0.31830989, 0.0, 1.0), 0.5), 0.0)).x*10.0; \
-        if (length(uv) < Rsh) { captured = true; } \
+        float rrK = length(uv); \
+        if (rrK < Rsh - edgeB) { captured = true; } \
         else { \
+          capT = min(capT, smoothstep(Rsh - edgeB, Rsh + edgeB, rrK)); \
           vec3 sd; \
           if (max(abs(uv.x), abs(uv.y)) < 24.5) { \
             vec2 uv2 = unpack12(texture2D(uLUT[K], clamp(uv*0.02 + 0.5, vec2(0.001), vec2(0.999)), 0.0))*50.0 - 25.0; \
@@ -8498,9 +8530,11 @@ vec3 projectPx(vec3 d) {
           dir = sd; \
         } \
       } else { \
-        if (bN < 5.1961524) { captured = true; } \
-        else { dir = rotToward(dir, wH, rhoOfB(bN)); } \
+        if (bN < 5.1961524 - edgeB) { captured = true; } \
+        else { capT = min(capT, smoothstep(5.1961524 - edgeB, 5.1961524 + edgeB, bN)); dir = rotToward(dir, wH, rhoOfB(bN)); } \
       } \
+    } else { \
+      dir = rotToward(dir, wH, rhoOfB(bN)); \
     } \
   } \
 }
@@ -8515,6 +8549,7 @@ void main() {
   vec3 dir = normalize(uCamF + uCamR*((frag.x/uRes.x*2.0 - 1.0)*uTanH*uAspect)
                                 + uCamU*((frag.y/uRes.y*2.0 - 1.0)*uTanH));
   bool captured = false;
+  float capT = 1.0;
   LENS_STEP(0)
   LENS_STEP(1)
   LENS_STEP(2)
@@ -8534,11 +8569,16 @@ void main() {
     if (inF) {
       col = texture2D(tDiffuse, clamp(sp3.xy/uRes, vec2(0.0005), vec2(0.9995))).rgb;
     } else if (uSkyReady) {
-      col = textureCube(uSky, uSkyRot*dir).rgb*uSkyNorm;
+      /* v23：显式 LOD0（textureCubeLodEXT→textureLod，three r170 WebGL2 兼容宏）。
+       * 全屏扭曲下相邻像素采样方向摆动可达数十度，隐式导数会把立方体贴图
+       * 采样打到粗 mip —— 光子环外圈「灰泥带 + mip 边界黑环 + 散点」，
+       * 强度随设备 anisotropy/DPR 变化（用户报告的设备差异伪影根源）。 */
+      col = textureCubeLodEXT(uSky, uSkyRot*dir, 0.0).rgb*uSkyNorm;
     } else {
       col = texture2D(tDiffuse, clamp(vUv, vec2(0.0005), vec2(0.9995))).rgb;
     }
   }
+  col *= capT;   /* v23：影子边缘 1.5px 软边（captured 分支 col=0 不受影响） */
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -8864,9 +8904,14 @@ void main() {
   vec3 cGreen = vec3(0.36, 0.86, 0.42);
   vec3 cCyan  = vec3(0.30, 0.80, 0.96);
   vec3 cBlue  = vec3(0.28, 0.50, 1.00);
-  float wR = 1.0 - smoothstep(uDRG - 0.12*(uDRG - uDRV), uDRG + 0.58*(uDMG - uDRG), r);
-  float wB = smoothstep(uDMG - 0.58*(uDMG - uDRG), uDMG + 0.12*(uDEM - uDMG), r);
-  float wG = (1.0 - smoothstep(uDRV + 0.28*(uDRG - uDRV), uDRG, r))
+  /* v23 修复：原 wG 首因子 1.0−smoothstep(…,uDRG,r) 在 r>dRG 的整个名义绿区
+   * 恒为 0 —— 绿色权重全程为零，红蓝延伸归一化后互稀释成灰调（用户：
+   * 「渐变太大，绿色都没有了」）。改为 smoothstep 淡入并在绿区保持 1；
+   * 红/蓝延伸 0.58→0.40 退回，中带 [dRG+40%, dMG−40%] 纯绿：
+   * 内缘 红+绿→黄、外缘 蓝+绿→青（加色混色设计不变），全程 C¹。 */
+  float wR = 1.0 - smoothstep(uDRG - 0.12*(uDRG - uDRV), uDRG + 0.40*(uDMG - uDRG), r);
+  float wB = smoothstep(uDMG - 0.40*(uDMG - uDRG), uDMG + 0.12*(uDEM - uDMG), r);
+  float wG = smoothstep(uDRV + 0.28*(uDRG - uDRV), uDRG, r)
            * (1.0 - smoothstep(uDMG, uDMG + 0.62*(uDEM - uDMG), r));
   float tHot = clamp((r - uDRV)/max(uDRG - uDRV, 1e-6), 0.0, 1.0);
   float tCld = clamp((r - uDMG)/max(uDEM - uDMG, 1e-6), 0.0, 1.0);
@@ -9283,12 +9328,19 @@ function renderFrame(fr, env) {
     }
     const _cs = new THREE.Vector3(), _ax = new THREE.Vector3(),
           _ev = new THREE.Vector3(), _eu = new THREE.Vector3(), _wH = new THREE.Vector3();
-    const camP = activeCam.position;
+    /* v22c 关键修复：uLBH 必须是「视点相对」坐标 —— 渲染场景中相机位于原点、
+     * 全部天体按 b.wx − env.eye 上传（float64 相对化，见 buildSceneFrame 注释），
+     * 透镜数据必须同系。v22 误用 activeCam.position（persp 恒为原点）做参考，
+     * 实际上传的是世界原点系 raw 坐标 → Dm ≡ |BH_世界| 与相机距离/朝向完全无关
+     * （实测：L/rs=200→2 截图逐像素不变、缩放无响应）；双星并合后黑洞回到
+     * 质心≈世界原点，Dm 掉到几 rs → 一块与视线无关的巨大捕获黑斑（「凑近全黑、
+     * 天空盒消失」的直接根因）。env.eye 与 fr.eye 同源（世界系视点），
+     * 与遮挡盘 b.mag、uLBH 正交模式同系。 */
+    const eyeW = env.eye;
     for (let k = 0; k < 8; k++) {
       if (k >= nL) { U.uLPar.value[k].w = 0; U.uLUT.value[k] = bhDummyTex; U.uBar.value[k] = bhDummyTex; continue; }
       const L = lensList[k];
-      /* v22 修正：全部世界空间（v 初版混用相机空间导致 cosT<0 整体跳过） */
-      U.uLBH.value[k].set(L.wx - camP.x, L.wy - camP.y, L.wz - camP.z);
+      U.uLBH.value[k].set(L.wx - eyeW[0], L.wy - eyeW[1], L.wz - eyeW[2]);
       U.uLPar.value[k].set(L.rsM, L.rgM, L.kerr ? L.aStar : 0, 1);
       _wH.copy(U.uLBH.value[k]).normalize();
       _ax.set(L.sax, L.say, L.saz);
@@ -9490,8 +9542,12 @@ function init(canvasId, fov) {
     lensPass = new GravLensPass();
     overlayScene = new THREE.Scene();
     composer.addPass(renderPass);
-    composer.addPass(lensPass);
+    /* v23：透镜移到 bloom 之后 —— bloom 大 mip 会把明亮环带/天空的辉光滑入
+     * 捕获区（实测 L=10 影心 0.22 灰 vs 关 bloom 0.02 黑，v22 因环带破碎
+     * 未暴露）；透镜全屏替换帧语义下其后置不改变扭曲前景（tDiffuse 已含
+     * bloom），仅捕获区恢复物理纯黑（与精确光线追踪参考一致）。 */
     composer.addPass(bloomPass);
+    composer.addPass(lensPass);
     composer.addPass(outputPass);
     initTrails();
     initOverlay();
@@ -9546,6 +9602,14 @@ function setSize(w, h, rf) {
 
 window.__TJS__ = {
   init, setSize, renderFrame, syncBodies,
+  lensDbg: () => ({ enabled: lensPass.enabled, n: lensPass.uniforms.uLN.value,
+    lbh: lensPass.uniforms.uLBH.value.slice(0, 2).map(v => v.toArray().map(x => +x.toPrecision(6))),
+    par: lensPass.uniforms.uLPar.value.slice(0, 2).map(v => [v.x, v.y, v.z, v.w]),
+    cam: { R: lensPass.uniforms.uCamR.value.toArray().map(x => +x.toFixed(3)),
+           U: lensPass.uniforms.uCamU.value.toArray().map(x => +x.toFixed(3)),
+           F: lensPass.uniforms.uCamF.value.toArray().map(x => +x.toFixed(3)),
+           tanH: lensPass.uniforms.uTanH.value, aspect: lensPass.uniforms.uAspect.value,
+           res: [lensPass.uniforms.uRes.value.x, lensPass.uniforms.uRes.value.y] } }),
   /* v19：天空方向对准（scene.backgroundRotation，仅影响背景立方体贴图采样方向）。
    * 输入约定：全景图银河盘面平行长边 → 默认 (0,0,0) 盘面贴世界水平面（XZ）。 */
   setSkyRot: (rx, ry, rz) => { if (scene) { scene.backgroundRotation.set(rx || 0, ry || 0, rz || 0); } },
