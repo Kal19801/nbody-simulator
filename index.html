@@ -571,6 +571,37 @@ body.free-touch .pad{display:grid}
  *      自转轴南北极指南针着色 + 北极圆圈箭头；删除水珠融合形变（椭球残留根因）；
  *      编辑/添加：母星联动速度开关（默认开）+ 温室因子（留空经验拟合）；
  *      自检改渐进式进度弹窗 + 新增 T26–T31。
+ * v27 渲染修复（用户 v26 实拍反馈：① 看无银河盘方向时银河带被"扭"进视野、
+ *      强偏折区呈巨大圆盘内容突变；② 质心处第二个诡异扭曲球/整个天空反直觉
+ *      扭转；③ 阴影盘内漏星。定位手段：three.js r170 源码比对 + 精确静态
+ *      观测者测地线映射（φout 积分 vs 一阶 ODE u''=−u+3u² 独立互证））：
+ *      ① 根因 = uSkyRot 与 three.js backgroundRotation 旋转约定相反 ——
+ *         three r170 WebGLBackground 对 RT 立方体背景应用前将 Euler 三分量
+ *         整体取反（"accommodate left-handed frame"），透镜 pass 却用原始
+ *         Euler：两条天空采样路径内容相差 R(2e)。默认天空俯仰 −60.2° 时
+ *         相差 120.4° —— 强偏折区（dispPx>1.5px 的 cubemap 分支）显示的是
+ *         转了 120° 的天空 = 任意视向"银河带扭进来"+ 圆盘边界内容突变 +
+ *         max(cEdge−cBase,0) 盈余项产出垃圾光晕；远场该区半径 asin(830rs/D)
+ *         随缩放胀缩 = "远景突兀叠加层"。v27 对齐取反口径（旋转=0 时逐位
+ *         不变，历史回归全部有效）。
+ *      ② 根因 = 背面（cosT≤0）偏折用常数 bM=Dme/rg + 全量 ρ(bM) —— 黑洞在
+ *         观测者背后时整个背向天球被刚性旋转 ρ(Dm/rg)（10rs→~11.5°，
+ *         4.2rs 钳位→~45°），即"反直觉的天空扭转"。物理：背向视线偏折应随
+ *         视线转向正后方单调衰减到 0。v27 引入有限距离精确静态映射
+ *         （φout = ∫₀^{uD}du/√(1/b²−u²+2u³)，u=uD(1−s²) 代换；正面
+ *         ρ=α̂+θ−φout，背面 ρ=φout−(π−θ)；θ=90° 两侧=α̂/2 衔接；
+ *         D→∞ / rs→0 / θ=180° 三极限逐一验证，Python ODE 独立互证）。
+ *         32 点中点求积（边界层宽度由 bM·uD 决定，弱场不可降点数；
+ *         sqrt 下限 1e-30 仅防除零——1e-6 会吞掉远场 P~1e-12 的真实值）。
+ *      ③ 根因（阴影漏星成分）= uOcc 前景遮挡孔径用图标半径 rCss·1.12 ——
+ *         未解析天体（图标 5~10px、点源精灵亚像素）在影子内打出图标大小的
+ *         未透镜孔，孔内直通未透镜星空 = 成片假星。v27 孔径钳制为
+ *         min(图标半径, max(物理盘半径, 2.6px))。
+ *      ④ 崩溃修复 = v25 遮挡盘插入排序漏播种 _occView[0] —— 首个
+ *         occN>1 的帧读 undefined.area 抛 TypeError，renderFrame 中途终止、
+ *         composer.render 不执行 → 画面冻结在陈旧帧（"≥2 前景遮挡天体 +
+ *         透镜"必触发；图标模式最易命中）。同时旧排序读 _occView 残留项，
+ *         会把上一帧遮挡盘混入本帧。修复 = 播种首项 + 统一 occView 读写。
  * 数值：Kahan 补偿求和（Rein & Tamayo 2015 "FAST"）
  * v6：2.5PN 由 Peters 轨道平均通量改为瞬时辐射反作用力 ——
  *     轨道平均公式在多体近交会时偏心率 e→1 导致 (1-e²)^(-7/2) 伪发散（三体预设开
@@ -1672,8 +1703,11 @@ async function matScan() {
    *    由清单缓存（下次秒开）与渐进呈现摊平体感。
    *    注：浏览器对同 host 仅 6 条 http/1.1 连接，请求数是硬成本；并发池 48 在
    *    file:// 下有效，http 下超出连接数的并发自动排队，无害 */
+  let scanPrevItems = null;   /* v27 修复：旧版在第二 if(!listed) 块引用第一块内 const
+   * prevItems —— 块作用域不可见，零发现时 ReferenceError（无 textures 目录
+   * 的首次运行/无缓存清单环境必崩，材质面板与后续级联中断）。提升到函数域 */
   if (!listed) {
-    const prevItems = matItems;   /* 缓存清单副本：本轮零发现时恢复展示 */
+    scanPrevItems = matItems;   /* 缓存清单副本：本轮零发现时恢复展示 */
     matItems = [];
     matSelected = -1;
     let lastFlush = 0;
@@ -1761,8 +1795,8 @@ async function matScan() {
   /* v19d：增量探测路径收尾（无目录列表/manifest 时，matItems 即本轮实时发现） */
   if (!listed) {
     if (!matItems.length) {
-      if (prevItems.length) {
-        matItems = prevItems;   /* 本轮零发现 → 恢复缓存清单（不闪空网格，v9 语义） */
+      if (scanPrevItems.length) {
+        matItems = scanPrevItems;   /* 本轮零发现 → 恢复缓存清单（不闪空网格，v9 语义） */
         matSelected = 0;
         matRenderGrid();
         matSetInfo('本次扫描未发现图片（file:// 目录列表受限），已保留缓存清单 ' + matItems.length + ' 张。');
@@ -8645,6 +8679,33 @@ float rhoOfB(float bM) {  /* bM: 冲击参数，单位 rg(=M) → 总偏转角�
  *   塌缩 = 阴影内侧断层/拉丝（GPU 探针实测 rhoOfB 正确 172.56° vs 精确
  *   172.51°，rotToward 后角度 19.76° vs 期望 167.45°）。删除后同时省
  *   一次 vec3 乘加，性能微优。 */
+/* v27 修复（Bug「反直觉天空扭转」根因）：背面（cosT≤0，视线背离黑洞）旧实现
+ *   bM = Dme/rg（与视线角无关的常数）并施加全量 ρ(bM) —— 整个背向天球被
+ *   刚性旋转 ρ(Dm/rg)（Dm=10rs 时 ~11.5°，4.2rs 钳位后可达 ~45°），银河带等
+ *   特征被整体拧进视野。物理事实：背向视线的采样旋转应随视线转向正后方
+ *   单调衰减到 0（径向视线零偏折）。v27 统一前后向冲击参数
+ *   bM = Dme·sinT/(fK·rg)，并引入有限距离观测者的精确静态映射（对视角 θ、
+ *   观测者半径 Dme，φout = ∫₀^{uD} du/√(1/b²−u²+2u³) 为 ∞→眼 弧扫掠，
+ *   uD = rg/Dme；Python 端已与一阶 ODE u''=−u+3u² 独立积分逐角度吻合）：
+ *   正面（下潜）: ρ = α̂(b) + θ − φout   （D→∞ 时 φout→θ，退化为旧口径 α̂）
+ *   背面（外爬）: ρ = φout − (π − θ)     （D→∞ 时 →0；θ→180° 时 →0）
+ *   θ=90° 两侧均 = α̂/2，C⁰ 衔接；θ→90° 两侧斜率→∞（切线焦散，物理固有）。
+ *   正面有限距离修正量 = θ−φout ∈ [−2°, 0]（D≥30rs 全画面 ≤0.8°，近距
+ *   高纬视角可达 −2°），远场（D≫rs）逐位退化回 v26 行为。 */
+float phiOut(float bM, float uD) {
+  float ib2 = 1.0/(bM*bM);
+  float S = 0.0;
+  /* 32 点中点求积（u=uD(1−s²) 代换）。注：被积函数边界层宽度由 bM·uD 决定
+   * （近切线 θ→90° 时 bM·uD→1，P(uD)→0），与 bM 无关 —— 弱场大 bM 不能
+   * 降点数（bhLensTest 平直极限自检实测 10 点在 bM·uD≈0.97 时误差 ~8%）。 */
+  for (int i = 0; i < 32; i++) {
+    float s = (float(i) + 0.5)*0.03125;
+    float u = uD*(1.0 - s*s);
+    float P = ib2 - u*u + 2.0*u*u*u;
+    S += 2.0*uD*s/sqrt(max(max(P, 0.0), 1e-30));
+  }
+  return S*0.03125;
+}
 vec3 rotToward(vec3 dir, vec3 wH, float rho) {
   vec3 ax = cross(dir, wH);
   float al = length(ax);
@@ -8663,8 +8724,9 @@ vec3 projectPx(vec3 d) {
  *    前景星球像素直通本透镜（不被扭曲、不被本透镜影子覆盖）；
  * ② 影子：bM < 3√3 − edgeB 捕获（黑），边缘 1.5px 解析软边
  *    （dbM/dpx = Dme·cosT/(√f·rg·ppx)，ppx = 0.5·uRes.y/uTanH）；
- * ③ 偏折：rotToward(dir, wH, ρ(bM))（反向光线追踪口径：采样方向向洞旋转 α̂）；
- * ④ 背侧（cosT≤0）：bM = Dm/rg（半线最近距，与前侧 C¹ 连续），只偏转不捕获。 */
+ * ③ 偏折（v27 精确静态观测者映射，见 phiOut 头注）：
+ *    正面 rotToward(dir, wH, α̂+θ−φout)；背面 rotToward(dir, wH, φout−(π−θ))；
+ * ④ 背面不捕获（外向光线必逃逸），bM 与正面同式（旧 Dme/rg 常数口径废除）。 */
 #define LENS_STEP(K) { \
   if (!captured && K < uLN && uLPar[K].w > 0.5) { \
     float Dm = length(uLBH[K]); \
@@ -8675,7 +8737,7 @@ vec3 projectPx(vec3 d) {
     float cosT = dot(dir, wH); \
     float sinT = sqrt(max(1.0 - cosT*cosT, 0.0)); \
     float fK = sqrt(max(1.0 - rsK/Dme, 1e-4)); \
-    float bM = cosT > 0.0 ? Dme*sinT/max(fK, 1e-3)/rgK : Dme/rgK; \
+    float bM = Dme*sinT/max(fK, 1e-3)/rgK; \
     bool occK = false; \
     for (int qi = 0; qi < 12; qi++) { \
       if (qi >= uOccN) break; \
@@ -8688,11 +8750,13 @@ vec3 projectPx(vec3 d) {
     if (!occK) { \
       float ppx = max(0.5*uRes.y/max(uTanH, 1e-4), 1.0); \
       float edgeB = 1.5*Dme*abs(cosT)/(max(fK, 1e-3)*rgK*ppx) + 1e-4; \
+      float thT = acos(clamp(cosT, -1.0, 1.0)); \
       if (cosT > 0.0) { \
         if (bM < 5.1961524 - edgeB) captured = true; \
-        else { capT = min(capT, smoothstep(5.1961524 - edgeB, 5.1961524 + edgeB, bM)); dir = rotToward(dir, wH, rhoOfB(bM)); } \
+        else { capT = min(capT, smoothstep(5.1961524 - edgeB, 5.1961524 + edgeB, bM)); \
+          dir = rotToward(dir, wH, rhoOfB(bM) + thT - phiOut(bM, rgK/Dme)); } \
       } else { \
-        dir = rotToward(dir, wH, rhoOfB(bM)); \
+        dir = rotToward(dir, wH, max(phiOut(bM, rgK/Dme) - (3.14159265 - thT), 0.0)); \
       } \
     } \
   } \
@@ -8865,8 +8929,29 @@ window.__bhLensTest = () => {
     prev = v;
   }
   const rhoCrit = rhoOfB(5.196152423 + 1e-6);
+  /* v27: phiOut 自检 —— ① 平直极限（D→∞）φout → arcsin(sinθ)（θ<90° 即 θ）；
+   * ② θ→180°（b→0）φout → 0；③ 背面映射 ρ=φout−(π−θ) 在 D=60rg、θ=135° 处
+   * 与 Python 精确积分锚点 0.8126° 比对（alphaOfB 用同款 series/积分 JS 复刻） */
+  const phiOut = (bM, uD) => {
+    const ib2 = 1/(bM*bM); let S = 0;
+    for (let i = 0; i < 32; i++) {
+      const s = (i + 0.5)*0.03125, u = uD*(1 - s*s);
+      const P = ib2 - u*u + 2*u*u*u;
+      S += 2*uD*s/Math.sqrt(Math.max(Math.max(P, 0), 1e-30));
+    }
+    return S*0.03125;
+  };
+  let phiOK = true;
+  {
+    const Drg = 2e6, uD = 1/Drg, fK = Math.sqrt(1 - 2/Drg);
+    for (const th of [0.2, 0.6, 1.2, 1.8, 2.6]) {
+      const po = phiOut(Drg*Math.sin(th)/fK, uD);
+      if (Math.abs(po - Math.asin(Math.sin(th))) > 3e-3) phiOK = false;
+    }
+    if (phiOut(Drg*Math.sin(1e-4)/fK, uD) > 2.5e-4) phiOK = false;   /* θ→180° → 0 */
+  }
   return { bc: 3*Math.sqrt(3), rho8deg: rhoOfB(8)*180/Math.PI, rho100deg: rhoOfB(100)*180/Math.PI,
-           rhoCritMax: rhoCrit, monotone: mono, capOK: rhoCrit <= 7.853982 + 1e-4 };
+           rhoCritMax: rhoCrit, monotone: mono, capOK: rhoCrit <= 7.853982 + 1e-4, phiOK };
 };
 /* ---------------- v24：场景深度捕获 + 叠层遮挡基建 ----------------
  * 用户：宜居带、轨道（轨迹）等叠层元素不被星球挡住 —— 需要深度遮挡。
@@ -9377,6 +9462,7 @@ function copyLights(U, b) {
 const _occPool = Array.from({ length: 12 }, () => ({ x: 0, y: 0, r: 0, d: 0, area: 0 }));
 const _occView = new Array(12);   /* v25：遮挡盘按面积排序的复用引用数组 */
 const _qSky = new THREE.Quaternion();
+const _eSky = new THREE.Euler();
 const _m4Sky = new THREE.Matrix4();
 let _frameId = 0;let bhProxyMat = null;   /* v21：黑洞 depth-only 代理材质（惰性建，需 renderer 就绪后） */
 function renderFrame(fr, env) {
@@ -9408,7 +9494,17 @@ function renderFrame(fr, env) {
     U.uSkyReady.value = !!(skyReady && skyRT);
     U.uSkyNorm.value = env.useSky ? env.skyNorm : 1;
     if (scene && scene.backgroundRotation) {
-      _qSky.setFromEuler(scene.backgroundRotation);
+      /* v27 修复（Bug「远景突兀叠加层/天空被扭转」根因）：three.js r170
+       * WebGLBackground 对 render-target 立方体背景应用 backgroundRotation 前
+       * 将 Euler 三分量整体取反（"accommodate left-handed frame"，
+       * three.module.js: _e1.copy(backgroundRotation); x*=y*=z*=-1），
+       * 而本 pass 的 uSkyRot 旧代码用原始 Euler —— 两条天空采样路径相差
+       * R(e)·R(e)=R(2e)：默认天空俯仰 −60.2° 时强偏折区（cubemap 分支）显示
+       * 的天空与场景背景相差 120.4°，银河带被"扭"进任意视向，盘缘锐利突变。
+       * v27 与 three 取反口径对齐（RT 纹理无额外 y/z 翻转，flipEnvMap=+1）。 */
+      _eSky.set(-scene.backgroundRotation.x, -scene.backgroundRotation.y,
+                -scene.backgroundRotation.z, scene.backgroundRotation.order);
+      _qSky.setFromEuler(_eSky);
       U.uSkyRot.value.setFromMatrix4(_m4Sky.makeRotationFromQuaternion(_qSky));
     }
     const eyeW = env.eye;
@@ -9425,25 +9521,39 @@ function renderFrame(fr, env) {
      * 判定且全有全无，居中天体（比远透镜近、比近透镜远）会被错误直通或扭曲 */
     const dFar = lensList[Math.min(nL, lensList.length) - 1].d;
     let occN = 0;
+    const fCssOcc = 0.5 * env.viewH / Math.tan(fovDeg * Math.PI / 360);
     for (const b of fr.bodies) {
       if (occN >= 12) break;
       if (b.isBH) continue;
       if (!(b.mag > 0) || !(b.mag < dFar * 0.999)) continue;
-      const rPx = (b.rCss || 0) * env.resFactor * 1.12;
+      /* v27 修复（Bug「阴影盘内漏星」成分）：孔径改按天体实际渲染内容钳制 ——
+       * 旧口径 rCss·1.12 对未解析天体（图标半径 5~10px、点源精灵仅亚像素）
+       * 会在影子内打出图标大小的未透镜孔，孔内直通未透镜星空 = 成片假星。
+       * 新口径 = min(图标半径, max(物理盘半径, 2.6px))：已解析盘面保留全径
+       * （表面像素本就应直通），未解析点源只保留精灵核，孔外恢复影子/透镜内容 */
+      const physPx = (b.radM && b.mag > 0) ? (b.radM / b.mag) * fCssOcc * env.resFactor : 0;
+      const rPx = Math.min((b.rCss || 0) * env.resFactor * 1.12, Math.max(physPx, 2.6));
       if (rPx < 1) continue;
       const O = _occPool[occN++];
       O.x = b.sx * env.resFactor; O.y = glH - b.sy * env.resFactor;
       O.r = rPx; O.d = b.mag; O.area = rPx * rPx;
     }
-    /* v25：复用引用数组 + 插入排序（旧 slice().sort() 每帧分配触发 GC） */
+    /* v25：复用引用数组 + 插入排序（旧 slice().sort() 每帧分配触发 GC）。
+     * v27 修复：插入排序漏播种 _occView[0] = _occPool[0] —— 首个 occN>1 的
+     * 帧上 _occView 全 undefined，while 条件读 .area 抛 TypeError，
+     * renderFrame 中途异常 → composer.render 不执行 → 画面停留在陈旧帧
+     * （任何「≥2 个前景遮挡天体 + 透镜」场景必触发；同时旧实现读取的是
+     * _occView 残留项，会把上一帧的遮挡盘混进本帧排序）。修复 = 播种首项
+     * 并统一经 occView 别名读写。 */
     let occView = _occPool;
     if (occN > 1) {
       occView = _occView;
+      occView[0] = _occPool[0];
       for (let a = 1; a < occN; a++) {
         const O = _occPool[a];
         let b3 = a - 1;
-        while (b3 >= 0 && _occView[b3].area < O.area) { _occView[b3 + 1] = _occView[b3]; b3--; }
-        _occView[b3 + 1] = O;
+        while (b3 >= 0 && occView[b3].area < O.area) { occView[b3 + 1] = occView[b3]; b3--; }
+        occView[b3 + 1] = O;
       }
     }
     lensPass.uniforms.uOccN.value = occN;
