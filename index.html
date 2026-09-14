@@ -546,6 +546,24 @@ body.free-touch .pad{display:grid}
  *         对照相似度 96.1%（v21 运行时 LUT 路径仅 4.6% —— 其 Thf 漏 −a² 项：
  *         Θ=Q−cos²θ(λ²/sin²θ−a²) 才守恒，|β|<a·cos i 子午带虚假捕获 + i=0 NaN）；
  *      ④ 出帧按方向回退天空盒（光子环缠绕天空正确显示）。
+ * v26 渲染修复（用户 v25 反馈：① 阴影内侧扭曲断层拉丝；② 远景黑洞突兀
+ *      扭曲叠加层、缩放时突变而非渐变到 0。Python 特征提取 + 精确零测地线
+ *      光线追踪逐像素对照定位，GPU 探针实测）：
+ *      ① 根因 = rotToward 的 Rodrigues 第三项轴向量误用 wH（应为 ax，而
+ *         ax = normalize(dir×wH) ⊥ dir → 该项恒为零应删除）。多余项
+ *         wH·cosθ0·(1-cosρ) 把大角度偏折方向拖回洞方向：ρ=172° 的正确旋转
+ *         被压成 ~20°，光子环缠绕结构整体塌缩 = 阴影内侧断层拉丝；
+ *         rhoOfB 本身经 GPU 探针验证正确（172.56° vs 精确积分 172.51°）。
+ *         删除后省一次 vec3 乘加。修复后缠绕像、阴影口径、二级像全部与
+ *         精确测地线积分对照一致（交叉点残差从 ±2~8px 降到 ±0.3px 量级）。
+ *      ② 根因 = 黑洞 depth-only 代理球（v24 引入，colorWrite:false 仅供
+ *         叠层遮挡写深）污染 GravLensPass 的 sceneObjAt 判定 —— 影子盘内
+ *         被误判为「星球表面」，重投影落在盘内的环带像素退化为未透镜场景
+ *         内容，与周围透镜天光形成内容/亮度台阶 = 远景黑洞周围「突兀叠加
+ *         层」（半径 ∝ dispPx≥1.5px 等值线 ∝ 1/D，缩放时突变）。修复 =
+ *         sceneObjAt 解析排除各透镜影子盘（半径 = f_px·asin(b_c·rg·√f/D)，
+ *         仅对深度命中像素加 ≤8 次标量运算）。远景位移场经 v25 已验证正确
+ *         （app/精确比值 1.004，方向 cos 1.000），叠加层另一成分即此判定。
  * v21：新增 1.5PN 自旋-轨道 + 2PN 自旋-自旋（Kidder 1995，eq. 2.2c/2.2e/2.4）；
  *      GR 默认 1PN→2PN 全开；黑洞物理判定 R≤r_s（radius=0 点质量=r_s）；
  *      引力透镜重构（顺序复合/Kerr LUT 查表/前景遮挡盘/天空盒 cubemap 回退）；
@@ -8618,13 +8636,22 @@ float rhoOfB(float bM) {  /* bM: 冲击参数，单位 rg(=M) → 总偏转角�
   float w = t*t*(3.0 - 2.0*t);
   return rhoSoftCap(mix(qd, rhoSeries(bM), w));
 }
+/* v26 修复（Bug「阴影内侧断层拉丝」根因）： Rodrigues 第三项原为
+ *   wH*dot(wH, dir)*(1.0-cr) —— 轴向量误用 wH。标准公式该项为
+ *   ax*dot(ax, dir)*(1.0-cr)，而 ax = normalize(dir×wH) ⊥ dir，
+ *   dot(ax,dir) ≡ 0 → 该项恒为零，直接删除。原多余项 = wH·cosθ0·(1-cosρ)，
+ *   把大角度偏折（光子环缠绕区）的方向强行拖回洞方向：
+ *   ρ=172° 时多余项长 1.98，把正确的 167° 旋转压成 ~19° —— 缠绕结构
+ *   塌缩 = 阴影内侧断层/拉丝（GPU 探针实测 rhoOfB 正确 172.56° vs 精确
+ *   172.51°，rotToward 后角度 19.76° vs 期望 167.45°）。删除后同时省
+ *   一次 vec3 乘加，性能微优。 */
 vec3 rotToward(vec3 dir, vec3 wH, float rho) {
   vec3 ax = cross(dir, wH);
   float al = length(ax);
   if (al < 1e-4) return dir;
   ax /= al;
   float cr = cos(rho), sr = sin(rho);
-  return normalize(dir*cr + cross(ax, dir)*sr + wH*dot(wH, dir)*(1.0 - cr));
+  return normalize(dir*cr + cross(ax, dir)*sr);
 }
 vec3 projectPx(vec3 d) {
   float zf = max(dot(d, uCamF), 1e-4);
@@ -8677,9 +8704,31 @@ vec3 dirOfUv(vec2 uv) {
 }
 /* 屏幕坐标处场景深度判定：true = 有天体表面（星球二阶像需采场景内容）。
  * 深度不可用时保守返回 true（维持旧口径全场景采样） */
+/* v26 修复（Bug「远景突兀叠加层」成分之一）：黑洞 depth-only 代理球
+ * （colorWrite:false，仅写深度供叠层遮挡）会污染本判定 —— 透镜管线把
+ * 影子盘内误判为「有星球表面」，重投影落在盘内的像素退化为未透镜场景
+ * 内容（黑点/内容断层）。代理不可见 → 其影子盘（解析半径
+ * r_px = f_px·asin(b_c·rg·√f/D)）内应视为无天体。仅对深度命中的像素
+ * 多做 ≤8 次标量运算，性能可忽略。 */
 bool sceneObjAt(vec2 uv) {
   if (uHasDepth < 0.5) return true;
-  return texture2D(tDepth, uv).x < 0.999999;
+  if (texture2D(tDepth, uv).x >= 0.999999) return false;
+  for (int k = 0; k < 8; k++) {
+    if (k >= uLN) break;
+    if (uLPar[k].w < 0.5) continue;
+    float Dmk = length(uLBH[k]);
+    vec3 wHk = uLBH[k]/max(Dmk, 1e-9);
+    float cosTk = dot(wHk, uCamF);
+    if (cosTk <= 0.001) continue;
+    vec2 ndcK = vec2(dot(wHk, uCamR)/(cosTk*uTanH*uAspect), dot(wHk, uCamU)/(cosTk*uTanH));
+    vec2 ck = vec2((ndcK.x*0.5 + 0.5)*uRes.x, (ndcK.y*0.5 + 0.5)*uRes.y);
+    float fPx = 0.5*uRes.y/max(uTanH, 1e-4);
+    float sinSh = 5.196078*uLPar[k].y*sqrt(max(1.0 - uLPar[k].x/max(Dmk, 4.2*uLPar[k].x), 1e-4))/Dmk;
+    if (sinSh >= 1.0) continue;
+    float rPx = fPx*sinSh/sqrt(max(1.0 - sinSh*sinSh, 1e-6)) + 1.5;
+    if (length((uv - ck)*uRes) < rPx) return false;
+  }
+  return true;
 }
 void main() {
   vec2 frag = vUv*uRes;
