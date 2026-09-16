@@ -224,6 +224,7 @@ body.free-touch .pad{display:grid}
         <option value="classic">默认</option>
         <option value="earthmoon">地月系</option>
         <option value="gw">致密双星 2.5PN</option>
+        <option value="bns">双中子星并合</option>
         <option value="figure8">三体 8 字解</option>
         <option value="single">单星</option>
       </select>
@@ -401,11 +402,12 @@ body.free-touch .pad{display:grid}
     <div class="kicker">About</div>
     <h2>关于与自检</h2>
     <div class="hint" style="margin-top:2px">
-      <span class="em">物理模型</span> 牛顿引力 + 后牛顿 GR（1PN/1.5PN 自旋 Kidder/2PN/2.5PN，3.5PN 实验性）+ 潮汐（保守潮 + 时滞耗散 + 自转演化）；速度相关力以逐阶段隐式中点积分；积分器 Yoshida 4 阶辛 / IAS15 15 阶 Gauss-Radau（Rein-Spiegel 自适应）；Kahan 补偿求和；自适应步长：Yoshida4 用时间反演偶判据 + 中点态隐式求值（Hairer–Söderlind 可逆变步长），IAS15 内置 REBOUND 同套误差监控（PRS23/GLOBAL + 步拒绝 + Everhart 预测器）。强场并合的能量平衡面板采用规范不变 E(x)（Blanchet LRR (377)），因谐和规范 EIH 流的守恒能量 ≠ naive 相对式 PN 能量公式（REBOUNDx gr_full 交叉验证）。<br><span class="em">黑洞渲染 v23</span> 逐像素视线重建 + Python 光线追踪对照（Synge 1966 逃逸锥 / James+2015 CQG 32 065001 近距相机 / Bardeen 1973 临界曲线口径）；影子/偏折同源 b=D·sinθ/√(1−rs/D)；成像距离下限 4.2rs（近距不再吞没全屏，天空环恒可见）；天空盒显式 LOD0 + ρ 平滑上限 2.5π（消除 mip 黑环/散点）+ 全球透镜无接缝 + 影缘 1.5px 软边；Kerr 位移场 LUT 内嵌（a*×incl 网格）+ Bardeen 解析影界。<br>
-      <span class="em">渲染</span> three.js WebGL：真实网格天体、多星朗伯照明与食阴影、临边昏暗、HDR 自动曝光 + 泛光、全景天空盒；恒星亮度按 质量→半径→温度→光度 物理链计算；加载失败回退 2D。<br>
-      <span class="em">视角 / 参考系</span> 视角跟随、参考系、轨迹参考系三者分离；轨迹末端与天体当前位置严格对齐。<br>
-      <span class="em">贴图</span> 等距柱状贴图按自转轴约定映射（图顶 = 北极），全部视图非镜像；双层贴图各有不透明度与「暗部透明」云图模式。<br>
-      <span class="em">材质库</span> 自动扫描同目录 textures/（目录列表 → manifest.json → 名称探测，结果本地缓存）。星球名.jpg → 底层；星球名_任意 → 上层第二贴图；后缀含 cloud/云 才自动开启暗部透明。<br>
+      <span class="em">物理模型</span> 牛顿引力 + 后牛顿 GR（1PN/1.5PN 自旋/2PN/2.5PN，3.5PN 实验性）+ 潮汐（保守潮 + 时滞耗散 + 自转演化）；积分器 Yoshida 4 阶辛 / IAS15 15 阶；强场并合能量平衡采用规范不变 E(x)。<br>
+      <span class="em">黑洞渲染</span> 逐像素测地线视线重建（Schwarzschild + Kerr LUT + Bardeen 影界），Python 光线追踪对照校准。<br>
+      <span class="em">渲染</span> three.js WebGL：真实网格天体、多星朗伯照明与食阴影、HDR 自动曝光 + 泛光；加载失败回退 2D。<br>
+      <span class="em">视角 / 参考系</span> 视角跟随、参考系、轨迹参考系三者分离；轨迹末端与当前位置严格对齐。<br>
+      <span class="em">贴图</span> 等距柱状贴图按自转轴约定映射（图顶 = 北极），全部视图非镜像；双层贴图与「暗部透明」云图模式。<br>
+      <span class="em">材质库</span> 自动扫描同目录 textures/：星球名.jpg → 底层；星球名_任意 → 上层；后缀含 cloud/云 自动暗部透明。<br>
       <span class="em">快捷键</span> Space 播放暂停 · Shift+R 重置 · 0 重置视图 · 滚轮缩放 · 自由视角 WASD/RF/QE，Shift 加速
     </div>
   </section>
@@ -426,11 +428,11 @@ body.free-touch .pad{display:grid}
       <label for="bodyRadius">半径 · 可留空按质量推算</label>
       <div class="input-wrapper"><input type="text" class="txt" id="bodyRadius" placeholder="如 6371 km / 1 Re / 0.0093 Rs"><button type="button" class="reset-btn">清零</button></div>
       <small id="radiusAuto"></small>
-      <label for="bodyGH">温室因子 · 地表温度 = 平衡温度 × 此值，留空自动拟合（自动气压 → 灰大气）</label>
-      <div class="input-wrapper"><input type="text" class="txt" id="bodyGH" placeholder="如 1.129（地球）；留空 = 自动气压拟合 + 灰大气"><button type="button" class="reset-btn">清零</button></div>
+      <label for="bodyGH" title="地表温度 = 平衡温度 × 此值；留空 = 自动气压拟合 + 灰大气">温室因子 · 留空自动拟合</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="bodyGH" placeholder="如 1.129（地球）；留空 = 自动"><button type="button" class="reset-btn">清零</button></div>
       <small id="ghAuto"></small>
-      <label for="bodyPressure" title="参考：金星 92 / 地球 1 / 火星 0.006 / 泰坦 1.5 bar">表面气压（bar）· 留空自动拟合（质量/轨道/总辐照度）；填入改用灰大气精确模型</label>
-      <div class="input-wrapper"><input type="text" class="txt" id="bodyPressure" placeholder="如 92（金星）、1（地球）；留空 = 自动拟合（需轨道信息）"><button type="button" class="reset-btn">清零</button></div>
+      <label for="bodyPressure" title="参考：金星 92 / 地球 1 / 火星 0.006 / 泰坦 1.5 bar。留空按质量/轨道/总辐照度自动拟合；填入改用灰大气精确模型">表面气压（bar）· 留空自动拟合</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="bodyPressure" placeholder="如 92（金星）、1（地球）"><button type="button" class="reset-btn">清零</button></div>
       <label for="bodyColor">颜色</label>
       <input type="color" id="bodyColor" value="#FFFFFF">
       <label>底层贴图</label>
@@ -461,7 +463,6 @@ body.free-touch .pad{display:grid}
       <div class="input-wrapper"><input type="number" class="txt" id="bodySpinTilt" step="0.01" value="0.0"><button type="button" class="reset-btn">清零</button></div>
       <label for="bodySpinPeriod">自转周期 · 留空则不自转</label>
       <div class="input-wrapper"><input type="text" class="txt" id="bodySpinPeriod" placeholder="如 23.9345h / 1d / 10.7h"><button type="button" class="reset-btn">清零</button></div>
-      <small style="display:block;color:var(--mut);margin:2px 0 8px" title="黑洞自转语义 = 视界角速度周期（Bardeen）：T_min = 4πGM/c³。a* = 2k/(k²+1)，k = T/T_min。">黑洞语义 = 视界角速度周期 → a*：20 M☉ + 0.01s ≈ a*0.24（D 影 ~1% 需放大看）；a*≥0.9（如 20 M☉ + 1.3ms）D 形明显</small>
       <small id="spinAuto"></small>
       <h4>潮汐与结构参数（动力学）</h4>
       <div class="hint">洛夫数 k2 与时滞 Δt 留空按质量/半径经验自动，填 0 显式关闭；k3=k2/3 自动。</div>
@@ -471,7 +472,7 @@ body.free-touch .pad{display:grid}
       <div class="input-wrapper"><input type="text" class="txt" id="bodyTideLag" placeholder="如 600 s / 12 min（地球海潮有效值）"><button type="button" class="reset-btn">清零</button></div>
       <small id="tideAuto"></small>
       <h4>星球库</h4>
-      <div class="hint">把当前表单的固有参数存为模板；复用时选模板一键填入，只需再填轨道与母星。模板存浏览器缓存，可导出/导入文件分享；内置场景星球可直接读取应用。</div>
+      <div class="hint">把表单固有参数存为模板，复用时一键填入（只需再填轨道与母星）；内置场景星球可直接读取。存浏览器缓存，可导出/导入分享。</div>
       <label for="libSelect">选择模板 / 内置星球</label>
       <div class="row" style="gap:6px">
         <select id="libSelect" style="flex:1;min-width:0"></select>
@@ -553,6 +554,38 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v33 显示一致性与预设修复（用户 6 项反馈；数值验证：Node 无头驱动真实积分器
+ *      scripts/verify_conservation.js 太阳系 10 万年守恒性 + 解析解对照，见文件尾注）：
+ *      ① 预设下拉补上「双中子星并合」（bns）：PRESETS 早已定义（T13/T21 在用），
+ *         但 presetSelect 无该 option —— UI 层漏项，物理与设置链路本就完好。
+ *      ② 【核心修复】长期运行自转轴演化后「网格轴线 ↔ 贴图旋转」不一致：
+ *         渲染四元数旧用 meta.spinTiltRad（initState/并合时刻的静态标量，且无方位角
+ *         表达力），而辅助网格轴线读实时 spinAx 矢量 —— 潮汐力矩/1.5PN 进动下两者
+ *         随时间分叉。修复 = 渲染载荷改携实时自转轴矢量，四元数 setFromUnitVectors
+ *         (ẑ, s⃗)；轴恒定时与旧 Rx(tilt) 逐位等价（数学最短旋转恒等式），零回归。
+ *      ③ 同族修复（并合后轴静默清除）：refreshBodyTideCache 旧行为每次并合后把
+ *         全系统自转轴重置回初值（方位角还被 acos 丢弃）；并合遗迹轴现直接继承
+ *         S⃗_rem = L_orb + S₁ + S₂ 完整方向，非遗迹天体演化轴保留（归一化防漂移），
+ *         initState 以 NaN 显式标记需重建轴（编辑/重置/导入语义不变）。
+ *      ④ 信息板轨道误报「双曲/逃逸」修复：新增 boundHostIdx —— 配置母星绑定
+ *         （ε<0）即用（旧行为逐位一致），未绑定才回退全系统比能量最负者；
+ *         双星里行星实际绕伴星运行而母星设置缺失/指向另一星时，不再因继承了
+ *         绕另一星的速度而误判。信息板 r/v、编辑面板根数回填、同步潮汐加热
+ *         显示改用同一宿主；真·双曲（对任何天体 ε≥0）仍如实显示。
+ *      ⑤ 编辑/添加页自转项下方「黑洞语义 = 视界角速度周期 → a*」提示条目移除
+ *         （仅 UI 文案；视界周期反解 a* 的计算路径 T33/kerrSpinOf 保留不变）。
+ *      ⑥ 精简不必要的长篇描述：About 区物理模型/黑洞渲染段与添加表单
+ *         温室因子/表面气压/星球库说明改为一句话 + 悬停提示承载细节。
+ *      ⑦ 【物理修复·数值核查发现】并合遗迹自转的 L_orb 取样时序错误：
+ *         mergeCollisions 在 px[bi]/vx[bi] 已覆盖为质心值之后才读 px[bj]−px[bi]
+ *         计算 μ(r⃗×v⃗)，相对位矢/速度被缩去 (Mi/Mt) 倍 → L_orb 低估 (Mi/Mt)²
+ *         （等质量 BNS 恰 4 倍：Ω_rem 6241 vs 正确 2.5e4 rad/s，遗迹角动量账本
+ *         破裂）。修复 = 状态合并前取样相对态。修复后接触并合遗迹自转
+ *         0.698 ms，与本注释记载的物理预期「典型 ~0.7 ms」精确吻合
+ *         （T13 宽窗 0.2–5ms 未覆盖旧倍差，故未报警；修复后 T13 仍通过）。
+ *      回归安全（不破坏既有物理）：力项、积分器系数、步长判据零改动；账本
+ *      仅修正上述取样时序；黑洞并合触发/拖曳/GW 波形/非耗散 PN 与辛稳定性
+ *      全部经内置 T 系列与 10 万年太阳系守恒性数值复验（见文件尾注）。
  * v32 积分器与合并物理修复（用户 5 项反馈；调研锚点：REBOUND integrator_ias15.c 5.x 逐行
  *      复核、Rein & Spiegel 2015、Pham-Rein-Spiegel 2024、Hairer–Söderlind 2005、
  *      Blanchet LRR 2014 TaylorT2 能量平衡、Abbott+2016 GW150914 带内时标）：
@@ -1254,9 +1287,10 @@ function tideFluxState(mu, mp, R, rx, ry, rz, dvx, dvy, dvz, k2q) {
   const Pw = (63 / 4) * k2q * (G * mp * mp * R * R * R * R * R / (a * a * a * a * a * a)) * ecc * ecc * n;
   return Pw > 0 ? Pw / (4 * Math.PI * R * R) : 0;
 }
-/* 运行时包装：主星取 orbits_around 目标（findPrimaryIdx），k₂/Q 缺省 0.012 */
+/* 运行时包装：主星取实际束缚宿主（v33 boundHostIdx —— 配置母星未绑定时回退
+ * 实际绕转对象，同步潮汐加热显示不再因母星设置指向另一星而恒为 0），k₂/Q 缺省 0.012 */
 function bodyTidalFluxOf(i) {
-  const p = findPrimaryIdx(i);
+  const p = boundHostIdx(i);
   if (!(p >= 0 && p !== i)) return 0;
   const mp = massA[p], mi = massA[i];
   if (!(mp > 0) || !(mi > 0)) return 0;
@@ -3584,7 +3618,11 @@ function removeIndex(idx) {
   }
   meta.pop(); N--;
 }
-/* 每天体潮汐缓存刷新（initState / 合并后调用）：R, k2, Δt, I, k2·G·R⁵, 自转轴 */
+/* 每天体潮汐缓存刷新（initState / 合并后调用）：R, k2, Δt, I, k2·G·R⁵, 自转轴
+ * v33：自转轴改为「已演化则保留（归一化防漂移），未初始化（NaN/零向量）才从
+ * spin_tilt_deg 建轴」。旧行为在每次并合后把全系统所有天体的轴重置回初值
+ * （方位角还被 acos 丢掉）—— 长期运行 + 并合场景下轴信息被静默清除；
+ * initState 现以 NaN 显式标记「需要重建」（表单改倾角/重置/导入均经 initState）。 */
 function refreshBodyTideCache() {
   for (let i = 0; i < N; i++) {
     const R = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
@@ -3595,8 +3633,14 @@ function refreshBodyTideCache() {
     bodyIA[i] = TIDE_GYRATION * massA[i] * R * R;
     bodyTideA0[i] = bodyK2A[i] * G * R * R * R * R * R;
     bodyTideA03[i] = bodyK2A[i] * TIDE_K3_RATIO * G * R * R * R * R * R * R * R;   /* v19e：k3·G·R⁷ */
-    const tilt = meta[i].spinTiltRad || 0;
-    spinAxX[i] = 0; spinAxY[i] = -Math.sin(tilt); spinAxZ[i] = Math.cos(tilt);
+    const axn2 = spinAxX[i] * spinAxX[i] + spinAxY[i] * spinAxY[i] + spinAxZ[i] * spinAxZ[i];
+    if (isFinite(axn2) && axn2 > 0.5) {
+      const il = 1 / Math.sqrt(axn2);            /* 演化轴：归一化保留（spinVecUpdate 每步已归一） */
+      spinAxX[i] *= il; spinAxY[i] *= il; spinAxZ[i] *= il;
+    } else {
+      const tilt = meta[i].spinTiltRad || 0;     /* 未初始化/退化：从输入倾角建轴（方位角 0，同旧约定） */
+      spinAxX[i] = 0; spinAxY[i] = -Math.sin(tilt); spinAxZ[i] = Math.cos(tilt);
+    }
   }
 }
 /* ---------------- 碰撞合并（v21：接触渐进拖曳 + 深重叠判据） ----------------
@@ -3716,6 +3760,14 @@ function mergeCollisions(thrMeters, dtFrame) {
       sinkTideE[0] += 0.5 * (Mi * Mj / Mt) * (vrx * vrx + vry * vry + vrz * vrz)
         - G * Mi * Mj / Math.sqrt(Math.max(bestHit2, 1e-12));
     }
+    /* v33 修复（并合遗迹自转 L_orb 取样时序）：S_rem 的轨道角动量必须在
+     * 状态合并【前】取样 —— 旧实现在 px[bi]/vx[bi] 已被覆盖为质心值之后才读
+     * px[bj]−px[bi]，相对位矢/速度被缩去 (Mi/Mt) 倍 → L_orb 低估 (Mi/Mt)²
+     * （等质量 1.4+1.4 M☉ BNS 实测恰 4 倍：Ω_rem 6241 vs 正确 2.5e4 rad/s，
+     * 遗迹角动量账本破裂，T13 的 0.2–5ms 宽窗未覆盖该倍差）。 */
+    const muPair = Mi * Mj / Mt;
+    const rLx = px[bj] - px[bi], rLy = py[bj] - py[bi], rLz = pz[bj] - pz[bi];
+    const vLx = vx[bj] - vx[bi], vLy = vy[bj] - vy[bi], vLz = vz[bj] - vz[bi];
     px[bi] = (px[bi] * Mi + px[bj] * Mj) / Mt;
     py[bi] = (py[bi] * Mi + py[bj] * Mj) / Mt;
     pz[bi] = (pz[bi] * Mi + pz[bj] * Mj) / Mt;
@@ -3731,12 +3783,9 @@ function mergeCollisions(thrMeters, dtFrame) {
     op.mass = Mt; op.radius_m = meta[bi].radius;
     /* 并合遗迹自转继承（角动量守恒）：S_rem = μ(r⃗×v⃗) + S₁ + S₂，
      * Ω_rem = |S_rem|/I_rem，I = 0.33mR²。双中子星并合遗迹典型 ~0.7 ms，
-     * 接近开普勒极限，是并合特征的重要观测量。 */
+     * 接近开普勒极限，是并合特征的重要观测量。r⃗/v⃗ 为合并前相对态（见上）。 */
     if (tideOn) {
-      const muPair = Mi * Mj / Mt;
-      const rx = px[bj] - px[bi], ry = py[bj] - py[bi], rz = pz[bj] - pz[bi];
-      const rvx = vx[bj] - vx[bi], rvy = vy[bj] - vy[bi], rvz = vz[bj] - vz[bi];
-      const Lx = muPair * (ry * rvz - rz * rvy), Ly = muPair * (rz * rvx - rx * rvz), Lz = muPair * (rx * rvy - ry * rvx);
+      const Lx = muPair * (rLy * vLz - rLz * vLy), Ly = muPair * (rLz * vLx - rLx * vLz), Lz = muPair * (rLx * vLy - rLy * vLx);
       const Sx = Lx + bodyIA[bi] * spinRate[bi] * spinAxX[bi] + bodyIA[bj] * spinRate[bj] * spinAxX[bj];
       const Sy = Ly + bodyIA[bi] * spinRate[bi] * spinAxY[bi] + bodyIA[bj] * spinRate[bj] * spinAxY[bj];
       const Sz = Lz + bodyIA[bi] * spinRate[bi] * spinAxZ[bi] + bodyIA[bj] * spinRate[bj] * spinAxZ[bj];
@@ -3745,8 +3794,14 @@ function mergeCollisions(thrMeters, dtFrame) {
       const Irem = TIDE_GYRATION * Mt * Rrem * Rrem;
       spinRate[bi] = Smag / Irem;
       if (Smag > 0) {
+        /* v33：遗迹轴直接取 S⃗_rem 方向（完整矢量，含方位角）——旧实现只写
+         * meta.spinTiltRad = acos(Sz/Sm)，方位角被静默丢弃，refreshBodyTideCache
+         * 再按「方位角 0」重建轴 → 并合瞬间遗迹自转轴跳变。现轴随角动量严格继承，
+         * 与 S_rem = L_orb + S₁ + S₂ 的守恒账本一致；spinTiltRad/Deg 仅作输入回填。 */
+        const invSm = 1 / Smag;
+        spinAxX[bi] = Sx * invSm; spinAxY[bi] = Sy * invSm; spinAxZ[bi] = Sz * invSm;
         const az = clampNum(Sz / Smag, -1, 1);
-        meta[bi].spinTiltRad = Math.acos(az);        // 自转轴倾角（方位角渲染层不表达，见说明）
+        meta[bi].spinTiltRad = Math.acos(az);        // 倾角回填（方位角现已由轴矢量承载）
         meta[bi].spinTiltDeg = meta[bi].spinTiltRad * 180 / Math.PI;
         op.spin_tilt_deg = String(+meta[bi].spinTiltDeg.toFixed(3));
       }
@@ -3959,6 +4014,7 @@ function initState(list) {
     spinPhase[i] = 0; cspinPhase[i] = 0;   /* 相位积分从零起算（与 simTime=0 对齐） */
     bodyK2Auto[i] = !!meta[i].tideK2Auto;
     bodyLagAuto[i] = !!meta[i].tideLagAuto;
+    spinAxX[i] = NaN; spinAxY[i] = NaN; spinAxZ[i] = NaN;   /* v33：标记待建轴（refreshBodyTideCache 按 spin_tilt_deg 重建） */
   }
   refreshBodyTideCache();
   zeroKahan();
@@ -4224,18 +4280,46 @@ function findPrimaryIdx(idx) {
   for (let k = 0; k < N; k++) if (k !== idx && massA[k] > bestM) { bestM = massA[k]; best = k; }
   return best;
 }
+/* v33：两体比轨道能 ε = v_rel²/2 − GM/r（信息板/密切根数用；r→0 视为非束缚） */
+function pairSpecEnergy(idx, p) {
+  const GM = G * (massA[idx] + massA[p]);
+  const rx = px[idx] - px[p], ry = py[idx] - py[p], rz = pz[idx] - pz[p];
+  const r2 = rx * rx + ry * ry + rz * rz;
+  if (!(r2 > 0)) return Infinity;
+  const dvx = vx[idx] - vx[p], dvy = vy[idx] - vy[p], dvz = vz[idx] - vz[p];
+  return (dvx * dvx + dvy * dvy + dvz * dvz) / 2 - GM / Math.sqrt(r2);
+}
+/* v33：实际束缚宿主。语义：母星设置（orbits_around / 最大质量兜底）优先 ——
+ * 两体比能量 ε<0（绑定）即沿用配置主星，行为与旧版逐位一致；
+ * 仅当配置主星 ε≥0 时才全系统扫描取比能量最负者。
+ * 修复场景：双星系统里行星实际绕伴星运行、母星设置缺失或指向另一颗星 ——
+ * 行星继承了绕另一星的轨道速度，相对配置主星的 ε 常为正，旧版信息板
+ * 一律显示「双曲/逃逸」（实际是绕伴星的椭圆轨道）；母星被吞并/改名后
+ * 同样落入该误报。返回 -1 = 对任何天体都不束缚（真·双曲/逃逸）。 */
+function boundHostIdx(idx) {
+  if (N < 2) return -1;
+  const cfg = findPrimaryIdx(idx);
+  if (cfg >= 0 && cfg !== idx && pairSpecEnergy(idx, cfg) < 0) return cfg;
+  let best = -1, bestE = 0;
+  for (let k = 0; k < N; k++) {
+    if (k === idx || !(massA[k] > 0)) continue;
+    const e = pairSpecEnergy(idx, k);
+    if (e < bestE) { bestE = e; best = k; }
+  }
+  return best;
+}
 function osculatingOf(idx) {
   if (N < 2) return null;
-  const p = findPrimaryIdx(idx);
-  if (p < 0) return null;
+  const p = boundHostIdx(idx);
+  if (p < 0 || p === idx) return { bound: false, primary: p };
   const mi = massA[idx], mp = massA[p], M = mi + mp, GM = G * M;
   const rx = px[idx] - px[p], ry = py[idx] - py[p], rz = pz[idx] - pz[p];
   const r = Math.sqrt(rx * rx + ry * ry + rz * rz);
-  if (!(r > 0)) return null;
+  if (!(r > 0)) return { bound: false, primary: p };
   const dvx = vx[idx] - vx[p], dvy = vy[idx] - vy[p], dvz = vz[idx] - vz[p];
   const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
   const eps = v2 / 2 - GM / r;
-  if (eps >= 0) return { bound: false };
+  if (eps >= 0) return { bound: false, primary: p };
   const a = -GM / (2 * eps);
   const hx = ry * dvz - rz * dvy, hy = rz * dvx - rx * dvz, hz = rx * dvy - ry * dvx;
   const h2 = hx * hx + hy * hy + hz * hz;
@@ -4245,7 +4329,7 @@ function osculatingOf(idx) {
   const ez = (dvx * hy - dvy * hx) / GM - rz / r;
   const e = Math.sqrt(ex * ex + ey * ey + ez * ez);
   const period = 2 * Math.PI * Math.sqrt(a * a * a / GM);
-  if (e < 1e-9) return { bound: true, a, e: 0, omega: null, period, GM };
+  if (e < 1e-9) return { bound: true, a, e: 0, omega: null, period, GM, primary: p };
   const invH = 1 / Math.sqrt(h2);
   const hxu = hx * invH, hyu = hy * invH, hzu = hz * invH;
   const invE = 1 / e;
@@ -4261,7 +4345,7 @@ function osculatingOf(idx) {
   } else {
     omega = Math.atan2(eu[1], eu[0]);   // 近赤道轨道：以 x 轴为参考方向（近似）
   }
-  return { bound: true, a, e, omega, period, GM };
+  return { bound: true, a, e, omega, period, GM, primary: p };
 }
 /* ---------------- v19：跟随天体信息叠加层 ----------------
  * 仅当视角跟随具体天体时出现；尺寸 ≤ WASD 键组（136×89px）。数据每帧轻量刷新：
@@ -4352,8 +4436,11 @@ function updateBodyOverlay() {
       } else { ui.ovTemp.textContent = '—'; ui.ovTempGH.textContent = '—'; }
     }
   }
-  /* 轨道（相对主星） */
-  const p = findPrimaryIdx(idx);
+  /* 轨道（相对主星）—— v33：r/v 与 a/e/P/i 相对同一「实际束缚宿主」
+   * （boundHostIdx：配置主星绑定即用，未绑定才回退全系统最负比能量者），
+   * 修复「行星绕伴星椭圆运行、信息板却相对另一星报双曲/逃逸」的错位显示 */
+  const osc = osculatingOf(idx);
+  const p = (osc && osc.bound && osc.primary >= 0) ? osc.primary : findPrimaryIdx(idx);
   if (p >= 0 && p !== idx) {
     const rx = px[idx] - px[p], ry = py[idx] - py[p], rz = pz[idx] - pz[p];
     const rNow = Math.sqrt(rx * rx + ry * ry + rz * rz);
@@ -4365,7 +4452,6 @@ function updateBodyOverlay() {
     const hyv = rz * dvx - rx * dvz;
     const hMag = Math.sqrt(hxv * hxv + hyv * hyv + hz * hz);
     const inc = hMag > 0 ? Math.acos(Math.min(1, Math.max(-1, hz / hMag))) * 180 / Math.PI : 0;
-    const osc = osculatingOf(idx);
     if (osc && osc.bound) {
       const au = osc.a / AU;
       ui.ovAE.textContent = (au >= 0.005 ? (au < 10 ? au.toFixed(3) : au.toFixed(1)) + 'AU' : fmtOvDist(osc.a)) + ' / ' + osc.e.toFixed(3);
@@ -5391,7 +5477,13 @@ function buildSceneFrame() {
       texMode2: meta[i].textureMode2 | 0,
       wx: px[i], wy: py[i], wz: pz[i],
       phys: physSizeOn && radM > 0, radM,
-      spinTilt: meta[i].spinTiltRad || 0, spinAng: 0,
+      /* v33：渲染层改携完整实时自转轴单位向量（旧 spinTilt 标量只有「相对世界 Z 的
+       * 倾角、方位角恒 0」的表达力，且 meta.spinTiltRad 只在 initState/并合时写入 ——
+       * 潮汐力矩/1.5PN 进动使 spinAx 长期演化后，网格轴线（读 spinAx）与贴图旋转
+       * （读陈旧倾角）物理不一致，长期运行分叉越来越大。轴恒定（无潮汐/无进动）
+       * 时 setFromUnitVectors(ẑ, (0,−sin t, cos t)) = Rx(t) 逐位等价旧行为，零回归） */
+      spinAxis: spinAxX ? [spinAxX[i], spinAxY[i], spinAxZ[i]] : [0, 0, 1],
+      spinAng: 0,
       defF: 0, tideDir: null, tideE: 0 };
     /* 自转相位（渲染层以网格四元数旋转；先 mod 2π 防长时浮点误差）。
      * v19c：spinPhase 为相位积分 φ=∫Ωdt（Kahan）。旧式 Ω·simTime 隐含 Ω 恒定，
@@ -7242,9 +7334,10 @@ function openBodyForm(idx) {
     if (ui.texDark1) ui.texDark1.checked = !!meta[editingIndex].textureMode1;
     if (ui.texDark2) ui.texDark2.checked = !!meta[editingIndex].textureMode2;
     populateBodyOrbitSelects(orig.orbits_around || meta[editingIndex].orbits_around || '');
-    /* 轨道根数：以当前密切根数为准（相对当前主星），无主星/双曲时回退原输入 */
-    const pIdx = findPrimaryIdx(editingIndex);
+    /* 轨道根数：以当前密切根数为准（v33：相对实际束缚宿主，配置主星绑定即用），
+     * 无宿主/真双曲时回退原输入 */
     const oscNow = osculatingOf(editingIndex);
+    const pIdx = (oscNow && oscNow.bound && oscNow.primary >= 0) ? oscNow.primary : findPrimaryIdx(editingIndex);
     const haveOsc = pIdx >= 0 && pIdx !== editingIndex && oscNow && oscNow.bound && isFinite(oscNow.a);
     if (haveOsc) {
       ui.bodySemiMajorAxis.value = oscNow.a.toPrecision(8);
@@ -10342,7 +10435,7 @@ const bodies = [];                       // 每天体: {mesh, shell, spin, def, 
 let lineObj = null, ptsObj = null, lineGeo = null, ptsGeo = null, ptsMat = null;
 const _m4 = new THREE.Matrix4();
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
-const _v1 = new THREE.Vector3();
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
 const X_AXIS = new THREE.Vector3(1, 0, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 function capRadiance(v) {
@@ -11380,7 +11473,15 @@ function renderFrame(fr, env) {
      *   —— 均为渲染假性行为（物理 spinTiltDeg 恒定，信息框佐证）。共轭写法下
      *   椭球形状逐位不变，纹理极点只随真实形变（物质点）移动。 */
     _q1.setFromAxisAngle(Z_AXIS, b.spinAng);   /* v20：+ang（旧 −ang 与公转反向，见上注） */
-    _q2.setFromAxisAngle(X_AXIS, b.spinTilt || 0);
+    /* v33：自转轴 = 实时物理轴 s⃗（spinAx 随潮汐力矩/1.5PN 进动演化的同一份数据，
+     * 与辅助网格的自转轴线段严格同源）。旧 setFromAxisAngle(X_AXIS, spinTilt) 用的
+     * meta.spinTiltRad 是 initState/并合时刻的静态标量且无方位角 —— 长期运行轴
+     * 演化后与网格轴线分叉（用户报告的显示/物理不一致）。等价性：轴恒定时
+     * s⃗=(0,−sin t, cos t)，setFromUnitVectors(ẑ, s⃗) 的最短旋转恰为 Rx(t)，旧行为逐位保留。 */
+    if (b.spinAxis) {
+      _v2.set(b.spinAxis[0], b.spinAxis[1], b.spinAxis[2]).normalize();
+      _q2.setFromUnitVectors(Z_AXIS, _v2);
+    } else _q2.identity();
     if (b.tideDir && b.tideE > 1e-6) {
       _q3.setFromUnitVectors(_v1, X_AXIS);   /* R_tide⁻¹（_v1 本帧已归一化） */
       rec.spin.quaternion.copy(_q3).multiply(_q2).multiply(_q1);
