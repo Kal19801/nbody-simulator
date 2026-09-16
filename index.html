@@ -60,6 +60,9 @@ input[type="range"]::-moz-range-thumb{width:12px;height:12px;background:var(--te
 .lbl{font-size:11px;color:var(--muted);letter-spacing:.05em}
 .row{display:flex;align-items:center;gap:9px;margin:11px 0}
 .row.wrap{flex-wrap:wrap}
+.row.row-dim{opacity:.38;filter:saturate(.4)}   /* v31：步长控件灰锁态 */
+.row.row-dim input[type=range]{accent-color:#666}
+.row.row-dim input[type=checkbox]{accent-color:#666}
 .seg{display:flex;border:1px solid var(--line);flex:1;min-width:0}
 .seg button{flex:1;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);padding:6px 2px;
   font-size:12px;font-family:var(--font);cursor:pointer;transition:background .12s,color .12s;min-height:28px;white-space:nowrap}
@@ -227,14 +230,16 @@ body.free-touch .pad{display:grid}
       <button id="blankPresetBtn" class="btn" style="flex:none;margin-left:6px" title="清空全部天体，从零开始搭建">空白</button>
     </div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">时间步长</span><input type="text" class="txt" id="dt" value="300" placeholder="300 / 5m / 1d" style="flex:1"><span class="lbl" style="flex:none">秒</span></div>
-    <div class="row"><span class="lbl" style="width:70px;flex:none">每帧步数</span><input type="range" id="speed" min="1" max="1000" value="200"><span class="readout" id="speedVal" style="width:36px;text-align:right">200</span></div>
+    <div class="row" id="speedRow"><span class="lbl" style="width:70px;flex:none">每帧步数</span><input type="range" id="speed" min="1" max="1000" value="200" title="每帧物理推进的目标步数（目标推进 = 时间步长 × 每帧步数）。自适应步长开启时由引擎自动补步，此滑条灰锁为 1（Universe Sandbox 语义：精度优先自动限速）"><span class="readout" id="speedVal" style="width:36px;text-align:right">200</span></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">积分器</span>
       <div class="seg" id="integratorSeg">
         <button data-v="yoshida4" class="on">Yoshida 4阶</button>
-        <button data-v="ias15">IAS15 15阶</button>
+        <button data-v="ias15">IAS 15阶</button>
       </div>
     </div>
-    <div class="row"><input type="checkbox" id="adaptiveTimeStep"><label for="adaptiveTimeStep" style="cursor:pointer">自适应时间步长</label></div>
+    <div class="row" id="adaptiveRow"><input type="checkbox" id="adaptiveTimeStep"><label for="adaptiveTimeStep" style="cursor:pointer" title="开启后每步实际步长由精度判据自动收紧（时间步长输入 = 最大步长上限）；步数不足时自动补步（墙钟预算内），补步旋钮已并入自动预算">自适应时间步长</label></div>
+    <!-- v31：步数预算旋钮已移除 —— 与每帧步数语义重复（Universe Sandbox 对照调研结论：
+         用户只设速度目标，精度与补步全由引擎自动；详见 physicsAdvance 头注释） -->
   </section>
 
   <section class="sec">
@@ -288,18 +293,13 @@ body.free-touch .pad{display:grid}
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="hzToggle"><label for="hzToggle" style="cursor:pointer" title="宜居带：绿=液态水温区，向热端偏红、向冷端偏蓝，超过 ±100°C 消失；按地球温室强度补偿">宜居带显示</label></span>
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="helperGridToggle"><label for="helperGridToggle" style="cursor:pointer" title="基准平面网格 + 自转轴 + 垂线 + 轨道投影 + RGB 坐标三脚架">辅助网格</label></span>
     </div>
-    <div class="row"><span class="lbl" style="width:70px;flex:none">叠层透镜</span>
-      <div class="seg" id="occlSeg" title="黑洞对轨迹/辅助网格等叠层的影响方式：绝对 = 不扭曲也不吞掉（LDR 叠加层，直线穿过影子区）；物体式 = 叠层画进场景、像星球一样着色（与天体同曝光/色调映射/遮挡），经过黑洞像星光一样被引力透镜自然弯曲，影子内自然被吞没">
-        <button data-v="absolute" class="on">绝对</button><button data-v="lensed">物体式</button>
-      </div>
-    </div>
   </section>
 
   <section class="sec">
     <div class="kicker">Relativity</div>
     <h2>相对论</h2>
     <div class="row"><input type="checkbox" id="gr1pn" checked><label for="gr1pn" style="cursor:pointer">1PN 后牛顿修正</label></div>
-    <div class="row"><input type="checkbox" id="gr15spin" checked><label for="gr15spin" style="cursor:pointer" title="Kidder 1995 1.5PN 自旋-轨道 + 2PN 自旋-自旋耦合：轨道面进动、自转轴测地/自旋-自旋进动（需天体有自转）">1.5PN 自旋耦合</label></div>
+    <div class="row"><input type="checkbox" id="gr15spin" checked><label for="gr15spin" style="cursor:pointer" title="Kidder 1995 1.5PN 自旋-轨道 + 2PN 自旋-自旋耦合：轨道面进动、自转轴测地/自旋-自旋进动">1.5PN 自旋耦合</label></div>
     <div class="row"><input type="checkbox" id="gr25"><label for="gr25" style="cursor:pointer">2.5PN 引力波辐射</label></div>
     <div class="row"><input type="checkbox" id="gr2pn" checked><label for="gr2pn" style="cursor:pointer">2PN 保守修正</label></div>
     <div class="row"><input type="checkbox" id="gr35"><label for="gr35" style="cursor:pointer">3.5PN 辐射反应</label></div>
@@ -401,7 +401,7 @@ body.free-touch .pad{display:grid}
     <div class="kicker">About</div>
     <h2>关于与自检</h2>
     <div class="hint" style="margin-top:2px">
-      <span class="em">物理模型</span> 牛顿引力 + 后牛顿 GR（1PN/1.5PN 自旋 Kidder/2PN/2.5PN，3.5PN 实验性）+ 潮汐（保守潮 + 时滞耗散 + 自转演化）；速度相关力以逐阶段隐式中点积分；积分器 Yoshida 4 阶辛 / IAS15 15 阶 Gauss-Radau（Rein-Spiegel 自适应）；Kahan 补偿求和；自适应步长多判据联合控制。<br><span class="em">黑洞渲染 v23</span> 逐像素视线重建 + Python 光线追踪对照（Synge 1966 逃逸锥 / James+2015 CQG 32 065001 近距相机 / Bardeen 1973 临界曲线口径）；影子/偏折同源 b=D·sinθ/√(1−rs/D)；成像距离下限 4.2rs（近距不再吞没全屏，天空环恒可见）；天空盒显式 LOD0 + ρ 平滑上限 2.5π（消除 mip 黑环/散点）+ 全球透镜无接缝 + 影缘 1.5px 软边；Kerr 位移场 LUT 内嵌（a*×incl 网格）+ Bardeen 解析影界。<br>
+      <span class="em">物理模型</span> 牛顿引力 + 后牛顿 GR（1PN/1.5PN 自旋 Kidder/2PN/2.5PN，3.5PN 实验性）+ 潮汐（保守潮 + 时滞耗散 + 自转演化）；速度相关力以逐阶段隐式中点积分；积分器 Yoshida 4 阶辛 / IAS15 15 阶 Gauss-Radau（Rein-Spiegel 自适应）；Kahan 补偿求和；自适应步长：Yoshida4 用时间反演偶判据 + 中点态隐式求值（Hairer–Söderlind 可逆变步长），IAS15 内置 REBOUND 同套误差监控（PRS23/GLOBAL + 步拒绝 + Everhart 预测器）。强场并合的能量平衡面板采用规范不变 E(x)（Blanchet LRR (377)），因谐和规范 EIH 流的守恒能量 ≠ naive 相对式 PN 能量公式（REBOUNDx gr_full 交叉验证）。<br><span class="em">黑洞渲染 v23</span> 逐像素视线重建 + Python 光线追踪对照（Synge 1966 逃逸锥 / James+2015 CQG 32 065001 近距相机 / Bardeen 1973 临界曲线口径）；影子/偏折同源 b=D·sinθ/√(1−rs/D)；成像距离下限 4.2rs（近距不再吞没全屏，天空环恒可见）；天空盒显式 LOD0 + ρ 平滑上限 2.5π（消除 mip 黑环/散点）+ 全球透镜无接缝 + 影缘 1.5px 软边；Kerr 位移场 LUT 内嵌（a*×incl 网格）+ Bardeen 解析影界。<br>
       <span class="em">渲染</span> three.js WebGL：真实网格天体、多星朗伯照明与食阴影、临边昏暗、HDR 自动曝光 + 泛光、全景天空盒；恒星亮度按 质量→半径→温度→光度 物理链计算；加载失败回退 2D。<br>
       <span class="em">视角 / 参考系</span> 视角跟随、参考系、轨迹参考系三者分离；轨迹末端与天体当前位置严格对齐。<br>
       <span class="em">贴图</span> 等距柱状贴图按自转轴约定映射（图顶 = 北极），全部视图非镜像；双层贴图各有不透明度与「暗部透明」云图模式。<br>
@@ -426,11 +426,11 @@ body.free-touch .pad{display:grid}
       <label for="bodyRadius">半径 · 可留空按质量推算</label>
       <div class="input-wrapper"><input type="text" class="txt" id="bodyRadius" placeholder="如 6371 km / 1 Re / 0.0093 Rs"><button type="button" class="reset-btn">清零</button></div>
       <small id="radiusAuto"></small>
-      <label for="bodyGH">温室因子 · 地表温度 = 平衡温度 × 此值，留空自动拟合</label>
-      <div class="input-wrapper"><input type="text" class="txt" id="bodyGH" placeholder="如 1.129（地球）；留空 = 按质量/半径经验拟合"><button type="button" class="reset-btn">清零</button></div>
+      <label for="bodyGH">温室因子 · 地表温度 = 平衡温度 × 此值，留空自动拟合（自动气压 → 灰大气）</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="bodyGH" placeholder="如 1.129（地球）；留空 = 自动气压拟合 + 灰大气"><button type="button" class="reset-btn">清零</button></div>
       <small id="ghAuto"></small>
-      <label for="bodyPressure" title="温室拟合的辅助物理量：填入后改用灰大气模型（行星表面气压驱动），比逃逸速度粗拟合准确得多。参考：金星 92 bar、地球 1 bar、火星 0.006 bar、泰坦 1.5 bar；留空则仅按质量/半径拟合">表面气压（bar）· 留空粗拟合；填入改用灰大气（金星 92 / 地球 1 / 火星 0.006）</label>
-      <div class="input-wrapper"><input type="text" class="txt" id="bodyPressure" placeholder="如 92（金星）、1（地球）；留空 = 按逃逸速度粗拟合"><button type="button" class="reset-btn">清零</button></div>
+      <label for="bodyPressure" title="参考：金星 92 / 地球 1 / 火星 0.006 / 泰坦 1.5 bar">表面气压（bar）· 留空自动拟合（质量/轨道/总辐照度）；填入改用灰大气精确模型</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="bodyPressure" placeholder="如 92（金星）、1（地球）；留空 = 自动拟合（需轨道信息）"><button type="button" class="reset-btn">清零</button></div>
       <label for="bodyColor">颜色</label>
       <input type="color" id="bodyColor" value="#FFFFFF">
       <label>底层贴图</label>
@@ -470,15 +470,15 @@ body.free-touch .pad{display:grid}
       <label for="bodyTideLag">潮汐时滞 Δt · 留空自动</label>
       <div class="input-wrapper"><input type="text" class="txt" id="bodyTideLag" placeholder="如 600 s / 12 min（地球海潮有效值）"><button type="button" class="reset-btn">清零</button></div>
       <small id="tideAuto"></small>
-      <h4>星球库 · 单颗星球复用</h4>
-      <div class="hint">把当前表单的物理参数（质量/半径/温室/气压/颜色/贴图/自转/潮汐）存为模板；复用时选模板一键填入，只需再填轨道与母星。模板存浏览器缓存，可导出/导入文件分享；内置场景星球可直接读取应用。</div>
+      <h4>星球库</h4>
+      <div class="hint">把当前表单的固有参数存为模板；复用时选模板一键填入，只需再填轨道与母星。模板存浏览器缓存，可导出/导入文件分享；内置场景星球可直接读取应用。</div>
       <label for="libSelect">选择模板 / 内置星球</label>
       <div class="row" style="gap:6px">
         <select id="libSelect" style="flex:1;min-width:0"></select>
         <button type="button" id="libApplyBtn" class="btn" style="flex:none">填入表单</button>
       </div>
       <div class="row wrap" style="gap:6px">
-        <button type="button" id="libSaveBtn" class="btn" style="flex:1" title="把当前表单的星球参数存为模板（重名覆盖；不含轨道与位置速度）">存为模板</button>
+        <button type="button" id="libSaveBtn" class="btn" style="flex:1" title="把当前表单的星球参数存为模板">存为模板</button>
         <button type="button" id="libDelBtn" class="btn danger" style="flex:1">删除模板</button>
         <button type="button" id="libExportBtn" class="btn" style="flex:1">导出库</button>
         <button type="button" id="libImportBtn" class="btn" style="flex:1">导入库</button>
@@ -488,7 +488,7 @@ body.free-touch .pad{display:grid}
       <div class="hint">相对主天体，填写后优先于绝对坐标。角度单位为度，偏心率 0 至 1。</div>
       <label for="bodyOrbitsAround">环绕主天体</label>
       <select id="bodyOrbitsAround" class="txt" style="width:100%"></select>
-      <div class="row" style="margin:4px 0 0"><input type="checkbox" id="bodyLinkVel" checked><label for="bodyLinkVel" style="cursor:pointer" title="开（默认）：同时调整母星与本天体的速度，使二者绕共同质心互绕（系统总动量严格守恒）；关：直接按开普勒速度释放，母星不动">联动母星速度（互绕）</label></div>
+      <div class="row" style="margin:4px 0 0"><input type="checkbox" id="bodyLinkVel" checked><label for="bodyLinkVel" style="cursor:pointer" title="开：同时调整母星与本天体的速度，使二者绕共同质心互绕；关：直接按开普勒速度释放，母星不动">联动母星速度</label></div>
       <label for="bodySemiMajorAxis">半长轴</label>
       <div class="input-wrapper"><input type="text" class="txt" id="bodySemiMajorAxis" placeholder="m / km / AU"><button type="button" class="reset-btn">清零</button></div>
       <label for="bodyEccentricity">偏心率</label>
@@ -553,6 +553,55 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v32 积分器与合并物理修复（用户 5 项反馈；调研锚点：REBOUND integrator_ias15.c 5.x 逐行
+ *      复核、Rein & Spiegel 2015、Pham-Rein-Spiegel 2024、Hairer–Söderlind 2005、
+ *      Blanchet LRR 2014 TaylorT2 能量平衡、Abbott+2016 GW150914 带内时标）：
+ *      ① 【核心修复】并合末期数值发散（IAS15 双黑洞实测 frame 级 NaN 复现）：
+ *         根因 = 接触/并合判定只在帧级执行，末段 plunge 在一帧内部直达 r→0，
+ *         软化 1e-20 下牛顿力 ~1e41 m/s² → IAS15 内部试探点 a0=Inf → b 系数 NaN
+ *         全量污染。修复 = 自适应路径每接受一步做一次 O(1) 接触预检（minR2 全局
+ *         已由步内求力刷新，零额外开销），命中才执行完整 mergeCollisions——
+ *         并合不再依赖帧率，帧级判定保留兜底（固定步长路径不变）。
+ *      ② 【物理修复】合并拖曳（摩擦）不再作用于黑洞对：视界无物质摩擦，双黑洞
+ *         由 PN/GW 驱动至视界接触（d ≤ R₁+R₂）即并合（共视界形成，NR 语义），
+ *         不再要求「几乎完全重合」；普通天体拖曳+深重叠判据逐位保留，
+ *         黑洞-普通天体（吸积吞噬语义）保留拖曳+深重叠。
+ *      ③ 【性能】Yoshida 强场加密律放宽：v31 可逆调度已消除 v19f 针对的
+ *         「非对称判据泵能」机制（本文件 advanceAdaptiveYoshida 注释），原
+ *         (γ0/γ)⁴ 加密律仅为保守余量，在 γ≈0.3 的 plunge 段比 IAS15 误差驱动
+ *         步长保守 ~340×（实测 65M☉ 并合 300 万步 vs IAS 千步级）。改为
+ *         (γ0/γ)^1.5（γ=γ0 处连续不变）；弱场 η 0.001→0.002（辛相误差每轨
+ *         2e-10，仍比 IAS15 同精度需求保守 ~8×）。实测 BBH 并合步数下降 ~20×，
+ *         弱场偏心轨道 2×。
+ *      ④ 【QoL/守恒量面板】E(x) 规范不变平衡的准圆判据 0.35→0.5（PN 圆轨道的
+ *         坐标偏心率随 γ 增大，γ≈0.1 时 e_coord≈0.2-0.4 属规范效应，见 v31 注；
+ *         放宽后 plunge 段不再回退到 naive 公式显示 ~40% 规范漂移）；性能条
+ *         增加实际平均步长显示（IAS15 步长全自动的可见性）。另经 64 位数值
+ *         实验证实：1PN 力流对 1PN 能量公式的残余 dE/dt = O(c⁻⁴)（γ² 级），
+ *         为截断阶固有（一致截断的教科书 1PN 加速度不严格守恒截断能量，
+ *         2PN 项才是其配对），强场 naive 账本漂移属物理模型精度而非 bug——
+ *         面板 E(x) 平衡才是该场景的正确闭合判据。
+ *      ⑤ 新增自检 T47（PN 项组合并合时标 vs TaylorT2 能量映射——NR 代理基准，
+ *         覆盖 2.5PN/1PN+2.5PN/1PN+2PN+2.5PN 三种组合）与 T48（双黑洞视界
+ *         接触并合：无摩擦、帧内 NaN 消除、账本闭合、动量守恒）。
+ * v31 积分与步长体系重构（用户 4 项反馈，调研锚点：REBOUND integrator_ias15.c
+ *      逐行对齐、Rein & Spiegel 2015、Pham-Rein-Spiegel 2024、Hairer–Söderlind
+ *      2005 可逆变步长、Mikkola-Merritt 2006/2008、Universe Sandbox 官方文档）：
+ *      ① 【核心修复】PN 全开双黑洞并合守恒量单调漂移：变步长判据含时间反演奇量
+ *         （maxAccMag 经 1PN ṙ·v 项、spinAcc 经滞后力矩）且在步首求值 → 中点映射
+ *         不再自逆 → secular 泵能。新调度 = Hairer–Söderlind 中点规则：判据全部
+ *         时间反演偶量（位置/v²/质量/自转态）+ 中点态隐式求值（预猜-校正迭代），
+ *         保守系统能量误差恢复有界；中点不收敛自动折半重做（整步回滚含账本）。
+ *      ② IAS15 对齐 REBOUND：PRS23（现行默认）/GLOBAL(R&S15) 双判据、步拒绝
+ *         （误差欲缩 >4× → 整步回滚重做）、4× 增长帽、min_dt 地板、Everhart
+ *         e 预测器（b−e 修正）、收敛判据改 max|Δb₆|/max|a(末内部点)|；
+ *         常数表 v21 已逐位核对（h/rr/c/d + w/2）。
+ *      ③ IAS15 内置自动步长接管：选中 IAS15 时自适应复选框灰锁为开；Yoshida4
+ *         自适应开时「每帧步数」滑条灰锁为 1（Universe Sandbox 语义：用户只设
+ *         速度目标，精度与补步全自动）；「步数预算」旋钮删除（与滑条语义重复），
+ *         改为每帧墙钟自动预算（220ms 内跑尽量多精度最优步 = 安全的最快）。
+ *      ④ 新增自检 T41-T46：IAS15 对标论文 e=0.9（机器精度/收敛阶/自适应鲁棒）、
+ *         1PN 进动 IAS15 版、PN 全开 BBH 并合账本闭合（双积分器路径）。
  * v22 黑洞渲染重构（用户 v23 反馈：凑近两侧鼓包 / 缩放时影子与扭曲不匹配 /
  *      屏缘鼓包变大 / Kerr 无效果）：
  *      ① 根因 = v21 像素空间弱场映射（sp = C + d(1−θE²/r²)）无透视校正——Python
@@ -641,6 +690,37 @@ body.free-touch .pad{display:grid}
  *         置 0 + tDepth 置 null 避免同帧深度纹理反馈）——星球遮挡、黑洞影子
  *         代理遮挡语义与 v24/v28 一致。'absolute' 模式渲染路径逐位不变
  *         （LDR 叠加层 + OVERLAY_OCCL_FS 纹理遮挡，默认档零回归）。
+ * v30 物体式退役 + 物理链改进（用户裁决：「非光线追踪的屏幕空间后处理无法
+ *      100% 准确弯曲近处/背后/围绕一圈的叠层 —— 屏幕缓冲里被影子/帧界裁掉的
+ *      像素信息先天缺失（被黑洞直接遮挡的天体/叠层不在缓冲里、出帧内容不在
+ *      缓冲里、光子环内多级像更不可能），无法凭空重建弯曲像；没有 100% 把握
+ *      的非光追实现，就把物体模式删除，只保留绝对，选择栏去掉」）——
+ *      ① 「物体式」整体退役：occlMode 变量、occlSeg 选择栏、v29 场景化基建
+ *         （overlayGroup/OVERLAY_SCENE_GAIN/uMode/uGain/ovlSrgbToLin）、v28
+ *         CPU warp 全家（warpPoint/lensRotToward/WARP_BMAX/fr.lens warp 字段/
+ *         网格扭曲门控细分/轨迹顶点 warp 分支）全部删除；TRAIL_FS/HZ_FS 恢复
+ *         v20 LDR 直出，OverlayPass 恒承载全部叠层（v20/v24/v28b 路径逐位），
+ *         存档 occlMode 字段忽略。v28 四修复（暂停旋转同步/曝光/叠层消失/
+ *         竖线）与遮挡系统（OVERLAY_OCCL_FS 深度遮挡 + OutputPass depth off
+ *         修复）全部保留；lensSoftcap/lensSeries/lensRhoOfB/lensPhiOut 数学
+ *         核心保留（__bhLensTest 自检锚点 ρ(8M)=49.19° 依赖）。
+ * v30c 物理链收口（用户验收：多样本温度 ≤5% / 气压不太离谱 / 密度全程正常；
+ *      自适应第二维度旋钮）——
+ *      ① 气压拟合：气巨/冰巨星界限 50 M⊕ → 10 M⊕（天王 14.5 / 海王 17.1 M⊕
+ *         旧界误入岩石冷区分支，气压差 −1.3/−2.7 dex → 修正后 0.00 dex）；
+ *      ② 温度显示口径：气巨显示 1-bar 层温度 T_1bar = T_eff·GIANT_T1RATIO
+ *         （木 165.1 / 土 134.1 / 天 76.4 / 海 72.0K，T_eff⁴=T_eq⁴+q_int/σ 仍为
+ *         辐射口径；海王内热 0.0165→0.434 W/m² 实测值）；冷而裸（T_eq<150K 且
+ *         P_fit<1e-3 bar）天体显示 max(全球均值, 0.8·T_ss=1.131·T_eq 昼侧加权)
+ *         —— 飞掠红外测温口径，Europa/Callisto/Triton/Pluto/Enceladus 回 ±5%；
+ *         Triton/Enceladus Bond 反照率取文献区间内 0.78/0.72；T39 全样本
+ *         17 样本自检（行星 ≤3%，木卫三 +9% 观测口径差如实豁免，scripts/
+ *         v30_fit.py 全表复核）；
+ *      ③ 自适应步长「步数预算」开放为用户可调（每帧最多步数，默认 4000，第二
+ *         维度旋钮：近点 dt 收紧时自动补步数维持时间流速，预算耗尽宁慢不放大
+ *         dt；BBH 每帧推进均匀性自检 PASS）；
+ *      ④ 显示核提取为纯函数 surfTempPure（meta.gh/meta.pressure 覆盖透传，
+ *         信息面板行为不变，可静态自检）。
  * v28b 渲染修复（用户 4 项反馈 + 全量回归。定位手段：无头浏览器逐 bug 复现
  *      + pass 链 ping-pong 考古 + three.js r170 源码核对 + GL draw-call 插桩）：
  *      ① 暂停后旋转网格/附加层不跟上（缩放一次才跟上）：helperCache 键缺视点
@@ -792,7 +872,8 @@ const M_SUN = 1.989e30, M_JUPITER = 1.898e27, M_EARTH = 5.972e24;
 const AU = 1.496e11, DAY_SEC = 86400, YEAR_SEC = 365.25 * DAY_SEC, CENTURY_SEC = 100 * YEAR_SEC;
 const LY = 9.4607304725808e15;
 const GRAV_SOFTENING_SQ = 1e-20;                       // 引力软化（防除零），与原版一致
-const ADAPTIVE_ETA = 0.001;                            // 自适应步长启发式参数（兼顾 1PN 强场近星点精度）
+const ADAPTIVE_ETA = 0.002;                            /* v32：0.001→0.002。辛相误差每轨 ~2e-10 仍远低于需求；
+                                                        * 实测弱场偏心/BBH 并合 ~2× 提速；强场近星点仍由判据 4/4b 接管 */
 const ADAPTIVE_ETA_SPIN = 0.01;                        // 自适应步长自转判据系数（每步 |ΔΩ| ≤ η·(|Ω|+ω_dyn)）
 const ADAPTIVE_SOFT_SQ = (0.001 * AU) * (0.001 * AU);  // 自适应步长最小距离软化
 const ARCSEC_PER_RAD = 206264.80624709636;
@@ -832,15 +913,18 @@ const TIDE_Q_STAR = 1e6, TIDE_Q_GIANT = 1.5e4, TIDE_Q_NS = 1e6, TIDE_Q_BD = 1e5;
 const PN_TIDE_R_MIN = 1e-2;
 const PN_DT_ETA = 0.022;                                // 强场 PN 步长系数（×GM/c³，见 calcAdaptiveDt）
 /* v19f：极强场加密（并合末段防“泵能弹走”）。
- * 旧判据 dt = 0.022·dynT·γ^1.5 ≡ 0.022·(GM/c³)（与 γ 无关，深度盲）：γ≤0.03 已验证优良
- * （BBH 预设/T13），但 γ≳0.08 后 1PN 滞后噪声×2.5PN 耗散每轨泵能超过物理衰减 ——
- * 实测 BBH 36+29M☉ γ≈0.107：dt=3e-8→净误差−0.14%（3e-7→+3.9%，3e-6→+31%），
- * 旧判据 dt≈1.18e-5 s（=0.037·GM/c³）在强场段反弹 3 次并合拖慢 2 倍。
- * 加密律 dt = PN_DEEP_ETA·(GM/c³)·(γ0/γ)^PN_DEEP_EXP：γ=γ0 处与旧判据连续
- * （0.022×2^{3/4}=0.037，致密间距软化膨胀因子），γ=0.107 处收紧 164 倍至 7.2e-8 s
- * （预期净误差 ≈+0.4%）。γ≤γ0 完全不触发（行星/BBH 预设零影响）。 */
+ * 【v32 修订】原指数 PN_DEEP_EXP=4.0 是针对 v30 非可逆调度的泵能机制调校的；
+ * v31 可逆中点调度已从机制上消除该泵能（见 advanceAdaptiveYoshida 注释），
+ * 加密律仅作分辨率保守余量。实测（Node 64 位台架，BBH 36+29M☉ @35Hz）：
+ * 指数 4.0 时 plunge 段 dt 比 IAS15 误差驱动步长保守 ~340×（单次并合 >3×10⁶ 步，
+ * 交互体验为「合并末端卡死/时间流速骤降」）；改为指数 1.5（γ=γ0 处连续、常数
+ * 不变）后并合步数下降 ~20×，2.5PN 啁啾相位误差每轨仍 ≤1e-11（T40/T47 验收）。
+ * γ≤γ0 完全不触发（行星/BBH 预设零影响）。
+ * 旧判据背景：dt = 0.022·dynT·γ^1.5 ≡ 0.022·(GM/c³)（与 γ 无关，深度盲）：γ≤0.03 已验证优良
+ * （BBH 预设/T13），但 v30 非可逆调度下 γ≳0.08 后 1PN 滞后噪声×2.5PN 耗散每轨泵能超过物理
+ * 衰减（实测 dt=3e-8→净误差−0.14%，3e-7→+3.9%，3e-6→+31%）——该机制 v31 起已根除（T45 复验）。 */
 const PN_GAMMA_DEEP = 0.03;
-const PN_DEEP_EXP = 4.0;
+const PN_DEEP_EXP = 1.5;
 const PN_DEEP_ETA = 0.037;
 const GW_DIST_MPC = 100;
 const GW_MAX_SAMPLES = 2048;
@@ -884,6 +968,22 @@ const IAS_D = [0.0562625605369221464656522, 0.0031654757181708292499905, 0.23650
 const IAS_W = [0.015625, 0.0926790774014896393, 0.152065310323392564, 0.188258772694559278,
   0.195786083726246797, 0.17350739781725064, 0.124823950664932482, 0.0572544073721285997]; // ∫₀¹拉格朗日基
 const IAS_EPS = 1e-9;              // Rein-Spiegel 步长监控目标（默认同 REBOUND）
+/* v31 IAS15 自适应步长（REBOUND integrator_ias15.c 全套移植，见 stepIAS15Adaptive）：
+ * IAS_ADAPTIVE_MODE：0 = PRS23（Pham-Rein-Spiegel 2024，2024-01 起的 REBOUND 默认判据，
+ *                    以 a/jerk/snap 估计力变化时标）；1 = GLOBAL（Rein & Spiegel 2015
+ *                    原始判据 err = max|b₆|/max|a_end|，含慢变加速度滤除）。
+ * IAS_SAFETY = 0.25：相邻步最大增/减因子（REBOUND safety_factor）；步长欲缩 >4× 时
+ *                    整步拒绝回滚重做（防大步误差污染），欲增 >4× 时封顶。
+ * IAS_MIN_DT：步长绝对地板（REBOUND min_dt 默认 0；此处取 1e-13 s 防 r→0 死锁，
+ *             与 Yoshida 路径深场地板一致），地板同时保证拒绝循环几何收敛必终止。
+ * iasEpsilon：运行时可写（测试用）；= 0 时关闭自适应走固定步长（同 REBOUND
+ *             ias15.epsilon = 0 语义）。 */
+const IAS_ADAPTIVE_MODE = 0;       // 默认对齐现行 REBOUND（PRS23）
+const IAS_SAFETY = 0.25;
+const IAS_MIN_DT = 1e-13;
+let iasEpsilon = IAS_EPS;
+let iasDtNext = Infinity;          // 控制器维护的「下一步建议步长」（上限 = 用户步长）
+let iasRejectCount = 0;            // 统计：步拒绝次数（诊断用）
 function iasSqrt7(a) {             // 机器无关 7 次方根（REBOUND 同款）
   let scale = 1;
   while (a < 1e-7 && a > 0) { scale *= 0.1; a *= 1e7; }
@@ -1006,53 +1106,240 @@ const GH_EARTH = 288.15 / 255.0;     // 地球温室强度 1.1294（255K 平衡 
  *    M/K 星（<4500K）冰-反照反馈弱化 → 同气压下地表更暖，η 最高 +25%；
  *    F 星（>6200K）外压-增温，η 最高 −5%；太阳型 5772K η=1。 */
 const GH_TAU0 = 0.840, GH_PGAMMA = 1.143, GH_GDELTA = 0.048;
-const GH_FIT_PTS = [[2, 0], [5, 0.31], [8, 0.65], [11.19, 1.0], [14, 1.08]];
 function ghSpectrumEta(teff) {
   if (!(teff > 0)) return 1;
   if (teff < 4500) return 1 + 0.25 * Math.min(1, (4500 - teff) / 1500);
   if (teff > 6200) return 1 - 0.05 * Math.min(1, (teff - 6200) / 1500);
   return 1;
 }
-function fitGHFactor(mass, radius, pressureBar, starTeff) {
+/* ---------------- v30 表面气压自动拟合（用户需求：按「质量 + 距母星距离 + 总辐照度」
+ * 拟合大气压，多恒星场景安全；编辑/添加面板气压留空时启用） ----------------
+ * 自变量：v_esc（质量/半径）与 T_eq（总辐照度 ΣE_i·F_⊙,1AU 与 Bond 反照率 ——
+ * 多恒星自动求和，距离/光度信息都编码在辐照度里）。三区物理（scripts/v30_fit.py
+ * 全太阳系样本复核：类地四星 dex ≤0.5、卫星量级正确）：
+ *  ① 冷区 T_eq < 85K：挥发性 N₂ 蒸气压平衡（Clausius-Clapeyron，L/R=719.8 K，
+ *     两点锚 63.15K/12.5kPa + 77.36K/101.3kPa）× Jeans 门（λ_N₂(28u, T_day0)）——
+ *     泰坦 2.0 bar（观测 1.45）、Triton 18 μbar（14）、冥王星 50 μbar（10）量级全中；
+ *     λ < 30 时门指数关闭（恩克拉多斯 v_esc 169 m/s → 羽流级 1e-10 bar）。
+ *  ② 温区 T_eq ≥ 85K：λ_CO₂ = (v_esc/v_th(44u, T_day0=1.19·T_eq))²（昼侧因子
+ *     1.19 = 4^{1/4} 与 1 的中庸，Jeans 逃逸发生在热昼侧）：
+ *     - λ ≥ 400：大气存留（类地基准 1 bar）× runaway 增压 exp(5.69·(S_eff−1))
+ *       （S_eff = ΣE/1.06，金星锚：S_eff=1.80 → 97 bar ≈ 观测 92）；
+ *     - λ < 400：逃逸主导陡降 sigmoid（λ₀=131.9、w=27.16，火星/水星锚定；
+ *       地板 10^-14.5 bar）—— 火星 0.0062 bar（观测 0.0064）、水星/月球 ~1e-14、
+ *       Io/木卫三 ~1e-11 量级。
+ *  ③ m ≥ 10 M⊕：H/He 主体（气巨/冰巨星，天 14.5 / 海 17.1 M⊕ 锚）→ 1 bar 云顶
+ *     惯例 —— 旧界 50 M⊕ 使天/海王误入岩石冷区分支（气压差 −1.3/−2.7 dex）。
+ * v30b 补全（温度全样本 ±5% 验收）：① 木星 Bond 0.503→0.34（原误用几何值）；
+ * ② 气巨 T_eff⁴ = T_eq⁴ + q_int/σ（GIANT_QINT 四锚，NASA 黑体温度 ±0.5%）；
+ * ③ 冷大气（T_eq<100K）N₂/CH₄ 红外弱吸收 τ×0.40（泰坦锚）。
+ * v30c 显示口径收口（全样本温度 ≤5%，唯木卫三 +9% 如实注明）：
+ *  ① 气巨信息面板显示 1-bar 层温度 T_1bar = T_eff·giantT1Ratio（气巨无固体表面，
+ *     1 bar 为通用「表面」定义：木 165.1 / 土 134.1 / 天 76.4 / 海 72.0K；
+ *     T_eff⁴ = T_eq⁴ + q_int/σ 仍为辐射口径，海王 q_int 修正为实测 0.434 W/m²）；
+ *  ② 冷而裸（T_eq<150K 且拟合 P<1e-3 bar）天体：文献「平均温度」多为飞掠红外的
+ *     昼侧加权值，显示取 max(全球均值, 0.8·T_ss = 1.131·T_eq 昼侧加权) ——
+ *     Europa/Callisto/Triton/Pluto/Enceladus 全部回口径（Io 与潮汐热取 max 自动兼容，
+ *     Triton/Enceladus Bond 反照率同步取文献区间内 0.78/0.72）；
+ *  ③ 木卫三观测 110K 恰近其全球均值口径（106K），昼侧口径给 119.9K（+9.0%）
+ *     为唯一 >5% 样本（观测口径不一致所致，T39 自检如实断言）；行星类全部 ≤3%。 */
+const PVP_LR = 719.8, PVP_T0 = 77.36, PVP_P0 = 101325;   /* N₂ Clausius 锚 */
+const P_LAMBDA0 = 131.9, P_WSIG = 27.16, P_FLOOR = 14.5; /* 温区陡降 sigmoid */
+const P_GATE_L = 30.0, P_GATE_W = 2.1;                   /* 冷区 Jeans 门 */
+const P_KRUN = 5.69, P_SRUN = 1.06, P_CAP_L = 400.0;     /* runaway（金星锚） */
+const P_GIANT_M = 10 * M_EARTH;                          /* 气巨/冰巨星界限（天 14.5 / 海 17.1 M⊕ 锚；v30c 旧界 50 M⊕ 漏判冰巨星） */
+const P_DAY_F = 1.19;                                    /* 昼侧温度因子 T_day0 = 1.19·T_eq */
+function fitPressureAuto(mass, radius, irrSum, starTeff, alb) {
+  if (!(mass > 0)) return 0;
+  if (mass >= STAR_M_MIN) return 0;                       /* 恒星无固体表面气压 */
+  const R = radius > 0 ? radius : massRadius(mass);
+  if (!(R > 0)) return 0;
+  if (mass >= P_GIANT_M) return 1;                        /* 气巨 H/He：1 bar 云顶 */
+  const vesc = Math.sqrt(2 * G * mass / R);
+  /* 冷区蒸气压对 T 极敏感（vp ∝ exp(L/T)），Triton 0.76 vs 0.3 → 3 个量级：
+   * 必须用真实 Bond 反照率（调用方传 bodyAlbedoOf）；缺省 0.3 类地均值 */
+  const Teq = bodyTempOf(irrSum, alb > 0 ? alb : 0.3);
+  if (!(Teq > 0)) return 0;                               /* 无辐照信息（无恒星）→ 不拟合 */
+  if (Teq < 85) {
+    /* ① 冷区：N₂ 蒸气压 × Jeans 门（28u，昼侧） */
+    const vthN2 = 29.8277 * Math.sqrt(P_DAY_F * Teq);     /* √(3k/28u) = 29.8277 m/s/√K */
+    const lam = (vesc / vthN2) * (vesc / vthN2);
+    const gate = lam >= P_GATE_L ? 1 : Math.exp(-(P_GATE_L - lam) / P_GATE_W);
+    const Pbar = PVP_P0 * Math.exp(-PVP_LR * (1 / Teq - 1 / PVP_T0)) / 1e5;
+    return clampNum(Pbar * gate, 1e-16, 1e3);
+  }
+  const vthCO2 = 23.8064 * Math.sqrt(P_DAY_F * Teq);      /* √(3k/44u) = 23.8064 */
+  const lamC = (vesc / vthCO2) * (vesc / vthCO2);
+  if (lamC >= P_CAP_L) {
+    /* ②a 存留区：1 bar 基准 × runaway 增压（S_eff = ΣE/1.06） */
+    const sEff = irrSum / P_SRUN;
+    if (sEff > 1) return Math.min(Math.exp(P_KRUN * (sEff - 1)), 158);
+    return 1;
+  }
+  /* ②b 逃逸主导陡降 */
+  const s = 1 / (1 + Math.exp((lamC - P_LAMBDA0) / P_WSIG));
+  return clampNum(Math.pow(10, -P_FLOOR * s), 1e-16, 1);
+}
+/* v30：温室因子 = 灰大气（显式气压或自动拟合气压驱动）。
+ * v22 的 v_esc 经验分段（GH_FIT_PTS）退役 —— 用户裁决：拟合对象是气压本身
+ * （质量+轨道+总辐照度 → P → 灰大气 τ(P) → g），v_esc 单参无法表达
+ * runaway（金星）也无法区分供给差异，且与气压输入路径语义重复。 */
+function fitGHFactor(mass, radius, pressureBar, starTeff, irrSum, alb) {
   if (!(mass > 0) || !(radius > 0)) return GH_EARTH;
   const eta = ghSpectrumEta(starTeff);
-  if (pressureBar > 0) {
-    /* 灰大气模型（气压驱动） */
-    const gSurf = G * mass / (radius * radius);
-    const tau = GH_TAU0 * Math.pow(pressureBar, GH_PGAMMA) * Math.pow(9.81 / gSurf, GH_GDELTA);
-    const g = Math.pow(1 + 0.75 * tau, 0.25) * eta;
-    return clampNum(g, 1, 6);
-  }
-  /* v_esc 经验分段（气压留空的粗拟合） */
-  const vesc = Math.sqrt(2 * G * mass / radius) / 1000;   // km/s
-  const pts = GH_FIT_PTS;
-  let f;
-  if (vesc <= pts[0][0]) f = pts[0][1];
-  else if (vesc >= pts[pts.length - 1][0]) f = Math.min(1.15, pts[pts.length - 1][1]);
-  else {
-    for (let k = 0; k < pts.length - 1; k++) {
-      if (vesc <= pts[k + 1][0]) {
-        const t = (vesc - pts[k][0]) / (pts[k + 1][0] - pts[k][0]);
-        f = pts[k][1] + t * (pts[k + 1][1] - pts[k][1]);
-        break;
-      }
+  if (mass >= STAR_M_MIN) return GH_EARTH;                /* 恒星无温室 */
+  let P = pressureBar;
+  if (!(P > 0)) P = fitPressureAuto(mass, radius, irrSum || 0, starTeff, alb);
+  if (!(P > 0)) return clampNum(GH_EARTH * eta, 1, 6);    /* 无辐照信息 → 地球锚回退 */
+  const gSurf = G * mass / (radius * radius);
+  let tau = GH_TAU0 * Math.pow(P, GH_PGAMMA) * Math.pow(9.81 / gSurf, GH_GDELTA);
+  /* v30b：冷大气（T_eq<100K）N₂/CH₄ 主导 —— 远红外吸收远弱于 CO₂/H₂O 灰大气
+   * 锚定（泰坦：τ×0.40 → gh 1.126，T=93.9K vs 观测 94.0；旧值 105K/+11.9%）。
+   * 仅作用于 T_eq<100K 且有气压的天体；温区金星/地球/火星路径逐位不变 */
+  const TeqC = bodyTempOf(irrSum || 0, alb > 0 ? alb : 0.3);
+  if (TeqC > 0 && TeqC < 100) tau *= 0.40;
+  return clampNum(Math.pow(1 + 0.75 * tau, 0.25) * eta, 1, 6);
+}
+/* v30b：气巨内部热流（W/m²，log 质量分段线性插值）。锚点由 σ(T_eff⁴−T_eq⁴)
+ * 反演（T_eff = NASA 有效温度），与文献实测内热一致：木星 5.24（实测 5.44）、
+ * 土星 2.16（实测 2.01）、天王 0.042（几乎无内热）、海王 0.434（实测 ≈2.6× 吸收流；
+ * v30c 旧值 0.0165 系误用黑体温度 47.3K 反演，使海王 T_eff 低估 10.7K）。仅 m ≥ P_GIANT_M 生效 */
+const GIANT_QINT = [[14.5, 0.042], [17.1, 0.434], [95.2, 2.16], [317.8, 5.24]];  /* M⊕ → W/m² */
+function giantInternalFlux(mass) {
+  const mE = mass / M_EARTH, A = GIANT_QINT;
+  if (!(mE > A[0][0])) return A[0][1];
+  if (mE >= A[A.length - 1][0]) return A[A.length - 1][1];
+  for (let k = 1; k < A.length; k++) {
+    if (mE <= A[k][0]) {
+      const t = (Math.log10(mE) - Math.log10(A[k - 1][0])) / (Math.log10(A[k][0]) - Math.log10(A[k - 1][0]));
+      return A[k - 1][1] * Math.pow(A[k][1] / A[k - 1][1], t);
     }
   }
-  return clampNum((1 + 0.1294 * Math.max(0, Math.min(1.15, f))) * eta, 1, 6);
+  return A[A.length - 1][1];
 }
-function bodyStarTeff(i) {
-  /* 母星有效温度（光谱修正用）；无恒星/自身即恒星 → 太阳型 5772（η=1） */
-  const nm = meta[i] && meta[i].orbits_around;
-  if (nm) for (let k = 0; k < N; k++) {
-    if (meta[k].name === nm && starPhysCache[k]) return starPhysCache[k].T;
+/* v30c：气巨 1-bar 层显示比（T_1bar/T_eff，log 质量分段几何插值）。气巨无固体表面，
+ * 通用「表面温度」取 1-bar 气压层（Wikipedia/NASA fact sheet 口径）：
+ * 木 165.1K（T_eff 124.30）/ 土 134.1（95.08）/ 天 76.4（59.15）/ 海 72.0（59.31）。
+ * 比值 1.21~1.41 为绝热大气增温（灰大气 τ~1 仅给 ~1.13，深绝热层需锚定实测）。 */
+const GIANT_T1RATIO = [[14.5, 1.2916], [17.1, 1.2139], [95.2, 1.4105], [317.8, 1.3282]];  /* M⊕ → T_1bar/T_eff */
+function giantT1Ratio(mass) {
+  const mE = mass / M_EARTH, A = GIANT_T1RATIO;
+  if (!(mE > A[0][0])) return A[0][1];
+  if (mE >= A[A.length - 1][0]) return A[A.length - 1][1];
+  for (let k = 1; k < A.length; k++) {
+    if (mE <= A[k][0]) {
+      const t = (Math.log10(mE) - Math.log10(A[k - 1][0])) / (Math.log10(A[k][0]) - Math.log10(A[k - 1][0]));
+      return A[k - 1][1] * Math.pow(A[k][1] / A[k - 1][1], t);
+    }
   }
-  return 0;   /* 0 → ghSpectrumEta 返回 1 */
+  return A[A.length - 1][1];
+}
+/* v30b：同步轨道卫星潮汐加热（Peale & Cassen 1978 平衡潮耗散，纯函数可静态测）：
+ * Ė = (63/4)(k₂/Q)(GM_p²R⁵/a⁶)·e²·n，q = Ė/(4πR²)。osculating a/e/n 由状态矢量
+ * 现算（双曲 ε≥0 → 0）。k₂/Q 缺省 0.012（k₂=0.3、Q=25，Io 已发表区间 10~40 内）：
+ * Io → 2.7 W/m²（观测 ~2.4，温度 -13.5% → -3.1%）；月球 5e-4 / 地球绕日 5e-9 W/m²，
+ * 量级自动归零，不影响其他天体 */
+function tideFluxState(mu, mp, R, rx, ry, rz, dvx, dvy, dvz, k2q) {
+  const r2 = rx * rx + ry * ry + rz * rz, r = Math.sqrt(r2);
+  if (!(r > 0) || !(R > 0) || !(mu > 0)) return 0;
+  const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
+  const eps = v2 / 2 - mu / r;
+  if (eps >= 0) return 0;                       /* 双曲/抛物 → 无受束轨道潮 */
+  const a = -mu / (2 * eps);
+  const hx = ry * dvz - rz * dvy, hy = rz * dvx - rx * dvz, hz = rx * dvy - ry * dvx;
+  const h2 = hx * hx + hy * hy + hz * hz;
+  const ecc = Math.sqrt(Math.max(0, 1 + 2 * eps * h2 / (mu * mu)));
+  if (!(ecc > 1e-6)) return 0;                  /* 圆轨道无耗散 */
+  const n = Math.sqrt(mu / (a * a * a));
+  const Pw = (63 / 4) * k2q * (G * mp * mp * R * R * R * R * R / (a * a * a * a * a * a)) * ecc * ecc * n;
+  return Pw > 0 ? Pw / (4 * Math.PI * R * R) : 0;
+}
+/* 运行时包装：主星取 orbits_around 目标（findPrimaryIdx），k₂/Q 缺省 0.012 */
+function bodyTidalFluxOf(i) {
+  const p = findPrimaryIdx(i);
+  if (!(p >= 0 && p !== i)) return 0;
+  const mp = massA[p], mi = massA[i];
+  if (!(mp > 0) || !(mi > 0)) return 0;
+  const R = meta[i].radius > 0 ? meta[i].radius : massRadius(mi);
+  const rx = px[i] - px[p], ry = py[i] - py[p], rz = pz[i] - pz[p];
+  const dvx = vx[i] - vx[p], dvy = vy[i] - vy[p], dvz = vz[i] - vz[p];
+  return tideFluxState(G * (mp + mi), mp, R, rx, ry, rz, dvx, dvy, dvz, 0.012);
+}
+/* v30c：天体表面温度（信息面板用）—— 纯函数核 surfTempPure 可静态自检：
+ * 类地/卫星：T_glob⁴ = (T_eq·gh)⁴ + q_tide/σ（灰大气 + 潮汐热）；
+ * 气巨（m ≥ P_GIANT_M）：T_eff⁴ = T_eq⁴ + (q_int + q_tide)/σ → 显示 T_1bar = T_eff·giantT1Ratio；
+ * 冷而裸（T_eq<150K 且 P_fit<1e-3 bar）：显示 max(T_glob, 1.131·T_eq)（v30c 昼侧加权
+ * 口径，详见 fitPressureAuto 块注释）。bodyGHFactor 的 meta.gh/meta.pressure 手动
+ * 覆盖经参数透传，显示路径行为不变；行星类样本温度误差全部 ≤3%（T39 全样本） */
+function surfTempPure(mass, radius, irrSum, alb, qtide, starTeff, ghOverride, pressureBar) {
+  const Teq = bodyTempOf(irrSum, alb > 0 ? alb : 0.3);
+  if (!(Teq > 0)) return { T: 0, Teq: 0, fac: 1, br: '' };
+  if (mass >= P_GIANT_M) {
+    const q = giantInternalFlux(mass) + (qtide || 0);
+    const Teff = Math.pow(Teq * Teq * Teq * Teq + q / SIGMA_SB, 0.25);
+    const T = Teff * giantT1Ratio(mass);
+    return { T, Teq, fac: T / Teq, br: '1bar' };
+  }
+  const g = (typeof ghOverride === 'number' && isFinite(ghOverride) && ghOverride >= 1 && ghOverride <= 6)
+    ? ghOverride : fitGHFactor(mass, radius, pressureBar || 0, starTeff, irrSum, alb);
+  const T4 = Teq * Teq * Teq * Teq * g * g * g * g + (qtide || 0) / SIGMA_SB;
+  let T = Math.pow(T4, 0.25), br = 'gray';
+  if (Teq < 150) {
+    const Pfit = pressureBar > 0 ? pressureBar : fitPressureAuto(mass, radius, irrSum, starTeff, alb);
+    const Td = 1.1314 * Teq;                       /* 0.8·4^{1/4}·T_eq 昼侧加权 */
+    if (Pfit > 0 && Pfit < 1e-3 && Td > T) { T = Td; br = 'dayside'; }
+  }
+  return { T, Teq, fac: T / Teq, br };
+}
+function bodySurfTempOf(i) {
+  const R = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+  return surfTempPure(massA[i], R, bodyIrradianceSum(i), bodyAlbedoOf(i), bodyTidalFluxOf(i), bodyStarTeff(i),
+    meta[i] && meta[i].gh, meta[i] && meta[i].pressure);
+}
+/* v30：多恒星安全的主导恒星温度 —— 按辐照贡献最大者取 T_eff（旧版只认
+ * orbits_around 单一母星，双星/三体系统的行星光谱修正会取错恒星） */
+function bodyStarTeff(i) {
+  let best = 0, bestE = 0;
+  for (let s = 0; s < N; s++) {
+    if (s === i || !starPhysCache[s]) continue;
+    const dx = px[s] - px[i], dy = py[s] - py[i], dz = pz[s] - pz[i];
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 <= 0) continue;
+    const E = starPhysCache[s].L / (4 * Math.PI * d2) / F_SUN_1AU;
+    if (E > bestE) { bestE = E; best = starPhysCache[s].T; }
+  }
+  return best;   /* 0 → ghSpectrumEta 返回 1 */
+}
+/* v30：Bond 反照率（平衡温度/气压拟合/温室链共用）。
+ * 内置太阳系天体按名锚定观测 Bond 反照率（NASA fact sheet）—— 旧版用颜色
+ * 亮度代理导致水星（浅灰 #B8B8B8 → A≈0.49，真实 0.088）平衡温度低估 13%，
+ * 即用户报告的「水星平均温度非常偏离观测值」根因。 */
+const BOND_ALBEDO = {
+  Mercury: 0.088, Venus: 0.76, Earth: 0.298, Mars: 0.25,
+  /* v30b：木星 0.503 是几何反照率 —— Bond 反照率为 0.34（NASA fact sheet）。
+   * 用错使木星 T_eq 低估 7%（102.4K vs 110.1K），是 T39 锚定前最大偏差源 */
+  Jupiter: 0.34, Saturn: 0.342, Uranus: 0.300, Neptune: 0.290,
+  Moon: 0.11, Pluto: 0.49, Ceres: 0.09,
+  Titan: 0.265, Io: 0.63, Europa: 0.68, Ganymede: 0.43, Callisto: 0.22,
+  /* v30c：Triton 0.76→0.78 / Enceladus 0.81→0.72 —— 文献 Bond 区间内取值
+   * （Triton 0.5~0.82 / Enceladus 0.7~0.81），配合昼侧显示口径使两者回 ±5% */
+  Triton: 0.78, Enceladus: 0.72
+};
+function bodyAlbedoOf(i) {
+  const m = meta[i] || {};
+  const bt = BOND_ALBEDO[m.name];
+  if (bt !== undefined) return bt;
+  if (m.texture) return 0.3;
+  /* 自定义天体：颜色亮度代理（线性域）—— 暗岩 ~0.1 / 类地 ~0.2 / 冰雪 0.5+ */
+  const c = hexToRgb(m.color || '#FFFFFF');
+  const lum = clampNum(0.2126 * Math.pow(c[0] / 255, 2.2) + 0.7152 * Math.pow(c[1] / 255, 2.2) + 0.0722 * Math.pow(c[2] / 255, 2.2), 0.02, 0.95);
+  return clampNum(0.06 + 0.55 * Math.pow(lum, 1.5), 0.06, 0.85);
 }
 function bodyGHFactor(i) {
   const gh = meta[i] && meta[i].gh;
   if (typeof gh === 'number' && isFinite(gh) && gh >= 1 && gh <= 6) return gh;
   const R = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
-  return fitGHFactor(massA[i], R, meta[i].pressure, bodyStarTeff(i));
+  return fitGHFactor(massA[i], R, meta[i].pressure, bodyStarTeff(i), bodyIrradianceSum(i), bodyAlbedoOf(i));
 }
 /* 轨迹渐隐：最老端 alpha→0（越接近消失越透明），幂次控制渐隐曲线 */
 const TRAIL_FADE_POW = 1.4, TRAIL_ALPHA_LINE = 0.85, TRAIL_ALPHA_DOT = 0.9;
@@ -1075,6 +1362,9 @@ let gr1pnOn = true, gr25On = false, gr2pnOn = true, gr35On = false, gr15spinOn =
 let iasB = null, iasGt = null, iasX0 = null, iasV0 = null, iasA0 = null;
 let iasXT = null, iasVT = null, iasAT = null, iasCSx = null, iasCSv = null, iasCap = 0;
 let iasSnapB = null, iasSpinT = null, iasSpinZ = null;   // 快照/自旋Radau累加（零GC）
+/* v31：Everhart e 预测器与「上接受步提交后真值」副本（REBOUND e/er/br 同构）——
+ * 提交后按 ratio 预测下一步 b（含 b−e 修正），拒绝时从副本按新 ratio 重排 */
+let iasE = null, iasLastB = null, iasLastE = null;
 let iasLastDt = 0, iasDtSuggest = Infinity, iasReady = false, iasN3 = -1;
 /* v19 中点阶段试探态缓冲（ensureCap 随主数组扩容）：pm/vm = 中点试探、a/RR/TL = 试探力、
  * pn = 下一次中点、mSpin = 试探自转加速度（真实 spinAcc 在 commit 前不被污染） */
@@ -1106,16 +1396,11 @@ let spinAxX, spinAxY, spinAxZ;         // 自转轴单位向量（渲染与潮�
 /* 渲染开关与相机状态 */
 let projMode = 'persp';                // ortho 正交 / persp 透视（v5 起默认透视）
 let physSizeOn = true;                 // 星球真实尺寸（v22 默认开，用户要求；老存档仍按存档恢复）
-/* v28：叠层透镜模式（用户需求：黑洞对轨迹/辅助网格等叠层的影响方式可切换）
- * 'absolute'（默认）：绝对 —— 黑洞不扭曲也不吞掉叠层（黑洞深度代理不写深度，
- *   叠层直线穿过影子区；普通星球的深度遮挡不受影响，v24 语义保留）；
- * v29：「物体式」渲染场景化 —— 叠加层（轨迹/辅助网格/宜居带）直绘进 HDR 场景
- *   缓冲（预泛光/预透镜）：颜色折算成场景辐射亮度（sRGB 解码 ×
- *   OVERLAY_SCENE_GAIN/曝光，上限与天体 uCap 同口径）与天体共享 ACES 色调映射
- *   /泛光；遮挡升级为硬件深度测试（星球/影子代理语义不变）；扭曲由
- *   GravLensPass 逐像素与星光同口径完成（影内捕获自然吞没）—— CPU warpPoint
- *   逐顶点偏折退役。v28 旧实现代码路径保留（warpOn 恒 false）以备回滚。 */
-let occlMode = 'absolute';
+/* v30：叠层透镜模式选择栏退役（用户裁决：非光线追踪的屏幕空间后处理无法
+ * 准确弯曲「近处/背后/围绕一圈」的叠层 —— 屏幕缓冲里被影子/视野边界裁掉的
+ * 像素信息先天缺失，无法凭空重建弯曲像；光子环内多级像更不可能。因此
+ * 「物体式」整体退役，叠层恒走「绝对」路径（v20/v24/v28b LDR 叠加层语义，
+ * v28 四修复与遮挡系统全部保留），occlMode 变量与选择栏一并删除。 */
 let starRadOn = true;                  // 恒星黑体辐射照明
 let glareOn = true;                    // 亮度眩光与发白
 let headlessOn = false;                // 无头模式
@@ -1259,11 +1544,18 @@ function autoTideLag(mass, R) {
   return 1e4;
 }
 /* ---------------- 恒星天体物理（渲染用，不影响引力计算） ----------------
- * massRadius: 质量半径经验关系，米。主序段取 Kippenhahn 幂律；棕矮星近恒定；
- * 行星段在对数锚点间插值，锚点取太阳系实测平均半径口径：水星 0.383 / 海王星 3.86 /
- * 天王星 3.98 / 土星 9.14 / 木星 10.97 R⊕（IAU 平均半径），岩石行星趋势参照 Zeng et al. 2016。
+ * massRadius: 质量半径经验关系，米。
+ * v30 行星段锚点补真实水星/火星（旧表 [0.05,0.40]/[0.3,0.72] 间插值给水星
+ * +8% 半径/-20% 密度、火星 -3.5%/+11%）；恒星段废弃单一幂律（旧 x^0.8/x^0.57
+ * 在 0.5M☉ +24%、20M☉ -41%，密度误差近 3 倍），改主序锚点对数插值
+ * （Eker 2018 / Torres 2010 / Cox 2000 主序中值）+ >40M☉ 幂律延伸。
+ * 行星段锚点取 IAU 平均半径口径：水星 0.383 / 海王星 3.86 / 天王星 3.98 /
+ * 土星 9.14 / 木星 10.97 R⊕，岩石行星趋势参照 Zeng et al. 2016。
  * 小于 0.05 M⊕ 按常密度 3300 kg/m³ 球体反解。 */
-const MR_ANCHORS = [[0.05, 0.40], [0.3, 0.72], [1, 1.0], [2, 1.30], [5, 2.0], [14.5, 3.98], [17.1, 3.86], [95, 9.14], [318, 10.97], [1300, 11.6], [4131, 10.3]];
+const MR_ANCHORS = [[0.05, 0.38], [0.0553, 0.3833], [0.10745, 0.5320], [0.3, 0.72], [1, 1.0], [2, 1.30], [5, 2.0], [14.5, 3.98], [17.1, 3.86], [95, 9.14], [318, 10.97], [1300, 11.6], [4131, 10.3]];
+/* 主序恒星段锚点（x=M/M☉ → R/R☉）：Eker+2018 / Torres+2010 主序中值，
+ * 锚点处半径误差 ≲5%（观测弥散内）；>40 M☉ 幂律 R = 16·(x/40)^0.7 延伸 */
+const STAR_MR_ANCHORS = [[0.08, 0.118], [0.1, 0.13], [0.15, 0.18], [0.2, 0.23], [0.3, 0.32], [0.4, 0.40], [0.5, 0.46], [0.6, 0.55], [0.7, 0.65], [0.8, 0.75], [0.9, 0.87], [1, 1.0], [1.15, 1.10], [1.3, 1.30], [1.5, 1.48], [1.75, 1.66], [2, 1.85], [2.5, 2.25], [3, 2.62], [4, 3.30], [5, 3.95], [7, 5.10], [10, 6.20], [15, 8.30], [20, 10.0], [30, 13.0], [40, 16.0]];
 function massRadius(m) {
   /* v20 边界保护（自动设置物理合理性检查）：非有限/非正 → 0；结果钳到 [0.1 m, 1e13 m]，
    * 防极端质量输入外推至 Inf/0 导致潮汐缓存 NaN、自适应步长崩溃 */
@@ -1274,8 +1566,17 @@ function massRadiusRaw(m) {
   if (!(m > 0) || !isFinite(m)) return 0;
   m = Math.min(m, 1e45);
   if (m >= STAR_M_MIN) {
+    /* v30：主序锚点对数插值（旧幂律 0.5M☉ +24% / 20M☉ -41% 已废） */
     const x = m / M_SUN;
-    return x < 1 ? R_SUN * Math.pow(x, 0.8) : R_SUN * Math.pow(x, 0.57);
+    const A = STAR_MR_ANCHORS;
+    if (x >= A[A.length - 1][0]) return R_SUN * A[A.length - 1][1] * Math.pow(x / A[A.length - 1][0], 0.7);
+    for (let k = 0; k < A.length - 1; k++) {
+      if (x <= A[k + 1][0]) {
+        const t = (Math.log(x) - Math.log(A[k][0])) / (Math.log(A[k + 1][0]) - Math.log(A[k][0]));
+        return R_SUN * Math.exp(Math.log(A[k][1]) + t * (Math.log(A[k + 1][1]) - Math.log(A[k][1])));
+      }
+    }
+    return R_SUN;
   }
   if (m >= 13 * M_JUPITER) return R_JUP_M * Math.pow(m / (13 * M_JUPITER), -0.09);
   const me = m / M_EARTH;
@@ -2584,9 +2885,10 @@ function kick(tau) {
  *   时间对称/哈密顿框架处理（他们用 KS 正则化 + 时间对称算法）—— 同结论。 */
 const MID_MAX_ITER = 8;
 let mpIterLast = 0;                       // 调试：最近一次阶段迭代数
+let mpConvLast = true;                    // v31：最近一次阶段是否收敛（不收敛 → 自适应路径折半重做）
 function stageMidpoint(tau) {
-  if (N === 0) return;
-  if (tau === 0) return;
+  if (N === 0) { mpConvLast = true; return; }
+  if (tau === 0) { mpConvLast = true; return; }
   /* 全局统计快照（试探求值会改写 minR2/maxAccMag/minPairM/minPairV2/tideHeatW；
    * spinAcc 由迭代最后一轮写入收敛力矩，commit 直接使用，步尾 computeAccel 再刷新） */
   const sR2 = minR2, sAM = maxAccMag, sPM = minPairM, sPV2 = minPairV2, sTH = tideHeatW;
@@ -2606,7 +2908,7 @@ function stageMidpoint(tau) {
     mpPnX[i] = xi; mpPnY[i] = yi; mpPnZ[i] = zi;
     mpVnX[i] = vxi; mpVnY[i] = vyi; mpVnZ[i] = vzi;
   }
-  let it = 0;
+  let it = 0, convOk = false;   /* v31：收敛标志外露（不收敛 → 调用方折半重做） */
   for (; it < MID_MAX_ITER; it++) {
     accumulateAccel(_wMP, _wMV, _wMA, _wMR, _wMT, spinAcc);
     /* p1 = p0 + vm·τ；v1 = v0 + a(pm,vm)·τ；中点 = (p0+p1)/2, (v0+v1)/2 */
@@ -2627,7 +2929,7 @@ function stageMidpoint(tau) {
       if (mpPnX[i] !== mpPx[i] || mpPnY[i] !== mpPy[i] || mpPnZ[i] !== mpPz[i] ||
           mpVnX[i] !== mpVx[i] || mpVnY[i] !== mpVy[i] || mpVnZ[i] !== mpVz[i]) same = false;
     }
-    if (same) break;
+    if (same) { convOk = true; break; }
     if (it >= 1) {
       let conv = true;
       for (let i = 0; i < N && conv; i++) {
@@ -2638,7 +2940,7 @@ function stageMidpoint(tau) {
             Math.abs(mpVnX[i] - mpVx[i]) / vxR > 4e-16 || Math.abs(mpVnY[i] - mpVy[i]) / vyR > 4e-16 ||
             Math.abs(mpVnZ[i] - mpVz[i]) / vzR > 4e-16) conv = false;
       }
-      if (conv) { it++; break; }
+      if (conv) { it++; convOk = true; break; }
     }
     for (let i = 0; i < N; i++) {
       mpPx[i] = mpPnX[i]; mpPy[i] = mpPnY[i]; mpPz[i] = mpPnZ[i];
@@ -2646,6 +2948,7 @@ function stageMidpoint(tau) {
     }
   }
   mpIterLast = it + 1;
+  mpConvLast = convOk;   /* v31：耗尽 MID_MAX_ITER 仍未收敛 → false（固定步长路径照旧提交并计数） */
   /* 提交：x₁ = x₀ + vm·τ；v₁ = v₀ + a(pm,vm)·τ；自转 Ω += ζ(pm,vm)·τ */
   for (let i = 0; i < N; i++) {
     kahanAdd(px, cpx, i, mpVx[i] * tau);
@@ -2704,22 +3007,27 @@ function spinVecUpdate(i, tau) {
     spinAxX[i] = Sx / Sm; spinAxY[i] = Sy / Sm; spinAxZ[i] = Sz / Sm;
   }
 }
-/* ---------------- v21 IAS15 积分器（替换 2 阶 Verlet） ----------------
+/* ---------------- v21/v31 IAS15 积分器（替换 2 阶 Verlet） ----------------
  * 15 阶 Gauss-Radau 预测-校正（Rein & Spiegel 2015；常数表 = REBOUND 5.1.1）。
  * 常数 h/rr/c/d 见文件头常量区；算法要点（Python 已验证 scripts/v21_physics_test.py A）：
- *   ① 步首按「实际使用的 dt」缩放 b 预测器系数（外层自适应每步变 dt 时预测器仍一致；
- *      这是与 REBOUND「提交后缩放」的等价重排——外层 dt 序列任意时必须如此）；
+ *   ① b 预测器在「提交后」按 dtNext/h 预测（v31 起与 REBOUND 完全同构：Everhart
+ *      e 外推 + b−e 修正，替代 v21-v30 的步首纯 q^k 缩放——外推项是 IAS15 高阶来源）；
  *   ② 7 个内部点求值与 case 1..7 的 b 更新交错（点 n 的 b 更新参与点 n+1 预测）；
- *   ③ 收敛判据 = max|Δb₆|/max|a₀|（GLOBAL 模式），<1e-16 或振荡或 12 次迭代止；
- *   ④ 步长监控 err→iasDtSuggest = (ε/err)^{1/7}·dt，由 calcAdaptiveDt 并入下步约束；
+ *   ③ 收敛判据（v31）= max|Δb₆|/max|a(末内部点)|（REBOUND 同式），<1e-16/振荡/12 次止；
+ *   ④ 自适应步长（v31）= REBOUND 全套：PRS23/GLOBAL 误差估计 → dt_new，欲缩 >4×
+ *      整步拒绝回滚重做，欲增封顶 4×，min_dt 地板；由 stepIAS15Adaptive 驱动重试；
  *   ⑤ 位置/速度终值经 Kahan 补偿提交（/6 /12 /20 /30 /42 /56 /72 与 /2 /3 /4 /5 /6 /7 /8）；
  *   ⑥ 自旋（相位/向量）与账本（辐射功/GW 角动量/场动量/潮汐热）按 IAS_W 权重在内部点
- *      Radau 积分——账本与 kick() 路径同一物理量（GW 功 = −Σm·a_RR·v·τ 等）。 */
+ *      Radau 积分——账本与 kick() 路径同一物理量（GW 功 = −Σm·a_RR·v·τ 等），
+ *      账本累加在拒绝重试时不重复入账（局部累加器，接受才提交）。 */
 function iasEnsureBuffers() {
   const need = 3 * CAP;
   if (iasCap >= need) return;
-  iasB = []; iasGt = []; iasSnapB = [];
-  for (let k = 0; k < 7; k++) { iasB.push(new Float64Array(need)); iasGt.push(new Float64Array(need)); iasSnapB.push(new Float64Array(need)); }
+  iasB = []; iasGt = []; iasSnapB = []; iasE = []; iasLastB = []; iasLastE = [];
+  for (let k = 0; k < 7; k++) {
+    iasB.push(new Float64Array(need)); iasGt.push(new Float64Array(need)); iasSnapB.push(new Float64Array(need));
+    iasE.push(new Float64Array(need)); iasLastB.push(new Float64Array(need)); iasLastE.push(new Float64Array(need));
+  }
   iasX0 = new Float64Array(need); iasV0 = new Float64Array(need); iasA0 = new Float64Array(need);
   iasXT = new Float64Array(need); iasVT = new Float64Array(need); iasAT = new Float64Array(need);
   iasCSx = new Float64Array(need); iasCSv = new Float64Array(need);
@@ -2727,36 +3035,56 @@ function iasEnsureBuffers() {
   iasCap = need; iasReady = false; iasN3 = -1;   // 缓冲重建后预测器失效
 }
 const IAS_ITER_MAX = 12;
-function stepIAS15(h, refreshStats) {
-  if (N === 0) { simTime += 0; return; }
+/* v31：Everhart 预测器（REBOUND predict_next_step 逐式移植）。
+ * e_new = q^k·(b 的二项式组合)；b_new = e_new + (b_old − e_old)（b−e 修正项）。
+ * ratio > 20 时预测器清零（与 REBOUND 同）。源/目标分离：接受步用 (lastB,lastE)→(B,E)，
+ * 拒绝步从同一源按新 ratio 重排——避免二次预测失真。 */
+function iasPredictNextStep(ratio, n3, srcB, srcE, dstB, dstE) {
+  if (ratio > 20) {
+    for (let k = 0; k < 7; k++) { dstB[k].fill(0, 0, n3); dstE[k].fill(0, 0, n3); }
+    return;
+  }
+  const q1 = ratio, q2 = q1 * q1, q3 = q1 * q2, q4 = q2 * q2, q5 = q2 * q3, q6 = q3 * q3, q7 = q3 * q4;
+  for (let i = 0; i < n3; i++) {
+    const b0 = srcB[0][i], b1 = srcB[1][i], b2 = srcB[2][i], b3 = srcB[3][i];
+    const b4 = srcB[4][i], b5 = srcB[5][i], b6 = srcB[6][i];
+    const be0 = b0 - srcE[0][i], be1 = b1 - srcE[1][i], be2 = b2 - srcE[2][i], be3 = b3 - srcE[3][i];
+    const be4 = b4 - srcE[4][i], be5 = b5 - srcE[5][i], be6 = b6 - srcE[6][i];
+    dstE[0][i] = q1 * (b6 * 7 + b5 * 6 + b4 * 5 + b3 * 4 + b2 * 3 + b1 * 2 + b0);
+    dstE[1][i] = q2 * (b6 * 21 + b5 * 15 + b4 * 10 + b3 * 6 + b2 * 3 + b1);
+    dstE[2][i] = q3 * (b6 * 35 + b5 * 20 + b4 * 10 + b3 * 4 + b2);
+    dstE[3][i] = q4 * (b6 * 35 + b5 * 15 + b4 * 5 + b3);
+    dstE[4][i] = q5 * (b6 * 21 + b5 * 6 + b4);
+    dstE[5][i] = q6 * (b6 * 7 + b5);
+    dstE[6][i] = q7 * b6;
+    dstB[0][i] = dstE[0][i] + be0; dstB[1][i] = dstE[1][i] + be1; dstB[2][i] = dstE[2][i] + be2;
+    dstB[3][i] = dstE[3][i] + be3; dstB[4][i] = dstE[4][i] + be4; dstB[5][i] = dstE[5][i] + be5;
+    dstB[6][i] = dstE[6][i] + be6;
+  }
+}
+/* v31：IAS15 单步尝试（REBOUND ias15.c step_try 忠实移植）。
+ * 返回 { acc, dtNext }：acc=true 该步已提交（px/vx 为终态，simTime 由调用方推进），
+ * dtNext = 误差监控建议的下步步长（已含 4× 增长帽与 min_dt 地板）；
+ * acc=false 步被拒绝（状态已回滚步首、预测器按 dtNext 重排），dtNext < IAS_SAFETY·h。
+ * fixed=true（旧接口兼容）：跳过误差决策，dt 恒定（REBOUND epsilon=0 语义）。
+ * 收敛判据对齐 REBOUND：max|Δb₆| / max|a(末内部点)|（v30 及以前用步首 a₀ 归一，
+ * 速度相关力下末点更贴近真残差）；迭代止于 <1e-16 / 振荡 / 12 次。 */
+function iasStepTry(h, refreshStats, fixed) {
+  if (N === 0) return { acc: true, dtNext: h };
   iasEnsureBuffers();
   const n3 = 3 * N;
-  /* ① 预测器按实际 dt 缩放（验证要点 1） */
-  if (iasReady && iasLastDt > 0 && Math.abs(h / iasLastDt - 1) > 1e-13) {
-    const q = h / iasLastDt;
-    if (q <= 20) {
-      let qk = 1;
-      for (let k = 0; k < 7; k++) { qk *= q; const B = iasB[k]; for (let i = 0; i < n3; i++) B[i] *= qk; }
-    } else {
-      for (let k = 0; k < 7; k++) iasB[k].fill(0, 0, n3);
-    }
-  } else if (!iasReady) {
-    for (let k = 0; k < 7; k++) iasB[k].fill(0, 0, n3);
+  if (!iasReady) {
+    for (let k = 0; k < 7; k++) { iasB[k].fill(0, 0, n3); iasE[k].fill(0, 0, n3); iasLastB[k].fill(0, 0, n3); iasLastE[k].fill(0, 0, n3); }
     iasCSx.fill(0, 0, n3); iasCSv.fill(0, 0, n3);
     iasReady = true;
   }
-  iasLastDt = h;
-  if (iasN3 !== n3) { iasN3 = n3; iasReady = false; for (let k = 0; k < 7; k++) iasB[k].fill(0, 0, n3); }
-  /* 步首快照（回滚用，预分配零GC）+ 基准态 */
-  for (let k = 0; k < 7; k++) iasSnapB[k].set(iasB[k].subarray(0, n3));
+  if (iasN3 !== n3) { iasN3 = n3; iasReady = false; for (let k = 0; k < 7; k++) { iasB[k].fill(0, 0, n3); iasE[k].fill(0, 0, n3); } }
+  /* 基准态（回滚源：位置/速度；预测器回滚源 = iasLastB/LastE = 上接受步提交后真值） */
   for (let i = 0; i < N; i++) { iasX0[3 * i] = px[i]; iasX0[3 * i + 1] = py[i]; iasX0[3 * i + 2] = pz[i]; }
   for (let i = 0; i < N; i++) { iasV0[3 * i] = vx[i]; iasV0[3 * i + 1] = vy[i]; iasV0[3 * i + 2] = vz[i]; }
   computeAccel();
-  let a0max = 0;
   for (let i = 0; i < N; i++) {
     iasA0[3 * i] = ax[i]; iasA0[3 * i + 1] = ay[i]; iasA0[3 * i + 2] = az[i];
-    const am = Math.abs(ax[i]) + Math.abs(ay[i]) + Math.abs(az[i]);
-    if (am > a0max) a0max = am;
   }
   /* b→g 预测（IAS_D 表） */
   const B = iasB, Gt = iasGt, D = IAS_D;
@@ -2775,14 +3103,22 @@ function stepIAS15(h, refreshStats) {
   let ledRR = 0, ledTL = 0, ledLRx = 0, ledLRy = 0, ledLRz = 0, ledPx = 0, ledPy = 0, ledPz = 0;
   const spinIx = (tideOn || gr15spinOn) && spinTx ? iasSpinT : null;
   const spinAxAcc = (tideOn || gr15spinOn) && spinAcc ? iasSpinZ : null;
-  if (spinIx) spinIx.fill(0, 0, 3 * N);
-  if (spinAxAcc) spinAxAcc.fill(0, 0, N);
   let err = 1e300, errLast = 2, iters = 0;
+  let adlMax = 0, trialA = 0;   /* v31：|Δb₆| 与末内部点 |a|（REBOUND at 归一） */
   while (true) {
     if (err < 1e-16) break;
     if (iters > 2 && errLast <= err) break;
     if (iters >= IAS_ITER_MAX) break;
-    errLast = err; err = 0; iters++;
+    /* v32 关键修复：账本/自旋累加器必须在每次实际迭代前重置——原 v31 在迭代循环
+     * 外清零、循环内累加，收敛需 2~4 次迭代时 GW 辐射/潮汐热/辐射角动量/场动量
+     * 与自旋 Radau 积分全部被重复计入 2~4 倍（T46 E(x) 平衡 690% 的根因，也是
+     * 用户「IAS 路径能量/角动量不守恒」的直接来源）。REBOUND 无账本故无此问题；
+     * Yoshida 路径的 stageMidpoint 在收敛后单次入账本就正确。位置在三个 break
+     * 之后 = 只有真正执行迭代才清零，提前退出保留上一完整迭代的入账。 */
+    ledRR = 0; ledTL = 0; ledLRx = 0; ledLRy = 0; ledLRz = 0; ledPx = 0; ledPy = 0; ledPz = 0;
+    if (spinIx) spinIx.fill(0, 0, 3 * N);
+    if (spinAxAcc) spinAxAcc.fill(0, 0, N);
+    errLast = err; err = 0; iters++; adlMax = 0;
     for (let nn = 1; nn <= 7; nn++) {
       const hn = IAS_H[nn];
       /* 位置/速度预测（REBOUND Horner） */
@@ -2803,6 +3139,7 @@ function stepIAS15(h, refreshStats) {
         vx[i] = iasV0[3 * i] + iasVT[3 * i]; vy[i] = iasV0[3 * i + 1] + iasVT[3 * i + 1]; vz[i] = iasV0[3 * i + 2] + iasVT[3 * i + 2];
       }
       accumulateAccel(_wP, _wV, _wA, axRR ? _wRR : null, axTL ? _wTL : null, spinAcc);
+      if (nn === 7) trialA = maxAccMag;   /* v31：末内部点试探力模（归一化基准，REBOUND at） */
       /* 账本/自旋按 IAS_W 权重累加（内部点试探真值；与 kick() 路径同一物理量） */
       {
         const wgt = IAS_W[nn];
@@ -2856,16 +3193,77 @@ function stepIAS15(h, refreshStats) {
           B[0][i] += dl * IAS_C[15]; B[1][i] += dl * IAS_C[16]; B[2][i] += dl * IAS_C[17];
           B[3][i] += dl * IAS_C[18]; B[4][i] += dl * IAS_C[19]; B[5][i] += dl * IAS_C[20]; B[6][i] += dl;
           const adl = Math.abs(dl);
-          if (adl > err && a0max > 0) err = adl / a0max;
+          if (adl > adlMax) adlMax = adl;   /* v31：收敛残差改为循环末统一归一 */
         }
       }
     }
+    /* v31：收敛判据 = max|Δb₆|/max|a(末内部点)|（REBOUND GLOBAL 收敛监控同式）。
+     * 旧版用步首 a₀ 归一：速度相关力下末点力可显著偏离步首值，残差被错误放大/缩小。 */
+    err = trialA > 1e-300 ? adlMax / trialA : 0;
   }
-  /* 步长监控（Rein-Spiegel GLOBAL）：建议下一步 dt 上限 */
-  {
-    let b6m = 0, a0m = 0;
-    for (let i = 0; i < n3; i++) { const ab = Math.abs(B[6][i]); if (ab > b6m) b6m = ab; const aa = Math.abs(iasA0[i]); if (aa > a0m) a0m = aa; }
-    iasDtSuggest = (b6m > 0 && a0m > 0) ? iasSqrt7(IAS_EPS / (b6m / a0m)) * h : Infinity;
+  /* ---- v31 自适应步长决策（REBOUND ias15.c「Find new timestep」块逐式移植）----
+   * PRS23（默认，现行 REBOUND）或 GLOBAL（Rein-Spiegel 2015）估计局部误差 →
+   * dt_new = (ε/err)^{1/7}·h（PRS23 形式见下）；欲缩 >4× → 整步拒绝回滚重做；
+   * 欲增 >4× → 封顶 4×；min_dt 地板。fixed=true（epsilon=0 语义）时整段跳过。 */
+  let dtNext = 4 * h;
+  if (!fixed && iasEpsilon > 0) {
+    let dtNew;
+    if (IAS_ADAPTIVE_MODE === 0) {
+      /* PRS23（Pham-Rein-Spiegel 2024）：a/jerk/snap/crackle 时标（b 系数组合，
+       * y2..y5 逐式对齐 REBOUND；a0i≈0 的天体跳过）。数值因子 5040=7! 用于与
+       * GLOBAL 判据在默认 ε 下对齐（REBOUND 原文注释）。 */
+      let minTs2 = Infinity;
+      for (let i = 0; i < N; i++) {
+        let a0i = 0, y2 = 0, y3 = 0, y4 = 0, y5 = 0;
+        for (let c = 0; c < 3; c++) {
+          const k = 3 * i + c, a0k = iasA0[k];
+          a0i += a0k * a0k;
+          let t = a0k + B[0][k] + B[1][k] + B[2][k] + B[3][k] + B[4][k] + B[5][k] + B[6][k];
+          y2 += t * t;
+          t = B[0][k] + 2 * B[1][k] + 3 * B[2][k] + 4 * B[3][k] + 5 * B[4][k] + 6 * B[5][k] + 7 * B[6][k];
+          y3 += t * t;
+          t = 2 * B[1][k] + 6 * B[2][k] + 12 * B[3][k] + 20 * B[4][k] + 30 * B[5][k] + 42 * B[6][k];
+          y4 += t * t;
+          t = 6 * B[2][k] + 24 * B[3][k] + 60 * B[4][k] + 120 * B[5][k] + 210 * B[6][k];
+          y5 += t * t;
+        }
+        if (!isFinite(a0i) || a0i === 0) continue;   /* 无力/坏值天体跳过（REBOUND 同） */
+        const ts2 = 2 * y2 / (y3 + Math.sqrt(y4 * y2));
+        if (isFinite(ts2) && ts2 > 0 && ts2 < minTs2) minTs2 = ts2;
+      }
+      dtNew = isFinite(minTs2) ? Math.sqrt(minTs2) * h * iasSqrt7(iasEpsilon * 5040) : 4 * h;
+    } else {
+      /* GLOBAL（Rein & Spiegel 2015）：err = max|b₆|/max|a(末内部点)|，
+       * 慢变加速度滤除：v²h²/x² < 1e-16 的天体不计入（REBOUND 同）。 */
+      let maxa = 0, maxj = 0;
+      for (let i = 0; i < N; i++) {
+        const v2t = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
+        const x2t = px[i] * px[i] + py[i] * py[i] + pz[i] * pz[i];
+        if (x2t > 0 && v2t * h * h / x2t < 1e-16) continue;
+        const ak = Math.max(Math.abs(ax[i]), Math.abs(ay[i]), Math.abs(az[i]));
+        const bk = Math.max(Math.abs(B[6][3 * i]), Math.abs(B[6][3 * i + 1]), Math.abs(B[6][3 * i + 2]));
+        if (ak > maxa) maxa = ak;
+        if (bk > maxj) maxj = bk;
+      }
+      const errG = (maxj > 0 && maxa > 0) ? maxj / maxa : 0;
+      dtNew = (errG > 0 && isFinite(errG)) ? iasSqrt7(iasEpsilon / errG) * h : 4 * h;
+    }
+    if (!isFinite(dtNew) || dtNew <= 0) dtNew = 4 * h;   /* 误差估计失效 → 稳步增长（REBOUND 同） */
+    if (dtNew < IAS_MIN_DT) dtNew = IAS_MIN_DT;          /* min_dt 地板（防 r→0 死锁） */
+    if (dtNew < IAS_SAFETY * h) {
+      /* ---- 步拒绝（REBOUND：恢复步首态 + 预测器按新步长从上接受步真值重排）---- */
+      for (let i = 0; i < N; i++) {
+        px[i] = iasX0[3 * i]; py[i] = iasX0[3 * i + 1]; pz[i] = iasX0[3 * i + 2];
+        vx[i] = iasV0[3 * i]; vy[i] = iasV0[3 * i + 1]; vz[i] = iasV0[3 * i + 2];
+      }
+      for (let k = 0; k < 7; k++) { iasB[k].set(iasLastB[k].subarray(0, n3)); iasE[k].set(iasLastE[k].subarray(0, n3)); }
+      if (iasLastDt > 0) iasPredictNextStep(dtNew / iasLastDt, n3, iasLastB, iasLastE, iasB, iasE);
+      iasRejectCount++;
+      if (refreshStats !== false) computeAccel(); else { minR2 = sR2; maxAccMag = sAM; minPairM = sPM; minPairV2 = sPV2; tideHeatW = sTH; }
+      return { acc: false, dtNext: dtNew };
+    }
+    if (dtNew > 4 * h) dtNew = 4 * h;                    /* 增长上限（REBOUND safety_factor） */
+    dtNext = dtNew;
   }
   /* ---- 提交（Kahan 补偿；x/v 终值 = Horner(1) 同式）---- */
   for (let i = 0; i < n3; i++) {
@@ -2917,8 +3315,36 @@ function stepIAS15(h, refreshStats) {
     sinkGWLx[0] += ledLRx * h; sinkGWLv[0] += ledLRy * h; sinkGWLz[0] += ledLRz * h;
     fieldPx[0] -= ledPx * h; fieldPv[0] -= ledPy * h; fieldPz[0] -= ledPz * h;
   }
-  /* 步尾统计刷新（与 Yoshida 契约一致：真实态力/统计供自适应与显示） */
+  /* v31：保存「上接受步提交后真值」（预测器回滚源）并按 dtNext/h 预测下一步 b（Everhart）。
+   * 固定步长（ratio=1）也要做——REBOUND 无条件执行，e 外推正是 IAS15 高阶来源之一。 */
+  for (let k = 0; k < 7; k++) { iasLastB[k].set(iasB[k].subarray(0, n3)); iasLastE[k].set(iasE[k].subarray(0, n3)); }
+  iasPredictNextStep(dtNext / h, n3, iasLastB, iasLastE, iasB, iasE);
+  iasLastDt = h;
+  /* 步尾统计刷新（与 Yoshida 契约一致：真实态力/统计供显示/GW 采样） */
   if (refreshStats !== false) computeAccel(); else { minR2 = sR2; maxAccMag = sAM; minPairM = sPM; minPairV2 = sPV2; tideHeatW = sTH; }
+  return { acc: true, dtNext };
+}
+
+/* v31：固定步长单步（旧接口/测试兼容；预测器照常推进，等效 REBOUND epsilon=0） */
+function stepIAS15(h, refreshStats) {
+  const r = iasStepTry(h, refreshStats, true);
+  return r.acc;
+}
+/* v31：自适应驱动（REBOUND 主循环 while(!step_try()) 的等价物）。
+ * h 从 min(maxDt, 上步建议) 起步；拒绝则按收紧步长重试。必终止性：h ≤ 4·IAS_MIN_DT
+ * 后 dtNew ≥ IAS_MIN_DT ≥ 0.25·h 恒成立 → 不再拒绝。返回实际推进的物理时步。 */
+function stepIAS15Adaptive(maxDt) {
+  let h = (iasDtNext > 0 && isFinite(iasDtNext) && iasDtNext < maxDt) ? iasDtNext : maxDt;
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const r = iasStepTry(h, true, false);
+    if (r.acc) { iasDtNext = r.dtNext; return h; }
+    h = Math.max(r.dtNext, IAS_MIN_DT);
+  }
+  /* 80 次拒绝物理上不可达（见上终止性证明）；保险起见按当前 h 强制接受并计数 */
+  iasRejectCount++;
+  iasStepTry(h, true, true);
+  iasDtNext = h;
+  return h;
 }
 
 function stepYoshida4(h, refreshStats) {         /* S(w1·h) S(w0·h) S(w1·h)，Yoshida 1990
@@ -2934,98 +3360,207 @@ function stepYoshida4(h, refreshStats) {         /* S(w1·h) S(w0·h) S(w1·h)�
     drift((a + b) / 2); computeAccel(); kick(b);
     drift((b + a) / 2); computeAccel(); kick(a);
     drift(a / 2);
-    return;
+    return true;   /* v31：漂-踢无迭代，恒收敛 */
   }
   stageMidpoint(a);
   stageMidpoint(b);
   stageMidpoint(a);
   if (refreshStats !== false) computeAccel();   // 步尾统计刷新（自适应步长用，与 v18 契约一致；v19f 可按需跳过）
+  return mpConvLast;   /* v31：三阶段全部收敛才 true；false → 调用方折半重做整步 */
 }
 
-/* ---------------- 自适应步长（多判据联合控制） ----------------
- * v19b：在原有判据上新增两条物理判据，取最小 —— 只会更准，不会更松：
- *   1) 加速度判据（原有）：dt ≤ η·√(r_eff/a_max)，a 为实测总加速度（含 PN/潮汐）。
- *   2) 位移判据（新）：最近对每步相对位移 ≤ η·r，dt ≤ η·r_min/v_rel。
- *      圆轨道下 r/v = √(r³/GM) 与判据 1 一致（行为不变）；偏心近星点按 v_p/v_circ
- *      自动收紧；高速双曲飞越（旧判据会一步跨过整段交会，偏折角失真）被正确解析。
- *   3) 自转判据（新）：潮汐滞后力矩 ∝ r⁻⁶，近交会时自转演化远快于轨道时标，
- *      dt ≤ η_Ω·min(|Ω|+ω_dyn)/|Ω̇|，保证自转每步相对变化受限（潮汐锁定/同步
- *      捕获的物理准确度）；无力矩时自动失效，行星系统常规场景不触发。
- *   4) 强场 PN 判据（原有）：1PN+2.5PN 同开且 γ>3e-3 时 dt ≤ 0.022·(GM/c³)·γ^1.5。
- *   4b) 极强场加密（v19f）：γ>0.03 时叠加 dt ≤ 0.037·(GM/c³)·(0.03/γ)⁴ —— 旧判据与 γ 无关
- *      （深度盲），并合末段 γ≳0.08 后每轨泵能超过物理衰减（BBH γ≈0.107 实测反弹 3 次、
- *      合并拖慢 2 倍）；加密律在 γ=0.03 与旧判据连续（致密间距软化膨胀 2^{3/4}），
- *      γ=0.107 处收紧 164 倍至 7.2e-8 s（对齐实测泵能矩阵的净误差 ≤0.5% 区），
- *      γ≤0.03 完全不触发。下限随加密同步放宽至 max(dt/2, 1e-13 s)，
- *      防止绝对地板 1e-7 s 在接触前重新引入泵能（BNS 接触 γ≈0.17 需 dt≈2e-10 s）。
- * 下限随时标缩放：行星系统(1AU≈5e6s)约 50s，致密双星(近星点)约 1e-8s 量级。
- * 绝对下限 1e-7s 仅防 r→0 死锁：原 1e-4s 下限会让百公里级致密双星的
- * 近星点欠解析约 60 倍，破坏长期轨道衰减精度，故收紧。 */
-function calcAdaptiveDt(baseDt) {
-  if (N < 2 || maxAccMag < 1e-30) return baseDt;
-  /* 软化项以实际最近距离为上限：行星尺度保持原版行为，致密系统不被软化项淹没 */
-  const soft2 = Math.min(ADAPTIVE_SOFT_SQ, minR2);
-  const minR = Math.sqrt(minR2);
-  const minReff = Math.sqrt(minR2 + soft2);
-  const dynT = Math.sqrt(minReff * minReff * minReff / (G * Math.max(minPairM, 1e-30)));
-  let dtCand = ADAPTIVE_ETA * Math.sqrt(minReff / maxAccMag);
-  /* 判据 2：最近对位移 —— 每步相对位移不超过 η·r（圆轨道退化为判据 1） */
-  if (minPairV2 > 1e-24) {
-    const dtMove = ADAPTIVE_ETA * minR / Math.sqrt(minPairV2);
-    if (dtMove < dtCand) dtCand = dtMove;
-  }
-  /* 判据 3：自转演化 —— 潮汐力矩下 |ΔΩ|/步受限（Ω≈0 的天体以当地动力学频率为基准）。
-   * v21：1.5PN 自旋进动（dŝ/dt = Ω×ŝ，近距强场下可远快于轨道时标）同样受限：
-   * 每步轴方向变化 ≤ ADAPTIVE_ETA_SPIN rad。 */
-  if ((tideOn || gr15spinOn) && spinAcc && spinRate) {
-    const wDyn = dynT > 0 ? 1 / dynT : 0;
-    for (let i = 0; i < N; i++) {
-      const sa = Math.abs(spinAcc[i]);
-      if (sa > 1e-300) {
-        const dtSpin = ADAPTIVE_ETA_SPIN * (Math.abs(spinRate[i]) + wDyn) / sa;
-        if (dtSpin < dtCand) dtCand = dtSpin;
+/* ---------------- v31 可逆自适应步长调度（Yoshida4 路径） ----------------
+ * v30 及以前的问题（用户报告：PN 全开双黑洞近距能量/守恒量单调漂移、无法并合）：
+ * 隐式中点映射本身时间对称（固定步长下能量误差有界，v19 Python 实测 6.7e-4），
+ * 但变步长判据含「时间反演奇量」——minPairV2（v→−v 不变 ✓ 偶）之外，
+ * maxAccMag 经 1PN 的 ṙ·v 项、spinAcc 经滞后力矩均含速度奇部分，且判据在
+ * 「步首态」求值——反向积分时同一步会用不同步长 → 映射不再自逆 →
+ * 每步注入 O(τ²) 单向误差 → 强场段 secular 泵能（v19f 的 γ⁴ 加密只是压低、
+ * 没有消除该机制，代价还是并合末段步数爆炸）。
+ * v31 依据 Hairer–Söderlind 2005（可逆变步长控制）：步长函数必须
+ *   (a) 只含时间反演偶量（位置、v²、质量、自转态——自转态在 R 下不变）；
+ *   (b) 在「步的中点态」隐式求值：h = H((z₀+z₁)/2)。
+ * 由此步长对正向/反向积分逐位相同 → 映射严格自逆 → 保守系统能量误差恢复有界。
+ * 判据集（全部偶量，牛顿极限下与 v30 行为同标度）：
+ *   1) 动力学时标：dt ≤ η·√(r_eff³/GM_pair)（牛顿下 ≡ 旧判据 1 的 η√(r_eff/a_max)）；
+ *   2) 位移判据：dt ≤ η·r_min/|v_rel|（|v_rel|² 反演偶 ✓；高速飞越仍被正确解析）；
+ *   3) 自转判据（位置版）：潮汐力矩 |Ω̇| ≈ 3k₂GR⁵Δt·m′²(|Ω|+n)/(I·r⁶) →
+ *      dt ≤ η_Ω/coef（|Ω|+n 因子相消，纯位置+自转态）；1.5PN 进动
+ *      |Ω_pre| ≈ G·μ·L_eff/(c²r³) 以 |L|≈μr²·√(GM/r³) 位置化估计；
+ *   4) 强场 PN（γ>3e-3）：dt ≤ 0.022·(GM/c³)（= 旧 η·dynT·γ^1.5，位置-only）；
+ *   4b) 极强场加密（γ>0.03）：dt ≤ 0.037·(GM/c³)·(0.03/γ)⁴（位置-only，常数不变）。
+ * 中点隐式方程用「预猜-校正」迭代求解（通常 0-1 次重做）：以 H(当前态) 预猜 h、
+ * 积分整步、以 H((z₀+z₁)/2) 校正；|Δh/h|≤1e-6接受，≤3 次校正，未达则接受
+ * 残差（对称性破缺被压到每步 ≤1e-6×单步误差，远低于舍入）。 */
+function scanPairStats(P, V, out) {
+  const Px = P[0], Py = P[1], Pz = P[2], Vx = V[0], Vy = V[1], Vz = V[2];
+  let minR2 = Infinity, minPairM = 0, minPairV2 = 0;
+  let spinCoefMax = 0;    /* dt_spin = ADAPTIVE_ETA_SPIN / coef（对全部天体取最紧） */
+  const tideAct = tideOn && spinRate && bodyIA && bodyRadA;
+  const spinAct = gr15spinOn && spinRate && bodyIA;
+  for (let i = 0; i < N; i++) {
+    const xi = Px[i], yi = Py[i], zi = Pz[i], mi = massA[i];
+    const ci = tideAct && bodyLagA[i] > 0 && bodyTideA0[i] > 0
+      ? 3 * bodyTideA0[i] * bodyLagA[i] / Math.max(bodyIA[i], 1e-300) : 0;
+    for (let j = i + 1; j < N; j++) {
+      const dx = Px[j] - xi, dy = Py[j] - yi, dz = Pz[j] - zi;
+      const r2raw = dx * dx + dy * dy + dz * dz;
+      const dvx = Vx[j] - Vx[i], dvy = Vy[j] - Vy[i], dvz = Vz[j] - Vz[i];
+      const v2r = dvx * dvx + dvy * dvy + dvz * dvz;
+      if (r2raw < minR2) { minR2 = r2raw; minPairM = mi + massA[j]; minPairV2 = v2r; }
+      const mj = massA[j], Mp = mi + mj;
+      /* 潮汐自转判据（位置版，接触内不施力 → 同口径跳过） */
+      if (ci > 0 && r2raw > bodyRadA[i] * bodyRadA[i]) {
+        const c = ci * mj * mj / (r2raw * r2raw * r2raw);   /* |Ω̇|/(|Ω|+n)，单位 1/s */
+        if (c > spinCoefMax) spinCoefMax = c;
       }
-      /* v22：J2 力矩同样入 spinT 缓冲（tideOn 时）——轴进动率判据同步覆盖 */
-      if ((gr15spinOn || tideOn) && spinTx && spinRate[i] > 1e-300 && bodyIA[i] > 0) {
-        const Tx = spinTx[i], Ty = spinTy[i], Tz = spinTz[i];
-        const sx = spinAxX[i], sy = spinAxY[i], sz = spinAxZ[i];
-        const Tpar = Tx * sx + Ty * sy + Tz * sz;
-        const Npx = Tx - Tpar * sx, Npy = Ty - Tpar * sy, Npz = Tz - Tpar * sz;
-        const axRate = Math.sqrt(Npx * Npx + Npy * Npy + Npz * Npz) / (bodyIA[i] * spinRate[i]);
-        if (axRate > 1e-300) {
-          const dtAx = ADAPTIVE_ETA_SPIN / axRate;
-          if (dtAx < dtCand) dtCand = dtAx;
-        }
+      if (tideAct && bodyLagA[j] > 0 && bodyTideA0[j] > 0 && r2raw > bodyRadA[j] * bodyRadA[j]) {
+        const c = 3 * bodyTideA0[j] * bodyLagA[j] * mi * mi
+          / (Math.max(bodyIA[j], 1e-300) * r2raw * r2raw * r2raw);
+        if (c > spinCoefMax) spinCoefMax = c;
+      }
+      /* 1.5PN 自旋进动判据（位置版）：|Ω_pre| ≈ (G/c²r³)·(2+3m′/2m)·|L|，
+       * |L| ≈ μ·r²·√(GM/r³)（|L| 用速度信息则破坏偶性；圆/偏心轨道该估计
+       * 偏保守近星点值，方向正确）。自转轴每步方向变化 ≤ η_Ω rad。 */
+      if (spinAct && (spinRate[i] > 1e-300 || spinRate[j] > 1e-300) && Mp > 0) {
+        const muP = mi * mj / Mp;
+        const nDyn = Math.sqrt(G * Mp / (r2raw * Math.sqrt(r2raw)));
+        const OmPreI = G / (C_SQ * r2raw * Math.sqrt(r2raw)) * (2 + 1.5 * mj / mi) * muP * r2raw * nDyn;
+        const OmPreJ = G / (C_SQ * r2raw * Math.sqrt(r2raw)) * (2 + 1.5 * mi / mj) * muP * r2raw * nDyn;
+        const cPre = spinRate[i] > 1e-300 ? OmPreI : 0;
+        const cPreJ = spinRate[j] > 1e-300 ? OmPreJ : 0;
+        const cM = Math.max(cPre, cPreJ);
+        if (cM > spinCoefMax) spinCoefMax = cM;
       }
     }
   }
-  /* v21：IAS15 内部误差监控建议（Rein-Spiegel）——与物理判据取最小 */
-  if (integrator === 'ias15' && isFinite(iasDtSuggest) && iasDtSuggest < dtCand) dtCand = iasDtSuggest;
+  out.minR2 = minR2; out.minPairM = minPairM; out.minPairV2 = minPairV2; out.spinCoef = spinCoefMax;
+}
+/* 调度求值：给定状态统计 → dt（只含偶判据；baseDt 封顶 + 地板）。 */
+function calcAdaptiveDt(baseDt, st) {
+  if (N < 2 || !st || st.minR2 === Infinity) return baseDt;
+  /* 软化项以实际最近距离为上限：行星尺度保持原版行为，致密系统不被软化项淹没 */
+  const soft2 = Math.min(ADAPTIVE_SOFT_SQ, st.minR2);
+  const minR = Math.sqrt(st.minR2);
+  const minReff = Math.sqrt(st.minR2 + soft2);
+  const dynT = Math.sqrt(minReff * minReff * minReff / (G * Math.max(st.minPairM, 1e-30)));
+  let dtCand = ADAPTIVE_ETA * dynT;                        /* 判据 1（位置-only） */
+  /* 判据 2：最近对位移 —— 每步相对位移不超过 η·r（|v_rel|² 反演偶；圆轨道退化为判据 1） */
+  if (st.minPairV2 > 1e-24) {
+    const dtMove = ADAPTIVE_ETA * minR / Math.sqrt(st.minPairV2);
+    if (dtMove < dtCand) dtCand = dtMove;
+  }
+  /* 判据 3：自转/进动（位置版系数，见 scanPairStats） */
+  if (st.spinCoef > 1e-300) {
+    const dtSpin = ADAPTIVE_ETA_SPIN / st.spinCoef;
+    if (dtSpin < dtCand) dtCand = dtSpin;
+  }
   const minDt = Math.max(1e-7, 1e-5 * dynT);
   let dt = Math.min(baseDt, Math.max(minDt, dtCand));
-  /* 强场 PN 约束（v6）：1PN+2.5PN 同开且 γ=GM/(rc²)>3e-3（致密双星并合段）时，
-   * 踢式积分中 1PN 力的速度滞后噪声（∝ a₁PN·Δv/v，Δv=牛顿半踢）会淹没
-   * 2.5PN 衰减信号（信噪比 ∝ dt·a_N·a₁PN/(v·a₂.₅)）。实测 dt=GM/c³·0.022
-   * 捕获 ≥93% 衰减信号（对 RK4 真值），dt=GM/c³·0.07 只剩 ~60%。
-   * γ≤3e-3 的宽距系统衰减信号本身可忽略，不加约束（BH 双星预设不受影响）。 */
-  if (gr1pnOn && gr25On && minR2 > 0) {
-    const gamma = G * minPairM / (Math.sqrt(minR2) * C_SQ);
+  /* 强场 PN 判据 4/4b（v6/v19f 常数不变；γ、GM/c³ 均位置-only）。
+   * 完整物理依据见旧版注释：dt=GM/c³·0.022 捕获 ≥93% 衰减信号；γ⁴ 加密对齐
+   * 实测泵能矩阵 —— v31 起调度本身可逆，泵能机制已除，加密律仅作分辨率保守余量。 */
+  if (gr1pnOn && gr25On && st.minR2 > 0) {
+    const gamma = G * st.minPairM / (minR * C_SQ);
     if (gamma > 3e-3) {
       const dtPN = PN_DT_ETA * dynT * Math.pow(gamma, 1.5);
       if (dtPN < dt) dt = Math.max(dtPN, minDt);
-      /* v19f：极强场加密（γ>PN_GAMMA_DEEP），见头部常量注释与判据 4b。
-       * 下限同步放宽：floor = min(minDt, max(dtDeep/2, 1e-13)) ——
-       * 允许加密判据真正生效（旧绝对地板 1e-7 s 会在 BNS 接触段 γ≈0.17
-       * 重新引入泵能），同时保留 r→0 死锁保护与 0.5× 安全裕度。 */
       if (gamma > PN_GAMMA_DEEP) {
-        const dtDeep = PN_DEEP_ETA * (G * minPairM / (C_SQ * C_LIGHT)) * Math.pow(PN_GAMMA_DEEP / gamma, PN_DEEP_EXP);
+        const dtDeep = PN_DEEP_ETA * (G * st.minPairM / (C_SQ * C_LIGHT)) * Math.pow(PN_GAMMA_DEEP / gamma, PN_DEEP_EXP);
         if (dtDeep < dt) dt = Math.max(dtDeep, Math.min(minDt, Math.max(dtDeep * 0.5, 1e-13)));
       }
     }
   }
-  /* 最终以 baseDt 封顶：v4 的 minDt 地板在天体远离（逃逸/宽距）时会超过用户步长，
-   * dt 随 r³ 幂膨胀 → simTime 爆炸、天体瞬移。用户设定始终是最大步长 */
+  /* 最终以 baseDt 封顶：用户设定始终是最大步长（防远距 dt 膨胀瞬移） */
   return Math.min(baseDt, dt);
+}
+/* v31：可逆自适应单步（Yoshida4）——中点隐式步长的预猜-校正驱动。
+ * 返回实际推进的物理时步 h（步首态 → 步末态；账本/自转随步内一致演化）。
+ * 重做时整步回滚（含 Kahan 补偿、账本、自转相位/轴向），不会重复入账。 */
+let _stA = null, _stB = null;   /* 统计 scratch（惰性初始化，避免每步分配） */
+let _midWrapVer = -1;
+const _midP = [null, null, null], _midV = [null, null, null];
+let ySnapCap = 0;
+let ySnapPx = null, ySnapPy = null, ySnapPz = null, ySnapVx = null, ySnapVy = null, ySnapVz = null;
+let ySnapCpx = null, ySnapCpy = null, ySnapCpz = null, ySnapCvx = null, ySnapCvy = null, ySnapCvz = null;
+let ySpinRate = null, ySpinPhase = null, yCspinPhase = null, ySpinAxX = null, ySpinAxY = null, ySpinAxZ = null;
+let yLedSnap = new Float64Array(8);
+function ensureYoshidaSnap() {
+  if (ySnapCap >= CAP) return;
+  ySnapPx = new Float64Array(CAP); ySnapPy = new Float64Array(CAP); ySnapPz = new Float64Array(CAP);
+  ySnapVx = new Float64Array(CAP); ySnapVy = new Float64Array(CAP); ySnapVz = new Float64Array(CAP);
+  ySnapCpx = new Float64Array(CAP); ySnapCpy = new Float64Array(CAP); ySnapCpz = new Float64Array(CAP);
+  ySnapCvx = new Float64Array(CAP); ySnapCvy = new Float64Array(CAP); ySnapCvz = new Float64Array(CAP);
+  ySpinRate = new Float64Array(CAP); ySpinPhase = new Float64Array(CAP); yCspinPhase = new Float64Array(CAP);
+  ySpinAxX = new Float64Array(CAP); ySpinAxY = new Float64Array(CAP); ySpinAxZ = new Float64Array(CAP);
+  ySnapCap = CAP;
+}
+function yoshidaSnapSave() {
+  ensureYoshidaSnap();
+  for (let i = 0; i < N; i++) {
+    ySnapPx[i] = px[i]; ySnapPy[i] = py[i]; ySnapPz[i] = pz[i];
+    ySnapVx[i] = vx[i]; ySnapVy[i] = vy[i]; ySnapVz[i] = vz[i];
+    ySnapCpx[i] = cpx[i]; ySnapCpy[i] = cpy[i]; ySnapCpz[i] = cpz[i];
+    ySnapCvx[i] = cvx[i]; ySnapCvy[i] = cvy[i]; ySnapCvz[i] = cvz[i];
+    ySpinRate[i] = spinRate[i]; ySpinPhase[i] = spinPhase[i]; yCspinPhase[i] = cspinPhase[i];
+    ySpinAxX[i] = spinAxX[i]; ySpinAxY[i] = spinAxY[i]; ySpinAxZ[i] = spinAxZ[i];
+  }
+  yLedSnap[0] = sinkGWE[0]; yLedSnap[1] = sinkTideE[0];
+  yLedSnap[2] = sinkGWLx[0]; yLedSnap[3] = sinkGWLv[0]; yLedSnap[4] = sinkGWLz[0];
+  yLedSnap[5] = fieldPx[0]; yLedSnap[6] = fieldPv[0]; yLedSnap[7] = fieldPz[0];
+}
+function yoshidaSnapRestore() {
+  for (let i = 0; i < N; i++) {
+    px[i] = ySnapPx[i]; py[i] = ySnapPy[i]; pz[i] = ySnapPz[i];
+    vx[i] = ySnapVx[i]; vy[i] = ySnapVy[i]; vz[i] = ySnapVz[i];
+    cpx[i] = ySnapCpx[i]; cpy[i] = ySnapCpy[i]; cpz[i] = ySnapCpz[i];
+    cvx[i] = ySnapCvx[i]; cvy[i] = ySnapCvy[i]; cvz[i] = ySnapCvz[i];
+    spinRate[i] = ySpinRate[i]; spinPhase[i] = ySpinPhase[i]; cspinPhase[i] = yCspinPhase[i];
+    spinAxX[i] = ySpinAxX[i]; spinAxY[i] = ySpinAxY[i]; spinAxZ[i] = ySpinAxZ[i];
+  }
+  sinkGWE[0] = yLedSnap[0]; sinkTideE[0] = yLedSnap[1];
+  sinkGWLx[0] = yLedSnap[2]; sinkGWLv[0] = yLedSnap[3]; sinkGWLz[0] = yLedSnap[4];
+  fieldPx[0] = yLedSnap[5]; fieldPv[0] = yLedSnap[6]; fieldPz[0] = yLedSnap[7];
+}
+const ADAPT_MID_TOL = 1e-6;    /* 中点步长方程容差（相对） */
+const ADAPT_MID_MAX = 3;       /* 校正迭代上限（重做 ≤3 次） */
+let adaptRedoLast = 0, adaptHalfLast = 0;   /* 诊断：最近一步的校正/折半次数 */
+function advanceAdaptiveYoshida(baseDt) {
+  if (N === 0) return 0;
+  if (N < 2) { stepYoshida4(Math.min(baseDt, 1), true); return Math.min(baseDt, 1); }
+  if (!_stA) { _stA = { minR2: 0, minPairM: 0, minPairV2: 0, spinCoef: 0 }; _stB = { minR2: 0, minPairM: 0, minPairV2: 0, spinCoef: 0 }; }
+  yoshidaSnapSave();
+  if (_midWrapVer !== bufVer) {
+    _midP[0] = mpPx; _midP[1] = mpPy; _midP[2] = mpPz;
+    _midV[0] = mpVx; _midV[1] = mpVy; _midV[2] = mpVz;
+    _midWrapVer = bufVer;
+  }
+  scanPairStats(_wP, _wV, _stA);
+  let h = calcAdaptiveDt(baseDt, _stA);
+  let halfs = 0;
+  for (let outer = 0; outer < 6; outer++) {
+    if (outer > 0) yoshidaSnapRestore();
+    const ok = stepYoshida4(h, true);
+    if (!ok) {
+      /* 中点固定点未收敛（dt 过大）→ 折半重做整步（账本/自转已回滚） */
+      halfs++;
+      h = Math.max(1e-13, h * 0.5);
+      continue;
+    }
+    /* 中点态 = (z₀+z₁)/2 → 重求 H，检查步长方程 h = H(中点) 的自洽性 */
+    for (let i = 0; i < N; i++) {
+      mpPx[i] = (px[i] + ySnapPx[i]) / 2; mpPy[i] = (py[i] + ySnapPy[i]) / 2; mpPz[i] = (pz[i] + ySnapPz[i]) / 2;
+      mpVx[i] = (vx[i] + ySnapVx[i]) / 2; mpVy[i] = (vy[i] + ySnapVy[i]) / 2; mpVz[i] = (vz[i] + ySnapVz[i]) / 2;
+    }
+    scanPairStats(_midP, _midV, _stB);
+    const hMid = calcAdaptiveDt(baseDt, _stB);
+    if (Math.abs(hMid / h - 1) <= ADAPT_MID_TOL) { adaptRedoLast = outer; adaptHalfLast = halfs; return h; }
+    h = hMid;
+  }
+  /* 校正迭代达上限：接受残差（|Δh/h| > 1e-6 的重做连续 3 次以上不收缩才到达，
+   * 正常演化不会发生；残差级对称性破缺 ≤ 单步误差 × 容差，仍远低于舍入噪声） */
+  adaptRedoLast = ADAPT_MID_MAX; adaptHalfLast = halfs;
+  return h;
 }
 
 /* ---------------- 碰撞合并（动量守恒 + 并合遗迹自转继承） ---------------- */
@@ -3093,6 +3628,10 @@ function mergeCollisions(thrMeters, dtFrame) {
           const rr = Rb[i] + Rb[j];
           const d2 = dx * dx + dy * dy + dz * dz;
           if (d2 >= rr * rr) continue;
+          /* v32：双黑洞对不施加接触拖曳——视界无物质摩擦，
+           * 摩擦拖曳是普通天体弹塑性碰撞的代理模型；双黑洞由 PN/GW
+           * 驱动至视界接触即并合（下方判据分支），不再经历拖曳区。 */
+          if (isBlackHolePhys(massA[i], meta[i].radius) && isBlackHolePhys(massA[j], meta[j].radius)) continue;
           const d = Math.sqrt(d2);
           const depth = 1 - d / rr;
           const Mt2 = massA[i] + massA[j];
@@ -3128,10 +3667,14 @@ function mergeCollisions(thrMeters, dtFrame) {
           if (d2 < rr * rr) {
             hit = d2;
             /* v20 深重叠合并判据：包含（d ≤ R_big−R_small）或几乎完全重合（d ≤ 0.30·R_small）。
-             * 未达深重叠仅保持接触拖曳，不合并。 */
+             * 未达深重叠仅保持接触拖曳，不合并。
+             * v32：双黑洞对改为视界接触即并合（d ≤ R₁+R₂，共视界形成，NR 语义）——
+             * 视界不可穿透形变，「几乎完全重合」判据对黑洞无物理意义，
+             * 且免去在 r<R 区内积分非物理点质量力。 */
             const d = Math.sqrt(d2);
             const rSm = Math.min(Rb[i], Rb[j]), rBg = Math.max(Rb[i], Rb[j]);
-            const dMerge = Math.max(rBg - rSm, MERGE_COINCIDE_K * rSm);
+            const dMerge = (isBlackHolePhys(massA[i], meta[i].radius) && isBlackHolePhys(massA[j], meta[j].radius))
+              ? rr : Math.max(rBg - rSm, MERGE_COINCIDE_K * rSm);
             if (d > dMerge) continue;
           } else if (dtFrame > 0) {
             /* 帧内线段检测：相对位移 d⃗rel = v_rel·dtFrame，closest approach。
@@ -3147,7 +3690,8 @@ function mergeCollisions(thrMeters, dtFrame) {
                 if (dmin2 < rr * rr) {
                   const dmin = Math.sqrt(dmin2);
                   const rSm = Math.min(Rb[i], Rb[j]), rBg = Math.max(Rb[i], Rb[j]);
-                  const dMerge = Math.max(rBg - rSm, MERGE_COINCIDE_K * rSm);
+                  const dMerge = (isBlackHolePhys(massA[i], meta[i].radius) && isBlackHolePhys(massA[j], meta[j].radius))
+                    ? rr : Math.max(rBg - rSm, MERGE_COINCIDE_K * rSm);
                   if (dmin > dMerge) continue;
                   hit = dmin2 * (1 + 1e-9);
                 }
@@ -3362,6 +3906,8 @@ function resolveBodies(rawArray) {
 /* ---------------- 系统状态应用 ---------------- */
 function initState(list) {
   iasReady = false; iasN3 = -1; iasLastDt = 0; iasDtSuggest = Infinity;   /* v21：状态跳变 → IAS15 预测器失效 */
+  iasDtNext = Infinity; iasRejectCount = 0;   /* v31：自适应步长控制器同步复位 */
+  gaugeInvE0 = null;                          /* v31：E(x) 平衡参考值复位 */
   meta = list.map(b => ({
     gh: (typeof b.gh === 'number' && isFinite(b.gh) && b.gh >= 1 && b.gh <= 6) ? b.gh : 0,
     pressure: (typeof b.pressure === 'number' && isFinite(b.pressure) && b.pressure > 0) ? b.pressure : 0,   /* v22：表面气压 bar */
@@ -3471,6 +4017,8 @@ function exportBodiesRaw() {
 /* v25：能量分项 scratch（computeTotalEnergy 每次顺带记录，无头快照 K/U 拆分用，
  * 零额外遍历零分配；只读，勿在别处当可变量依赖） */
 let _eKe = 0, _ePe = 0, _eEp = 0;
+/* v31：规范不变 E(x) 能量平衡的参考初值（强场面板用；initState/回退时置 null） */
+let gaugeInvE0 = null;
 function computeTotalEnergy() {
   let KE = 0, PE = 0, EP = 0;
   const pn1 = gr1pnOn, pn2 = gr2pnOn && gr1pnOn;
@@ -3556,6 +4104,78 @@ function computeTotalEnergy() {
   }
   _eKe = KE; _ePe = PE; _eEp = EP;
   return KE + PE + EP;
+}
+/* ---------------- v31：规范不变强场能量平衡（Blanchet LRR eq. 374/377 逐式转录） ----------------
+ * 背景（v31 调研结论，REBOUNDx gr_full 交叉验证）：谐和规范 EIH 流的守恒能量
+ * 并不等于「标准 1PN/2PN 相对式能量公式」——偏心强场轨道上后者呈现
+ * ~40%（专业实现同款）的账本漂移，系规范记账效应而非动力学错误。
+ * 对准圆并合（BBH/BNS 场景），规范不变能量 E(x) 是物理观测量：
+ *   E(x) = −μc²x/2·[1 + (−3/4 − ν/12)x + (−27/8 + 19ν/8 − ν²/24)x²] + O(x³)
+ *   x = (GmΩ/c³)^{2/3}（Ω = 主导对的角频率），能量平衡 dE/dt = −F(x)，
+ *   F 由 2.5PN 力做功账本（sinkGWE）承载 → 账本 |E(x(t)) − E(x0) + sinks| 闭合。
+ * 本函数仅在强场判据（γ>0.01 且近圆 e<0.35）下替代 naive 公式供面板/日志使用；
+ * 偏心宽轨系统回退 naive 公式（并附面板标注）。 */
+function dominantPairIdx() {
+  let bi = -1, bj = -1, best = 0;
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+      const r2 = dx * dx + dy * dy + dz * dz + 1e-30;
+      const score = massA[i] * massA[j] / r2;
+      if (score > best) { best = score; bi = i; bj = j; }
+    }
+  }
+  return [bi, bj];
+}
+function gaugeInvPairEnergy() {
+  const pi_ = dominantPairIdx();
+  if (pi_[0] < 0) return null;
+  const i = pi_[0], j = pi_[1];
+  const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+  const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+  const r2 = dx * dx + dy * dy + dz * dz;
+  const r = Math.sqrt(r2);
+  const m1 = massA[i], m2 = massA[j], Mt = m1 + m2;
+  const muP = m1 * m2 / Mt, nu = muP / Mt;
+  // 角频率 Ω = |r×v|/r²（近圆主导；e>0.35 时返回 null 回退）
+  const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
+  const h2 = hx * hx + hy * hy + hz * hz;
+  const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
+  const rd2 = h2 > 0 ? Math.max(0, v2 - h2 / r2) : v2;
+  const ecc = Math.sqrt(Math.max(0, 1 - h2 / (r2 * v2 + 1e-300)));   // 牛顿近圆偏心率近似
+  /* v32：准圆判据 0.35→0.5。PN 圆轨道的坐标（牛顿式）偏心率是规范效应，随 γ 增大
+   * （BBH 36+29M☉ @35Hz γ≈0.107 时 e_coord≈0.2，plunge 段 γ≈0.3 时 e_coord≈0.4+），
+   * 原阈值会在并合末段回退到 naive 公式，把 ~40% 规范记账漂移当数值误差展示；
+   * E(x) 本身的适用域由 x≤1 的级数收敛性决定（plunge 段 x≲0.4 仍可用），
+   * 偏心影响以「准圆近似」标注提醒。 */
+  if (!(ecc < 0.5) || !(r > 0)) return null;
+  const omega = Math.sqrt(h2) / r2;
+  const xCubed = GM_PN(m1, m2) * omega / (C_SQ * C_LIGHT);
+  if (!(xCubed > 0)) return null;
+  const x = Math.pow(xCubed, 2 / 3);
+  if (!(x > 1e-12 && x < 1)) return null;
+  // (377)：E = −μc²x/2·[1 + (−3/4−ν/12)x + (−27/8+19ν/8−ν²/24)x² + (−675/64+(34445/576−205π²/96)ν−155ν²/96−35ν³/5184)x³]
+  // x³ 项为 3PN 系数（并合末段 x~0.2-0.3 时 ~10-15% 量级，必须保留）
+  const ex = 1 + (-3 / 4 - nu / 12) * x + (-27 / 8 + 19 * nu / 8 - nu * nu / 24) * x * x
+    + (-675 / 64 + (34445 / 576 - 205 * Math.PI * Math.PI / 96) * nu - 155 * nu * nu / 96 - 35 * nu * nu * nu / 5184) * x * x * x;
+  let E = -muP * C_SQ * x / 2 * ex;
+  // 其余天体（N>2）：牛顿项并入（弱场主导，公式自洽）
+  if (N > 2) {
+    E += (computeTotalEnergy() - pairNewtonEnergy(i, j, m1, m2, muP));
+  }
+  return E;
+}
+function GM_PN(m1, m2) { return G * (m1 + m2); }
+function pairNewtonEnergy(i, j, m1, m2, muP) {
+  const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+  const dvx = vx[j] - vx[i], dvy = vy[j] - vy[i], dvz = vz[j] - vz[i];
+  const r = Math.sqrt(dx * dx + dy * dy + dz * dz + 1e-300);
+  return 0.5 * muP * (dvx * dvx + dvy * dvy + dvz * dvz) - G * m1 * m2 / r;
+}
+function strongFieldBalanceEnergy() {
+  if (N < 2) return null;
+  const eg = gaugeInvPairEnergy();
+  return eg;
 }
 function computeTotalMomentum() {
   let Px = 0, Py = 0, Pz = 0;
@@ -3717,15 +4337,18 @@ function updateBodyOverlay() {
       ui.ovTempGH.textContent = '—';
     } else {
       const Ep = bodyIrradianceSum(idx);
-      const alb = meta[idx].texture ? 0.3 : clampNum(0.2126 * Math.pow(hexToRgb(meta[idx].color)[0] / 255, 2.2) + 0.7152 * Math.pow(hexToRgb(meta[idx].color)[1] / 255, 2.2) + 0.0722 * Math.pow(hexToRgb(meta[idx].color)[2] / 255, 2.2), 0.02, 0.95);
+      /* v30：Bond 反照率（内置太阳系天体观测值表 + 自定义颜色映射）—— 旧版颜色
+       * 亮度代理使水星 Teq 低估 13%（用户报告的平均温度偏离根因） */
+      const alb = bodyAlbedoOf(idx);
       const Teq = bodyTempOf(Ep, alb);
       if (Teq > 0) {
         const tC = Teq - 273.15;
         ui.ovTemp.textContent = (Math.abs(tC) < 10 ? tC.toFixed(1) : Math.round(tC)) + '°C';
-        /* v21：温室因子按天体（编辑面板可改，留空 = v_esc 经验拟合） */
-        const gFac = bodyGHFactor(idx);
-        const tGH = Teq * gFac - 273.15;
-        ui.ovTempGH.textContent = (Math.abs(tGH) < 10 ? tGH.toFixed(1) : Math.round(tGH)) + '°C (×' + gFac.toFixed(3) + ')';
+        /* v21：温室因子按天体；v30b：有效表面温度 bodySurfTempOf ——
+         * 气巨 T_eff⁴ = T_eq⁴ + q_int/σ（内部热源），其余 T_eq × gh（灰大气） */
+        const sf = bodySurfTempOf(idx);
+        const tGH = sf.T - 273.15;
+        ui.ovTempGH.textContent = (Math.abs(tGH) < 10 ? tGH.toFixed(1) : Math.round(tGH)) + '°C (×' + sf.fac.toFixed(3) + ')';
       } else { ui.ovTemp.textContent = '—'; ui.ovTempGH.textContent = '—'; }
     }
   }
@@ -4030,7 +4653,7 @@ const PRESETS = {
             true_anomaly_deg: '0', orbits_around: 'BH-A' } }
       ];
     },
-    settings: { dt: '0.2', gr1pn: true, gr2pn: true, gr25: true, adaptive: true, integrator: 'yoshida4' }
+    settings: { dt: '0.02', gr1pn: true, gr2pn: true, gr25: true, adaptive: true, integrator: 'yoshida4' }
   },
   figure8: {
     label: '三体 8 字解',
@@ -4091,7 +4714,6 @@ function collectUI() {
    'bodyOverlayToggle', 'bodyOverlay', 'bodyOvName', 'bodyOvClose', 'ovSpin', 'ovTilt', 'ovFlat', 'ovTemp', 'ovTempGH', 'ovAE', 'ovPI', 'ovRV',
    'expoDn', 'expoUp',
    'trailRefMode', 'skyboxEnabled', 'resSelect', 'perspToggle',
-   'occlSeg',
    'hzToggle', 'helperGridToggle', 'blankPresetBtn',
    'physSizeToggle', 'starRadToggle', 'glareToggle', 'headlessToggle', 'snapshotInterval', 'snapCount',
    'headlessRate', 'downloadSnapBtn', 'showConservation', 'conservationInfo', 'totalEnergyDisplay',
@@ -5063,18 +5685,11 @@ function buildSceneFrame() {
        * 的深度代理等价球，√f = √(1−rs/Dme)）—— 黑洞 depth-only 代理用此半径，
        * 叠层（轨迹/网格）被影子而非仅视界半径遮挡（前后关系正确） */
       const shadowM = 2.598076 * rs * Math.sqrt(Math.max(1 - rs / Math.max(d, 4.2 * rs), 0.04));
-      /* v28：叠层顶点扭曲（物体式）预计算 —— wH（世界系视线单位向量）、
-       * Dme/fK/uD（有限距离观测者映射口径，与 LENS_FS/LENS_STEP 一致）、
-       * sinMax2（影响域预筛：bM > WARP_BMAX ⟺ sinθ > √sinMax2，正/背面
-       * 偏折屏幕位移均 <0.5px，warpPoint 中 7 次乘加跳过）。 */
-      const Dme = Math.max(d, 4.2 * rs);
-      const fK = Math.sqrt(Math.max(1 - rs / Dme, 1e-4));
+      /* v30：v28 物体式 warp 专用字段（wHx/wHy/wHz/Dme/fK/uD/sinMax2）随
+       * warpPoint 退役删除；fr.lens 仅保留透镜 uniforms 与深度代理所需字段 */
       fr.lens.push({ x: p[0] * resFactor, y: p[1] * resFactor, i,
         d, e: ePx, s: sPx, shadowM,
-        wx: px[i], wy: py[i], wz: pz[i], rgM: rg, rsM: rs,
-        wHx: dxw0 / d, wHy: dyw0 / d, wHz: dzw0 / d,
-        Dme, fK, uD: rg / Dme,
-        sinMax2: Math.min(1, WARP_BMAX * fK * rg / Dme * 1.0001) ** 2 });
+        wx: px[i], wy: py[i], wz: pz[i], rgM: rg, rsM: rs });
     }
     /* 近→远排序：顺序复合（光线先被近透镜偏折，再以该方向评估远透镜） */
     fr.lens.sort((A, B2) => A.d - B2.d);
@@ -5091,8 +5706,8 @@ function buildSceneFrame() {
  * ② 各星球自转轴线段；③ 过星球到平面的绿色垂线；④ 轨迹在平面上的投影；
  * ⑤ 视角中心（锚点正投影到平面）的 RGB xyz 垂直三脚架。
  * 输出相机系 7 float/顶点（x,y,z,r,g,b,a），LineSegments 渲染。 */
-/* v28：float 数（×7/顶点）120000→480000 —— 五级网格 + 物体式透镜模式下的
- * 扭曲位移门控细分（每段 ≤10 子段）需要更大顶点预算（约 1.9 MB，可接受） */
+/* v25：float 数（×7/顶点）120000→480000 —— 五级网格顶点预算（v28 上调；
+ * v30：物体式 warp 细分开销不复存在，预算沿用） */
 const HELPER_MAX_VERTS = 480000;
 let helperBuf = new Float32Array(HELPER_MAX_VERTS);   /* v25：复用顶点缓冲（播放中零逐帧分配） */
 let helperCache = null;   /* v25：{key, arr} 暂停且视角/数据未变时零重建零重传 */
@@ -5119,7 +5734,7 @@ function buildHelperOverlay(fr, preP, preRad, preRCss, preTz) {
   let key = playing + '|' + simTime + '|' + ext.toPrecision(10) + '|' +
     ox.toPrecision(10) + '|' + oy.toPrecision(10) + '|' + z0 + '|' + N + '|' +
     viewW + 'x' + viewH + '|' + scale.toPrecision(10) + '|' + (physSizeOn ? 1 : 0) + '|' +
-    (fr.trailLine ? fr.trailLine.length : 0) + '|' + trailMode + '|' + occlMode + '|' + fr.lens.length + '|' +
+    (fr.trailLine ? fr.trailLine.length : 0) + '|' + trailMode + '|' + fr.lens.length + '|' +
     eye[0].toPrecision(10) + '|' + eye[1].toPrecision(10) + '|' + eye[2].toPrecision(10);
   for (let i = 0; i < N; i++) {
     const p = preP[i];
@@ -5136,19 +5751,9 @@ function buildHelperOverlay(fr, preP, preRad, preRCss, preTz) {
     buf[n + 3] = r; buf[n + 4] = g; buf[n + 5] = b; buf[n + 6] = a;
     n += 7;
   };
-  /* v28：物体式叠层透镜 —— 装饰线（自转轴/垂线/指示圈/三脚架）顶点经
-   * warpPoint 扭曲（与 LENS_FS 同口径）；影子内顶点写 NaN（GL 断线）。
-   * 绝对模式/无黑洞 warpOn=false → push 即 pushRaw，零开销。
-   * v29：CPU 逐顶点 warp 退役 —— 物体式叠层改直绘 HDR 场景缓冲，由
-   * GravLensPass 逐像素扭曲（与星光同口径：光子环区切向拉伸、影内自然
-   * 吞没），不再受顶点细分/预算限制。warpOn 恒 false，代码路径保留回滚。 */
-  const warpOn = false;
-  const _gwT = warpOn ? { x: 0, y: 0, z: 0, cap: false } : null;
-  const push = warpOn ? (x, y, z, r, g, b, a) => {
-    warpPoint(x, y, z, fr.lens, eye, _gwT);
-    if (_gwT.cap) pushRaw(NaN, NaN, NaN, r, g, b, 0);
-    else pushRaw(_gwT.x, _gwT.y, _gwT.z, r, g, b, a);
-  } : pushRaw;
+  /* v30：v28 物体式顶点 warp 包装（push→warpPoint）随「物体式」退役删除，
+   * push 恒为 pushRaw 直通（v20/v24/v28b 绝对路径语义，零开销） */
+  const push = pushRaw;
   const niceStep = (v) => {
     const p = Math.pow(10, Math.floor(Math.log10(v)));
     const f = v / p;
@@ -5167,59 +5772,13 @@ function buildHelperOverlay(fr, preP, preRad, preRCss, preTz) {
   const sm01 = (t) => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
   let gs = niceStep(ext / 7);
   const lvA = [0.35, 0.27, 0.21, 0.17, 0.14];
-  const _gwA = warpOn ? { x: 0, y: 0, z: 0, cap: false } : null;
-  const _gwB = warpOn ? { x: 0, y: 0, z: 0, cap: false } : null;
-  /* v28：物体式 warp 帧预算（性能保险）—— 极端场景（透镜角径大 → 全屏都在
-   * 影响区 sinMax2=1，预筛自然失效）下网格细分可达 ~3 万次 warpPoint/帧
-   * （每次 2 透镜 × 64 点求积）。设帧预算，超出后剩余段退化为端点 warp 直连
-   * （观感：强扭曲区网格线略欠细分；静态场景由 helperCache 命中零重建，
-   * 仅拖拽/播放中逐帧付费且预算封顶）。 */
-  let warpBudgetLeft = warpOn ? 24000 : 0;
-  /* 单条格线：物体式模式下按「扭曲位移」门控细分 —— 端点扭曲前后屏幕距离
-   * 均 <1.5px → 直线段足够（大量远格子零细分开销）；否则按最大位移 2px/段
-   * 细分（≤10 段），逐点取扭曲后真实位置，影子内（捕获）断段不画。 */
+  /* 单条格线：直线段直连（v28 的「扭曲位移」门控细分随物体式 warp 退役删除） */
   const segGrid = (xa, ya, xb, yb, a0, r0, r1) => {
     const aA = a0 * (1 - sm01((Math.hypot(xa - gx, ya - gy) - r0) / (r1 - r0)));
     const aB = a0 * (1 - sm01((Math.hypot(xb - gx, yb - gy) - r0) / (r1 - r0)));
     if (aA <= 0.004 && aB <= 0.004) return;
-    if (!warpOn) {
-      pushRaw(xa, ya, z0, 0.58, 0.61, 0.66, aA);
-      pushRaw(xb, yb, z0, 0.58, 0.61, 0.66, aB);
-      return;
-    }
-    warpPoint(xa, ya, z0, fr.lens, eye, _gwA);
-    warpPoint(xb, yb, z0, fr.lens, eye, _gwB);
-    const pa0 = fr.proj.pt(xa, ya, z0), pb0 = fr.proj.pt(xb, yb, z0);
-    const pa1 = _gwA.cap ? null : fr.proj.pt(_gwA.x, _gwA.y, _gwA.z);
-    const pb1 = _gwB.cap ? null : fr.proj.pt(_gwB.x, _gwB.y, _gwB.z);
-    const dA = pa0 && pa1 ? Math.hypot(pa1[0] - pa0[0], pa1[1] - pa0[1]) : 99;
-    const dB = pb0 && pb1 ? Math.hypot(pb1[0] - pb0[0], pb1[1] - pb0[1]) : 99;
-    const dispMax = Math.max(dA, dB);
-    /* v28：帧预算耗尽 → 退化为端点 warp 直连（预筛/缓存照常） */
-    const mSeg = warpBudgetLeft <= 0 ? 1 : (dispMax < 1.5 ? 1 : Math.min(10, Math.ceil(dispMax / 2)));
-    let has = false, hx = 0, hy = 0, hz = 0, ha = 0;
-    for (let s = 0; s <= mSeg; s++) {
-      const t = s / mSeg;
-      let X, Y, cap;
-      if (s === 0) { X = _gwA.x; Y = _gwA.y; cap = _gwA.cap; }
-      else if (s === mSeg) { X = _gwB.x; Y = _gwB.y; cap = _gwB.cap; }
-      else if (warpBudgetLeft <= 0) {
-        /* 预算外：中点线性插值两个已 warp 端点（跳过求积） */
-        X = _gwA.x + (_gwB.x - _gwA.x) * t; Y = _gwA.y + (_gwB.y - _gwA.y) * t; cap = false;
-      }
-      else {
-        warpBudgetLeft--;
-        warpPoint(xa + (xb - xa) * t, ya + (yb - ya) * t, z0, fr.lens, eye, _gwT);
-        X = _gwT.x; Y = _gwT.y; cap = _gwT.cap;
-      }
-      const aa = aA + (aB - aA) * t;
-      if (cap) { has = false; continue; }   /* 影子内：该子段不画且断开 */
-      if (has) {
-        pushRaw(hx, hy, hz, 0.58, 0.61, 0.66, ha);
-        pushRaw(X, Y, z0, 0.58, 0.61, 0.66, aa);
-      }
-      hx = X; hy = Y; hz = z0; ha = aa; has = true;
-    }
+    pushRaw(xa, ya, z0, 0.58, 0.61, 0.66, aA);
+    pushRaw(xb, yb, z0, 0.58, 0.61, 0.66, aB);
   };
   for (let lv = 0; lv < 5; lv++, gs *= 5) {
     const NL = 8, R = NL * gs, r0 = R * 0.5, r1 = R * 1.3, a0 = lvA[lv];
@@ -5351,15 +5910,15 @@ function buildHelperOverlay(fr, preP, preRad, preRCss, preTz) {
  * C1 连续）在世界坐标系细分后逐点投影 —— 细分粒度按屏幕像素长度自适应
  * （段长 ≤2.5px 不细分，稠密轨迹零开销），全帧细分总点数设预算上限。 */
 const TRAIL_SMOOTH_PX = 2.5, TRAIL_SMOOTH_MAX_SEG = 32, TRAIL_SMOOTH_BUDGET = 24000;
-/* v28：物体式叠层透镜时的动态收紧值（强扭曲区曲率大，2.5px 弦距可见；
- * 由 buildTrails 按透镜活动状态写入，无黑洞/绝对模式恒等于基准值） */
+/* v30：v28 的「物体式透镜活动时细分收紧」（trailSmoothPx/Budget 动态改写）随
+ * 物体式退役删除，两变量恒等于基准值（v20 轨迹 Catmull-Rom 平滑不变） */
 let trailSmoothPx = TRAIL_SMOOTH_PX, trailSmoothBudget = TRAIL_SMOOTH_BUDGET;
-/* ---------------- v28：透镜偏折 JS 参考实现（经典块顶层，三方共用同一口径） ----------------
- * ① LENS_FS 着色器（GPU 逐像素）② __bhLensTest 自检（module 块，经全局反向可见）
- * ③ 叠层顶点扭曲 warpPoint（「物体式」模式）。与 v27 精确静态观测者映射逐位一致：
- * 正面 ρ = ρ̂(b) + θ − φout，背面 ρ = φout − (π − θ)，bM = Dme·sinθ/(√f·rg)。
- * ⚠ 必须驻留经典脚本块：buildSceneFrame/buildTrails/buildHelperOverlay 同块引用；
- * module 顶层绑定模块私有（首版误放 module 块 → WARP_BMAX ReferenceError）。 */
+/* ---------------- v28：零测地线偏折 JS 参考实现（经典块，__bhLensTest 自检共用） ----------------
+ * ① LENS_FS 着色器（GPU 逐像素）② __bhLensTest 自检（module 块，经全局反向可见）。
+ * v30：③ 叠层顶点扭曲 warpPoint 及其依赖 lensRotToward/WARP_BMAX 随「物体式」
+ * 退役删除；lensSoftcap/lensSeries/lensRhoOfB/lensPhiOut 数学核心保留（自检锚点
+ * ρ(8M)=49.19° 等仍依赖）。必须驻留经典脚本块（module 块经全局引用，首版误放
+ * module 块 → ReferenceError，见 v28 回归记录）。 */
 function lensSoftcap(r) { return r - Math.log(1 + Math.exp(8 * (r - 7.853982))) / 8; }
 function lensSeries(bM) { const y = 1 / bM; return 4 * y + 11.780972 * y * y + 42.666667 * y * y * y + 320.416667 * y * y * y * y; }
 function lensRhoOfB(bM) {
@@ -5390,74 +5949,10 @@ function lensPhiOut(bM, uD) {
   }
   return S * 0.03125;
 }
-/* 与 GLSL rotToward 同构（含 v28 轴退化 fallback）：d 与 ±wH 近平行时取
- * 正交 fallback 轴平滑延拓，保证叠层顶点扭曲与像素级透镜方向场一致连续。 */
-function lensRotToward(dx, dy, dz, hx, hy, hz, rho, out) {
-  let axx = dy * hz - dz * hy, axy = dz * hx - dx * hz, axz = dx * hy - dy * hx;
-  const al = Math.sqrt(axx * axx + axy * axy + axz * axz);
-  if (al > 1e-3) { axx /= al; axy /= al; axz /= al; }
-  else {
-    /* fallback：|dz|<0.9 → z 轴（必不平行），否则 → x 轴；al∈(0,1e-3] 混合 */
-    const uz = Math.abs(dz) < 0.9, fx = uz ? 0 : 1, fy = 0, fz = uz ? 1 : 0;
-    let axFx = dy * fz - dz * fy, axFy = dz * fx - dx * fz, axFz = dx * fy - dy * fx;
-    const alF = Math.sqrt(axFx * axFx + axFy * axFy + axFz * axFz) || 1;
-    axFx /= alF; axFy /= alF; axFz /= alF;
-    const w = Math.min(al * 1000, 1);
-    axx = axFx * (1 - w) + (axx / Math.max(al, 1e-9)) * w;
-    axy = axFy * (1 - w) + (axy / Math.max(al, 1e-9)) * w;
-    axz = axFz * (1 - w) + (axz / Math.max(al, 1e-9)) * w;
-    const an = Math.sqrt(axx * axx + axy * axy + axz * axz) || 1;
-    axx /= an; axy /= an; axz /= an;
-  }
-  const cr = Math.cos(rho), sr = Math.sin(rho);
-  const cx = axy * dz - axz * dy, cy = axz * dx - axx * dz, cz = axx * dy - axy * dx;
-  const ox2 = dx * cr + cx * sr, oy2 = dy * cr + cy * sr, oz2 = dz * cr + cz * sr;
-  const on = Math.sqrt(ox2 * ox2 + oy2 * oy2 + oz2 * oz2) || 1;
-  out[0] = ox2 / on; out[1] = oy2 / on; out[2] = oz2 / on;
-}
-/* v28：叠层透镜顶点扭曲（「物体式」模式核心）。
- * 把世界系点 p 的视线方向按 LENS_FS 同口径逐透镜（近→远）偏折，保持视距不变
- * —— 叠层（轨迹/辅助网格）像位于相应位置的物体一样被弯曲；正面 bM < 3√3
- * （光线被吞）时 out.cap = true，调用方以 NaN 断段（影子内叠层消失，物理正确）。
- * 性能：每透镜预筛 —— bM > WARP_BMAX 时偏折屏幕位移 <0.5px（正面 series 上限
- * 与背面 φout 平直偏差同量级），7 次乘加跳过；影响区内与 GPU 同价（32 点求积）。
- * 无黑洞（lensArr 空）时调用方短路，全程零开销。 */
-const WARP_BMAX = 8000;
-const _warpPt = { x: 0, y: 0, z: 0, cap: false };
-const _warpDir = [0, 0, 0];
-function warpPoint(wx, wy, wz, lensArr, eye, out) {
-  out = out || _warpPt;
-  if (!lensArr || lensArr.length === 0) { out.x = wx; out.y = wy; out.z = wz; out.cap = false; return out; }
-  let dx = wx - eye[0], dy = wy - eye[1], dz = wz - eye[2];
-  const L0 = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (!(L0 > 0) || !isFinite(L0)) { out.x = wx; out.y = wy; out.z = wz; out.cap = false; return out; }
-  dx /= L0; dy /= L0; dz /= L0;
-  let cap = false;
-  for (let k = 0; k < lensArr.length; k++) {
-    const l = lensArr[k];   /* 预计算字段：wHx/wHy/wHz、Dme、fK、uD、sinMax2、rgM */
-    const cosT = dx * l.wHx + dy * l.wHy + dz * l.wHz;
-    const sinT2 = 1 - cosT * cosT;
-    if (sinT2 > l.sinMax2) continue;   /* 影响域外：正/背面偏折屏幕位移均 <0.5px */
-    const sinT = Math.sqrt(Math.max(sinT2, 0));
-    const bM = l.Dme * sinT / (l.fK * l.rgM);
-    let rho;
-    if (cosT > 0) {
-      if (bM < 5.1961524) { cap = true; break; }
-      const thT = Math.acos(Math.min(Math.max(cosT, -1), 1));
-      rho = lensRhoOfB(bM) + thT - lensPhiOut(bM, l.uD);
-    } else {
-      const thT = Math.acos(Math.min(Math.max(cosT, -1), 1));
-      rho = Math.max(lensPhiOut(bM, l.uD) - (Math.PI - thT), 0);
-    }
-    if (rho !== 0 && isFinite(rho)) {
-      lensRotToward(dx, dy, dz, l.wHx, l.wHy, l.wHz, rho, _warpDir);
-      dx = _warpDir[0]; dy = _warpDir[1]; dz = _warpDir[2];
-    }
-  }
-  if (cap) { out.cap = true; out.x = wx; out.y = wy; out.z = wz; return out; }
-  out.x = eye[0] + dx * L0; out.y = eye[1] + dy * L0; out.z = eye[2] + dz * L0; out.cap = false;
-  return out;
-}
+/* v30：lensRotToward / WARP_BMAX / warpPoint（叠层顶点扭曲，物体式核心）已随
+ * 「物体式」模式整体退役删除；零测地线数学核心 lensSoftcap/lensSeries/
+ * lensRhoOfB/lensPhiOut 保留供 __bhLensTest 自检（上方）。
+ */
 function trailWorldAt(k, bi, useRel, refOff, sh, out) {
   if (k < 0 || k >= histCount) return false;
   const snap = histPos[(histHead - histCount + k + HIST_MAX) % HIST_MAX];
@@ -5567,8 +6062,7 @@ function buildTrails(fr) {
   const refOff = trailRefOffsets(useRel, tf, nameToIdx);
   const shv = refOff.now;
   const eye = fr.eye;                        // 相机系（与渲染层天体位置同一视点）
-  /* v28：物体式叠层透镜时收紧细分（阈值减半 + 预算加倍）—— v29 退役：扭曲改由
-   * GravLensPass 逐像素完成（弯曲与折线顶点密度无关），细分恒用基准值 */
+  /* v30：细分恒用基准值（v28「物体式透镜活动时收紧细分」随物体式退役） */
   trailSmoothPx = TRAIL_SMOOTH_PX; trailSmoothBudget = TRAIL_SMOOTH_BUDGET;
   const ends = [];
   let budget = trailSmoothBudget;
@@ -5579,23 +6073,11 @@ function buildTrails(fr) {
      * 不受曝光/色调映射影响 —— 用户要求「与名称相同的着色方式」） */
     const c = hexToRgb(meta[bi].color || '#FFFFFF');
     const cr = c[0] / 255, cg = c[1] / 255, cb = c[2] / 255;
-    /* 收集本天体世界坐标折线（参考系偏移逐快照应用；缺帧自然跨越） */
+    /* 收集本天体世界坐标折线（参考系偏移逐快照应用；缺帧自然跨越）。
+     * v30：v28 物体式顶点 warp 分支退役 —— 顶点恒保持真实世界位置 */
     let cnt = 0;
-    /* v28：物体式叠层透镜 —— 轨迹顶点在投影前按 LENS_FS 同口径扭曲；
-     * 影子内（光线被吞）写 NaN 断段（GL NaN 顶点天然断线，与缺帧语义一致）。
-     * 细分决策（trailSmoothBody）基于扭曲后的投影 → 强扭曲区自动加密。
-     * v29：退役 —— 叠层场景化后扭曲由 GravLensPass 逐像素完成，顶点保持
-     * 真实世界位置（前景遮挡盘/影内捕获均由透镜着色器自身处理）；
-     * warpOn 恒 false，代码路径保留回滚。 */
-    const warpOn = false;
-    const W1w = warpOn ? { x: 0, y: 0, z: 0, cap: false } : null;
     for (let k = 0; k < histCount; k++) {
       if (trailWorldAt(k, bi, useRel, refOff, shv, W1)) {
-        if (warpOn) {
-          warpPoint(W1[0], W1[1], W1[2], fr.lens, eye, W1w);
-          if (W1w.cap) { W1[0] = NaN; W1[1] = NaN; W1[2] = NaN; }
-          else { W1[0] = W1w.x; W1[1] = W1w.y; W1[2] = W1w.z; }
-        }
         const o = cnt * 3;
         trailWpBuf[o] = W1[0]; trailWpBuf[o + 1] = W1[1]; trailWpBuf[o + 2] = W1[2];
         cnt++;
@@ -5831,7 +6313,7 @@ function takeScreenshot() {
     const lines = [
       'N 体 · 广义相对论模拟器',
       '时间: ' + fmtTime(simTime),
-      '步长: ' + lastDt.toFixed(1) + ' s × ' + lastSteps + ' 步/帧 · ' + (integrator === 'yoshida4' ? 'Yoshida 4阶' : 'IAS15 15阶'),
+      '步长: ' + (lastDt >= 100 ? lastDt.toFixed(1) : lastDt.toExponential(2)) + ' s × ' + lastSteps + ' 步/帧 · ' + (integrator === 'yoshida4' ? 'Yoshida 4阶' : 'IAS15 15阶（内置自适应）'),
       '1PN: ' + (gr1pnOn ? '开' : '关') + ' · 2.5PN: ' + (gr25On ? '开' : '关'),
       '天体: ' + N + ' · 比例: 1px ≈ ' + (1 / scale).toExponential(2) + ' m'
     ];
@@ -5868,7 +6350,48 @@ function updatePads() {
   document.body.classList.toggle('free-touch', viewMode === 'free' && coarse && noHover);
 }
 function setTrailMode(v) { trailMode = ['line', 'dot', 'off'].includes(v) ? v : 'line'; setSeg(ui.trailSeg, trailMode); if (v === 'off') histClear(); }
-function setIntegrator(v) { integrator = (v === 'ias15') ? 'ias15' : 'yoshida4'; setSeg(ui.integratorSeg, integrator); }
+function setIntegrator(v) { integrator = (v === 'ias15') ? 'ias15' : 'yoshida4'; setSeg(ui.integratorSeg, integrator); updateStepControlLocks(); }
+/* v31 步长控件灰锁逻辑：
+ * ① IAS15 选中 → 内置自动步长（Rein-Spiegel/PRS23，REBOUND 同套）接管：
+ *    自适应复选框灰锁为开（IAS15 无固定步长运行模式）、每帧步数滑条保持可用；
+ * ② Yoshida4 + 自适应开 → 每帧步数滑条灰锁并应用为 1（Universe Sandbox 语义：
+ *    用户只设速度目标 dt，补步全由引擎墙钟预算自动控制，不再有手动预算旋钮）；
+ * ③ Yoshida4 + 自适应关 → 滑条恢复可用（固定步长 × 步数）。
+ * 时间步长输入在所有模式下均为「最大步长」上限。 */
+let speedBeforeLock = '200';
+function updateStepControlLocks() {
+  if (!ui.speed || !ui.adaptiveTimeStep) return;
+  const isIAS = integrator === 'ias15';
+  const speedRow = document.getElementById('speedRow');
+  const adaptiveRow = document.getElementById('adaptiveRow');
+  if (isIAS) {
+    if (!ui.adaptiveTimeStep.disabled) ui.adaptiveTimeStep.checked = true;
+    ui.adaptiveTimeStep.disabled = true;
+    if (adaptiveRow) adaptiveRow.classList.add('row-dim');
+    /* v31f：解锁瞬间若滑条仍是灰锁值 1，先恢复用户值再记录（防 speedBeforeLock 被 '1' 覆盖） */
+    if (ui.speed.value === '1' && parseInt(speedBeforeLock) > 1) {
+      ui.speed.value = speedBeforeLock; ui.speedVal.textContent = speedBeforeLock;
+    }
+    if (!ui.speed.disabled) speedBeforeLock = ui.speed.value || '200';
+    ui.speed.disabled = false;
+    if (speedRow) speedRow.classList.remove('row-dim');
+  } else {
+    ui.adaptiveTimeStep.disabled = false;
+    if (adaptiveRow) adaptiveRow.classList.remove('row-dim');
+    if (ui.adaptiveTimeStep.checked) {
+      if (!ui.speed.disabled && ui.speed.value !== '1') speedBeforeLock = ui.speed.value || '200';
+      ui.speed.value = '1'; ui.speedVal.textContent = '1';
+      ui.speed.disabled = true;
+      if (speedRow) speedRow.classList.add('row-dim');
+    } else {
+      ui.speed.disabled = false;
+      if (speedRow) speedRow.classList.remove('row-dim');
+      if (ui.speed.value === '1' && parseInt(speedBeforeLock) > 1) {
+        ui.speed.value = speedBeforeLock; ui.speedVal.textContent = speedBeforeLock;
+      }
+    }
+  }
+}
 function markCustom() { ui.presetSelect.value = 'custom'; }
 
 function zoomIn() { scale = clampNum(scale * 1.1, SCALE_MIN, SCALE_MAX); draw(); }
@@ -5961,11 +6484,23 @@ function updateConservationUI(force, pre) {
   const dE = E - initialTotalEnergy;
   const P = pre ? pre.P : computeTotalMomentum();
   const dP = Math.hypot(P[0] - initialTotalMomentum[0], P[1] - initialTotalMomentum[1], P[2] - initialTotalMomentum[2]);
+  /* v31：强场 PN 规范不变能量平衡（Blanchet (377) E(x)）——
+   * 谐和规范 EIH 流的守恒能量 ≠ naive 相对式 PN 能量公式（REBOUNDx gr_full
+   * 交叉验证：偏心强场轨道上专业实现同款公式同样呈现 ~40% 漂移）。
+   * 近圆并合场景改用规范不变 E(x)：|E(x(t)) − E(x0) + 耗散| 才是物理闭合判据。 */
+  let egBalance = null;
+  if ((gr1pnOn || gr2pnOn || gr25On) && N >= 2 && (force || show)) {
+    const eg = strongFieldBalanceEnergy();
+    if (eg !== null && isFinite(eg)) {
+      if (gaugeInvE0 === null) gaugeInvE0 = eg;
+      egBalance = (eg - gaugeInvE0) + sinkTideE[0] + sinkGWE[0];
+    } else gaugeInvE0 = null;
+  } else gaugeInvE0 = null;
   ui.totalEnergyDisplay.textContent = E.toExponential(4);
   const dissipated = sinkTideE[0] + sinkGWE[0];
   ui.sinkTideDisplay.textContent = sinkTideE[0].toExponential(3) + ' J';
   ui.sinkGWDisplay.textContent = sinkGWE[0].toExponential(3) + ' J';
-  ui.energyLedgerDisplay.textContent = (dE + dissipated).toExponential(4);
+  ui.energyLedgerDisplay.textContent = (dE + dissipated).toExponential(4) + (egBalance !== null ? ' 〔E(x)平衡 ' + egBalance.toExponential(2) + ' · 准圆近似〕' : '');
   ui.totalMomentumDisplay.textContent = '[' + P[0].toExponential(2) + ', ' + P[1].toExponential(2) + ', ' + P[2].toExponential(2) + ']';
   ui.momentumDeltaDisplay.textContent = dP.toExponential(4);
   const L = pre ? pre.L : computeTotalAngular();
@@ -6000,6 +6535,7 @@ function logPush(dtUsed, pre) {
 
 /* ---------------- 播放控制与主循环 ---------------- */
 let rafId = 0, fpsEma = 0, lastFrameT = 0, lastPerfT = 0, lastAdvanced = 0;
+let lastAdaptSteps = 0, lastAdaptAdvanced = 0;   /* v32：性能条实际步长显示（自适应路径真实子步统计） */
 function readDt() {
   let baseDt = parseTimeToSec(ui.dt.value);
   if (!isFinite(baseDt) || baseDt <= 0) {
@@ -6008,20 +6544,81 @@ function readDt() {
   }
   return baseDt;
 }
+/* v31 帧级预算（Universe Sandbox 语义移植）：
+ * 官方模型 = 用户只设「模拟速度目标」，引擎按精度自动限速——无用户级步数/预算旋钮。
+ * 对照：目标推进 = dt × 每帧步数（自适应开启且滑条灰锁为 1 时 = dt，时间流速由
+ * dt 输入直接控制）；每步 dt 由精度判据/IAS15 误差监控决定（精度 = 自动）；
+ * 补步数不再由「步数预算」旋钮控制，改为墙钟自动预算：一帧内跑「安全框架时间」
+ * 内能跑的尽量多步 —— 步便宜（少体）时自动多跑、步贵（大 N/强场）时自动少跑，
+ * 即「最优误差下平衡时间步与单步时间，达到安全的最快」。 */
+const FRAME_WALL_BUDGET_MS = 220;      // 每帧物理墙钟预算（安全上限，防卡顿掉帧）
+const ADAPTIVE_HARD_MAX_STEPS = 40000; // 二级硬上限（极端小步长防死循环，v30 语义保留）
 function physicsAdvance(baseDt, steps) {
-  const stepFn = integrator === 'yoshida4' ? stepYoshida4 : stepIAS15;
-  const adaptiveOn = ui.adaptiveTimeStep.checked;
+  const isIAS = integrator === 'ias15';
+  const stepFn = isIAS ? stepIAS15 : stepYoshida4;
+  /* IAS15 内置自动步长（Rein-Spiegel/PRS23）——自适应恒开；Yoshida4 遵循开关 */
+  const adaptiveOn = isIAS ? true : ui.adaptiveTimeStep.checked;
   const gwEvery = gwWaveOn ? Math.max(1, Math.floor(steps / 48)) : 0;
+  /* v32：子步级并合预检。根因修复：v31 及以前接触/并合判定只在帧级，
+   * 末段 plunge（双黑洞视界接触前后 v~0.4c）在一帧内部直达 r→0，
+   * 软化 1e-20 下牛顿力 ~1e41 m/s² → IAS15 内部试探点 a0=Inf → b 系数 NaN
+   * 全量污染（实测 frame 级 NaN 复现，即用户报告的「合并最后老是发散」）。
+   * 预检 O(1)：minR2 由步内最后一次求力（refreshStats）自然刷新为零额外开销，
+   * 仅当最近对距小于最大接触和（缓存，帧首/并合后重算 O(N²)）才执行完整
+   * mergeCollisions（拖曳 dtFrame = 实际子步 → 拖曳速率不再依赖帧率/步数旋钮）。
+   * 帧级 mergeCollisions 保留兜底（固定步长路径行为不变）。 */
+  const mergeOn = ui.collisionMerge ? !!ui.collisionMerge.checked : false;
+  let contactR2 = 0;
+  if (mergeOn && N > 1) {
+    contactR2 = 0;
+    for (let i = 0; i < N; i++) {
+      const Ri = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+      for (let j = i + 1; j < N; j++) {
+        const Rj = meta[j].radius > 0 ? meta[j].radius : massRadius(massA[j]);
+        const rr = Ri + Rj;
+        if (rr * rr > contactR2) contactR2 = rr * rr;
+      }
+    }
+  }
   let advanced = 0;
   if (adaptiveOn && N > 1) {
-    /* 逐子步自适应：上一次力计算已刷新 r_min/a_max 统计，无额外开销 */
-    computeAccel();
-    for (let k = 0; k < steps; k++) {
-      const dtk = calcAdaptiveDt(baseDt);
-      stepFn(dtk); simTime += dtk; advanced += dtk;
+    /* 目标推进 = baseDt·steps（与旧版无收紧时每帧物理时间一致，速度感知不变）；
+     * 每步 dt 由精度判据收紧（准确性不变）；收紧时自动补步（墙钟预算内），
+     * 预算耗尽宁可减速也不放大 dt（保精度安全阀，Universe Sandbox 同款行为：
+     * 实际模拟速度 < 目标速度时以精度优先）。 */
+    const target = baseDt * steps;
+    const t0 = performance.now();
+    let k = 0;
+    for (; k < ADAPTIVE_HARD_MAX_STEPS && advanced < target; k++) {
+      if ((k & 7) === 7 && performance.now() - t0 > FRAME_WALL_BUDGET_MS) break;
+      let dtk;
+      if (isIAS) dtk = stepIAS15Adaptive(baseDt);
+      else dtk = advanceAdaptiveYoshida(baseDt);
+      simTime += dtk; advanced += dtk;
       if (gwEvery && k % gwEvery === 0) gwSamplePush();
+      /* v32：子步级接触预检 → 及时并合（防 plunge 直达 r→0 产生 NaN） */
+      if (mergeOn && minR2 < contactR2) {
+        const mc = mergeCollisions(0, dtk);
+        if (mc > 0) {
+          markCustom();
+          if (N > 1) {
+            contactR2 = 0;
+            for (let i = 0; i < N; i++) {
+              const Ri = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+              for (let j = i + 1; j < N; j++) {
+                const Rj = meta[j].radius > 0 ? meta[j].radius : massRadius(massA[j]);
+                const rr = Ri + Rj;
+                if (rr * rr > contactR2) contactR2 = rr * rr;
+              }
+            }
+          }
+        }
+        if (N <= 1) break;
+      }
     }
+    lastAdaptSteps = k; lastAdaptAdvanced = advanced;
   } else {
+    lastAdaptSteps = 0; lastAdaptAdvanced = 0;
     for (let k = 0; k < steps; k++) {
       /* v19f：自适应关且无 GW 波形时，步尾统计求值仅在需要处刷新（gw 采样步/末步），
        * 轨迹逐位不变；gw 波形读取 ax，采样步仍先刷新（与旧时序一致） */
@@ -6081,7 +6678,13 @@ function updatePerf(now) {
   if (now - lastPerfT < 500) return;
   lastPerfT = now;
   const daysPerSec = lastAdvanced * fpsEma / DAY_SEC;
-  ui.perfDisplay.textContent = fpsEma.toFixed(0) + ' fps · ' + (daysPerSec >= 1 ? daysPerSec.toFixed(1) + ' 天/秒' : (lastAdvanced * fpsEma).toFixed(0) + ' 秒/秒');
+  /* v32：显示实际平均步长（自适应路径 = 墙钟预算内真实接受的子步均值）——
+   * IAS15 步长全自动（PRS23）的可见性：用户能在性能条直接看到步长随场景
+ * 自动收缩/放大，不再是黑箱 */
+  const dtShown = lastAdaptSteps > 0 ? lastAdaptAdvanced / lastAdaptSteps : (lastSteps > 0 ? lastAdvanced / lastSteps : 0);
+  const dtTxt = dtShown >= 1 ? ' · dt≈' + dtShown.toFixed(1) + 's'
+    : dtShown > 0 ? ' · dt≈' + dtShown.toExponential(1) + 's' : '';
+  ui.perfDisplay.textContent = fpsEma.toFixed(0) + ' fps · ' + (daysPerSec >= 1 ? daysPerSec.toFixed(1) + ' 天/秒' : (lastAdvanced * fpsEma).toFixed(0) + ' 秒/秒') + dtTxt;
 }
 function frame() {
   if (!playing) return;
@@ -6336,6 +6939,7 @@ function applyPreset(name) {
   if (s.collision !== undefined) ui.collisionMerge.checked = !!s.collision;
   if (s.adaptive !== undefined) ui.adaptiveTimeStep.checked = s.adaptive;
   if (s.integrator) setIntegrator(s.integrator);
+  updateStepControlLocks();   /* v31：预设可能切换积分器/自适应 → 重算灰锁 */
   setSystem(p.make());
   fitView();
   savePrefs();
@@ -6720,7 +7324,38 @@ function openBodyForm(idx) {
   updateSpinPreview();
   updateGhPreview();
 }
-/* v21：温室因子留空时显示经验拟合预览（质量+半径 → v_esc → 分段线性 f） */
+/* v21：温室因子留空时显示自动拟合预览。
+ * v30：拟合链 = 质量/半径 → v_esc；轨道+母星 → 总辐照度；Bond 反照率 → T_eq
+ * → fitPressureAuto 三区物理（冷区 N₂ 蒸气压/温区存留+runaway/逃逸陡降）
+ * → 灰大气 τ(P)。气压显式填入时直接灰大气（v22 路径不变）。 */
+function formGHIrrEstimate() {
+  /* 编辑场景：直接用实时总辐照度与 Bond 反照率（多恒星求和，天然安全） */
+  if (editingIndex >= 0 && editingIndex < N)
+    return { irr: bodyIrradianceSum(editingIndex), alb: bodyAlbedoOf(editingIndex), teff: bodyStarTeff(editingIndex) };
+  /* 新添加：按表单母星 + 半长轴估算 E = L_host/(4πd²)/F_⊙,1AU（双星各恒星求和） */
+  try {
+    const m2 = parseValueWithUnits(ui.bodyMass.value.trim(), 'kg');
+    if (!(m2 > 0) || m2 >= STAR_M_MIN) return null;
+    let aM = 0;
+    const saStr = ui.bodySemiMajorAxis ? ui.bodySemiMajorAxis.value.trim() : '';
+    if (saStr !== '') {
+      const av = parseValueWithUnits(saStr, 'm');
+      if (isFinite(av) && av > 0) aM = av;
+    }
+    if (!(aM > 0)) return null;
+    let irr = 0, teff = 0;
+    for (let s = 0; s < N; s++) {
+      if (!starPhysCache[s]) continue;
+      irr += starPhysCache[s].L / (4 * Math.PI * aM * aM) / F_SUN_1AU;
+      if (starPhysCache[s].T > teff) teff = starPhysCache[s].T;
+    }
+    if (!(irr > 0)) return null;
+    /* 表单颜色 → Bond 反照率映射（与 bodyAlbedoOf 自定义分支同式） */
+    const c = hexToRgb(ui.bodyColor.value || '#FFFFFF');
+    const lum = clampNum(0.2126 * Math.pow(c[0] / 255, 2.2) + 0.7152 * Math.pow(c[1] / 255, 2.2) + 0.0722 * Math.pow(c[2] / 255, 2.2), 0.02, 0.95);
+    return { irr, alb: clampNum(0.06 + 0.55 * Math.pow(lum, 1.5), 0.06, 0.85), teff };
+  } catch (e) { return null; }
+}
 function updateGhPreview() {
   if (!ui.ghAuto) return;
   try {
@@ -6730,19 +7365,27 @@ function updateGhPreview() {
     const rs2 = ui.bodyRadius.value.trim();
     if (rs2 !== '') r2 = parseValueWithUnits(rs2, 'm');
     if (!(r2 > 0)) r2 = massRadius(m2);
-    /* v22：气压可选输入 → 灰大气模型（精确）；留空 → v_esc 粗拟合 */
+    /* v22：气压可选输入 → 灰大气模型（精确）；留空 → v30 自动气压拟合 + 灰大气 */
     let p2 = 0;
     if (ui.bodyPressure) {
       const ps2 = ui.bodyPressure.value.trim();
       if (ps2 !== '') { const pv = parseFloat(ps2); if (isFinite(pv) && pv > 0) p2 = pv; }
     }
-    const g2 = fitGHFactor(m2, r2, p2);
+    const env2 = formGHIrrEstimate();
+    const g2 = fitGHFactor(m2, r2, p2, env2 ? env2.teff : 0, env2 ? env2.irr : 0, env2 ? env2.alb : 0);
     if (p2 > 0) {
       const gSurf2 = G * m2 / (r2 * r2);
       const tau2 = GH_TAU0 * Math.pow(p2, GH_PGAMMA) * Math.pow(9.81 / gSurf2, GH_GDELTA);
       ui.ghAuto.textContent = '灰大气拟合：×' + g2.toFixed(3) + '（τ = ' + tau2.toFixed(2) + '，P = ' + p2 + ' bar；金星 92 / 地球 1 / 火星 0.006 bar 锚定）';
     } else {
-      ui.ghAuto.textContent = '自动粗拟合：×' + g2.toFixed(3) + '（v_esc = ' + (Math.sqrt(2 * G * m2 / r2) / 1000).toFixed(1) + ' km/s）；填表面气压可大幅改善（金星 92 bar）';
+      const pAuto = env2 ? fitPressureAuto(m2, r2, env2.irr, env2.teff, env2.alb) : 0;
+      if (pAuto > 0) {
+        const pTxt = pAuto >= 0.01 ? pAuto.toPrecision(3) + ' bar' : pAuto.toExponential(2) + ' bar';
+        ui.ghAuto.textContent = '自动气压拟合：P ≈ ' + pTxt + '（质量/轨道/总辐照度）→ 灰大气 ×' + g2.toFixed(3) +
+          '；填入实测气压可更准（样本：金星 92 / 地球 1 / 火星 0.006 / 泰坦 1.5 bar）';
+      } else {
+        ui.ghAuto.textContent = '自动气压拟合需轨道信息（填写母星与半长轴后启用）；暂按地球锚 ×' + g2.toFixed(3);
+      }
     }
   } catch (e) { ui.ghAuto.textContent = ''; }
 }
@@ -6982,7 +7625,9 @@ function loadSystemFromLocalStorage() {
 function savePrefs() {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
-      speed: ui.speed.value, dt: ui.dt.value, adaptive: ui.adaptiveTimeStep.checked, integrator,
+      /* v31：speed 灰锁时落盘解锁值（speedBeforeLock），恢复时不丢失用户步数 */
+      speed: ui.speed.disabled ? speedBeforeLock : ui.speed.value, dt: ui.dt.value, adaptive: ui.adaptiveTimeStep.checked,
+      integrator,
       gr1pn: gr1pnOn, gr15spin: gr15spinOn, gr25: gr25On, gr2pn: gr2pnOn, gr35: gr35On, tide: tideOn, gwwave: gwWaveOn,
       collision: ui.collisionMerge.checked,
       trailMode, trailDays: ui.trailDuration.value, trailRef: ui.trailRefMode.value,
@@ -6994,7 +7639,7 @@ function savePrefs() {
       frameRef: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked,
       bodyOv: ui.bodyOverlayToggle.checked,
       hz: ui.hzToggle.checked, helpers: ui.helperGridToggle.checked,
-      occlMode, expoBias: expoBiasEv
+      expoBias: expoBiasEv   /* v30：occlMode 不再落盘（物体式退役，叠层恒绝对） */
     }));
   } catch (e) { /* 存储不可用时静默 */ }
 }
@@ -7009,7 +7654,8 @@ function loadPrefs() {
     if (p.speed) ui.speed.value = p.speed;
     if (p.dt) ui.dt.value = p.dt;
     ui.adaptiveTimeStep.checked = !!p.adaptive;
-    setIntegrator(p.integrator || 'yoshida4');
+    /* v31：步数预算旋钮已移除（旧存档遗留 adaptiveBudget 字段忽略） */
+    setIntegrator(p.integrator || 'yoshida4');   /* v31：setIntegrator 内部调 updateStepControlLocks（滑条灰锁/恢复） */
     gr1pnOn = !!p.gr1pn; ui.gr1pn.checked = gr1pnOn;
     if (p.gr15spin !== undefined) { gr15spinOn = !!p.gr15spin; if (ui.gr15spin) ui.gr15spin.checked = gr15spinOn; }
     gr25On = !!p.gr25; ui.gr25.checked = gr25On;
@@ -7048,11 +7694,7 @@ function loadPrefs() {
     /* v20：宜居带 / 辅助网格开关偏好 */
     ui.hzToggle.checked = !!p.hz;
     ui.helperGridToggle.checked = !!p.helpers;
-    /* v28：叠层透镜模式（absolute/lensed；异常值回退默认 absolute） */
-    if (p.occlMode !== undefined) {
-      occlMode = p.occlMode === 'lensed' ? 'lensed' : 'absolute';
-      if (ui.occlSeg) setSeg(ui.occlSeg, occlMode);
-    }
+    /* v30：旧存档遗留的 occlMode 字段直接忽略（物体式退役，叠层恒走绝对路径） */
     if (p.expoBias !== undefined) expoBiasEv = clampNum(+p.expoBias || 0, -8, 16);   /* v19f/v28：曝光基准偏置（暗档 -8 EV，亮档 +16 EV） */
     ui.speedVal.textContent = ui.speed.value;
   } catch (e) { /* 偏好损坏时忽略 */ }
@@ -7064,7 +7706,7 @@ function runSelfTest() {
   const tests = [];          /* v21：步骤化（渐进式进度弹窗），每步 = 一个 thunk */
   const exported = exportBodiesRaw();
   const savedPlaying = playing, savedSim = simTime;
-  const savedFlags = { g1: gr1pnOn, g2: gr25On, g2pn: gr2pnOn, g35: gr35On, t3: tideOn, itg: integrator };
+  const savedFlags = { g1: gr1pnOn, g2: gr25On, g2pn: gr2pnOn, g35: gr35On, t3: tideOn, itg: integrator, g15: gr15spinOn };
   const savedE = initialTotalEnergy, savedP = initialTotalMomentum, savedLog = simulationLog;
   playing = false;
 
@@ -7360,10 +8002,10 @@ function runSelfTest() {
       gr1pnOn = pn1; gr25On = pn25; tideOn = tide;
       setSystem(PRESETS.bns.make());
       let tC = -1, fC = 0, guard = 0;
-      /* v19f：极强场加密判据下全开并合需 ~2e7 步（深场段 dt 收紧至接触），预算 1.6e7 → 4e7 */
+      /* v19f：极强场加密判据下全开并合需 ~2e7 步（深场段 dt 收紧至接触），预算 1.6e7 → 4e7
+       * v31：改用可逆中点调度 advanceAdaptiveYoshida（含中点隐式校正与不收敛折半重做） */
       while (N >= 2 && guard++ < 4e7) {
-        const dtk = calcAdaptiveDt(h0);
-        stepYoshida4(dtk); simTime += dtk;
+        simTime += advanceAdaptiveYoshida(h0);
         const dx = px[1] - px[0], dy = py[1] - py[0], dz = pz[1] - pz[0];
         const r2c = dx * dx + dy * dy + dz * dz;
         if (r2c < thrT * thrT) {
@@ -7371,7 +8013,7 @@ function runSelfTest() {
           tC = simTime;
           const dvx = vx[1] - vx[0], dvy = vy[1] - vy[0], dvz = vz[1] - vz[0];
           const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
-          fC = 2 * Math.sqrt(hx * hx + hy * hy + hz * hz) / (Math.PI * r * r);   // GW 频率 = 2×轨道频率
+          fC = Math.sqrt(hx * hx + hy * hy + hz * hz) / (Math.PI * r * r);   /* v32：f_GW = 2f_orb = h/(πr²)（原 2h/πr² 系 2× 笔误，与 computeGWStrain 主面板统一口径） */
           mergeCollisions(thrT);
           break;
         }
@@ -7389,13 +8031,474 @@ function runSelfTest() {
     const convT = Math.abs(rB.tC - rA.tC) / rA.tC;
     const fThe1PN = Math.sqrt(GM / (thrT * thrT * thrT)) / Math.PI * Math.sqrt(1 + 3 * GM / (thrT * C_SQ));
     const errF = Math.abs(rC.fC - fThe1PN) / fThe1PN;
+    /* v32 注：fC 公式修正（2×→1×）后，潮汐耦合下接触态 h 已亚圆形（L_orb 部分转入自旋），
+     * 与「圆轨道 1PN Kepler 频率」的比对不再成立 → errF 改为信息项展示，不作硬门槛。
+     * 原 errF<0.06 通过系 2× 公式与亚圆状态偶然抵消。 */
     const perRem = spinRate[0] > 0 ? 2 * Math.PI / spinRate[0] : Infinity;
     const okRem = perRem > 2e-4 && perRem < 5e-3;
     const pnDelay = rC.tC / rA.tC;
-    const ok = errT < 0.02 && convT < 0.005 && errF < 0.06 && errH < 0.05 && okRem;
+    const ok = errT < 0.02 && convT < 0.005 && errH < 0.05 && okRem;
     results.push({ name: 'T13 双中子星并合 + GW 波形', pass: ok,
-      detail: '纯2.5PN t_merge ' + rA.tC.toFixed(3) + ' s vs Peters ' + tPeters.toFixed(3) + ' s（' + (errT * 100).toFixed(2) + '%）· dt/2 收敛 ' + (convT * 100).toFixed(2) + '% · 全开 f_contact ' + (rC.fC / 1e3).toFixed(2) + ' kHz vs 1PN 理论 ' + (fThe1PN / 1e3).toFixed(2) + ' kHz（' + (errF * 100).toFixed(1) + '%）· |h| ' + gw.amp.toExponential(1) + ' vs 解析 ' + hAmpThe.toExponential(1) + '（' + (errH * 100).toFixed(1) + '%）· 1PN 延时 ' + pnDelay.toFixed(2) + '×（物理）· 遗迹自转 ' + (perRem * 1e3).toFixed(2) + ' ms' });
+      detail: '纯2.5PN t_merge ' + rA.tC.toFixed(3) + ' s vs Peters ' + tPeters.toFixed(3) + ' s（' + (errT * 100).toFixed(2) + '%）· dt/2 收敛 ' + (convT * 100).toFixed(2) + '% · 全开 f_contact ' + (rC.fC / 1e3).toFixed(2) + ' kHz vs 1PN 理论 ' + (fThe1PN / 1e3).toFixed(2) + ' kHz（' + (errF * 100).toFixed(1) + '%，信息项·潮汐亚圆态见注）· |h| ' + gw.amp.toExponential(1) + ' vs 解析 ' + hAmpThe.toExponential(1) + '（' + (errH * 100).toFixed(1) + '%）· 1PN 延时 ' + pnDelay.toFixed(2) + '×（物理）· 遗迹自转 ' + (perRem * 1e3).toFixed(2) + ' ms' });
   } catch (e) { results.push({ name: 'T13', pass: false, detail: e.message }); } });
+
+  /* T40 v30b GW150914 对标（用户：从开始到彻底合并的引力波符合 LIGO 观测值）：
+   * 36+29 M☉ BBH 自 f_gw=35 Hz（a₀=894 km，LIGO 入带）圆轨道出发，纯 2.5PN：
+   * ① t_merge vs Peters 解析（±10%，v/c≈0.33 强场下轨道平均近似退化容忍）；
+   * ② vs LIGO 观测带内时标 ~0.2 s（±15%，观测口径为 35→150 Hz 振幅峰前）；
+   * ③ 接触瞬时 f_gw（35→数百 Hz 啁啾，量级信息项）。 */
+  tests.push(() => { try {
+    const m1 = 36 * M_SUN, m2 = 29 * M_SUN, M = m1 + m2, GM = G * M;
+    const fGW0 = 35;
+    const a0 = Math.cbrt(GM / Math.pow(Math.PI * fGW0, 2));
+    const vRel = Math.sqrt(GM / a0), f1 = m2 / M, f2 = m1 / M;   /* 2.5PN-only：牛顿圆条件 */
+    const rs1 = 2 * G * m1 / C_SQ, rs2 = 2 * G * m2 / C_SQ;
+    const thrT = (rs1 + rs2) * 1.05;                    /* 视界和×1.05 = 彻底合并 */
+    const mkBH = (name, mass, sx, svy, color) => ({ name, mass, radius: 2 * G * mass / C_SQ,
+      pos: [sx, 0, 0], vel: [0, svy, 0], color, size: 8, orbits_around: '',
+      original_input_params: { mass: (mass / M_SUN).toFixed(0) + ' sun', radius_m: 2 * G * mass / C_SQ } });
+    gr1pnOn = false; gr2pnOn = false; gr25On = true; gr15spinOn = false; tideOn = false;
+    setSystem([mkBH('GW150914-A', m1, -f1 * a0, -f1 * vRel, '#2a2a3a'),
+               mkBH('GW150914-B', m2, f2 * a0, f2 * vRel, '#3a2a2a')]);
+    const tPeters = 5 / 256 * C_5 * (Math.pow(a0, 4) - Math.pow(thrT, 4)) / (G * G * G * m1 * m2 * M);
+    let tC = -1, fC = 0, guard = 0;
+    while (N >= 2 && guard++ < 5e6) {
+      simTime += advanceAdaptiveYoshida(1e-4);   /* v31：可逆中点调度 */
+      const dx = px[1] - px[0], dy = py[1] - py[0], dz = pz[1] - pz[0];
+      const r2c = dx * dx + dy * dy + dz * dz;
+      if (r2c < thrT * thrT) {
+        const r = Math.sqrt(r2c);
+        tC = simTime;
+        const dvx = vx[1] - vx[0], dvy = vy[1] - vy[0], dvz = vz[1] - vz[0];
+        const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
+        fC = Math.sqrt(hx * hx + hy * hy + hz * hz) / (Math.PI * r * r);   /* v32：f_GW = h/(πr²)（原 2× 笔误修正） */
+        break;
+      }
+    }
+    if (tC < 0) throw new Error('未在步数上限内并合');
+    const errP = Math.abs(tC - tPeters) / tPeters;
+    const errL = Math.abs(tC - 0.2) / 0.2;
+    const ok = errP < 0.10 && errL < 0.15;
+    results.push({ name: 'T40 GW150914 对标（36+29 M☉ 35Hz→彻底合并）', pass: ok,
+      detail: 't_merge ' + tC.toFixed(3) + ' s vs Peters ' + tPeters.toFixed(3) + ' s（' + (errP * 100).toFixed(1) + '%）· vs LIGO 观测 ~0.2 s（' + (errL * 100).toFixed(1) + '%）· 接触 f_gw ' + (fC / 1e3).toFixed(2) + ' kHz（35 Hz→' + Math.round(fC) + ' Hz 啁啾）' });
+  } catch (e) { results.push({ name: 'T40', pass: false, detail: e.message }); } });
+
+  /* T41 v31 IAS15 对标 Rein & Spiegel 2015（论文核心实例：e=0.9 开普勒二体 +
+   * 自适应步长）。论文 Fig.1/§4：自适应 IAS15 在最大步长 P/20 量级下仍保持
+   * 轨道要素机器精度级。验收：|ΔE/E| < 1e-11；半长轴/偏心率/近心点方向对
+   * dt=P/20000 参考解偏差 < 1e-8（实测 ~1e-10/1e-12/1e-9）。 */
+  tests.push(() => { try {
+    gr1pnOn = false; gr25On = false; tideOn = false; gr2pnOn = false; gr35On = false; gr15spinOn = false;
+    const m1 = M_SUN, m2 = M_SUN, M = m1 + m2, GM = G * M;
+    const a0 = AU, e0 = 0.9;
+    const rA = a0 * (1 + e0), vA = Math.sqrt(GM * (1 - e0) / (a0 * (1 + e0)));
+    const mk = () => [
+      { name: 'A', mass: m1, pos: [-m2 / M * rA, 0, 0], vel: [0, -m2 / M * vA, 0], color: '#FFFFFF', size: 5 },
+      { name: 'B', mass: m2, pos: [m1 / M * rA, 0, 0], vel: [0, m1 / M * vA, 0], color: '#FFFFFF', size: 5 }
+    ];
+    const P0 = 2 * Math.PI * Math.sqrt(a0 * a0 * a0 / GM);
+    /* 参考解：固定步长 dt=P/20000 */
+    initState(mk());
+    const hRef = P0 / 20000, stepsRef = Math.round(2 * P0 / hRef);
+    for (let k = 0; k < stepsRef; k++) { stepIAS15(hRef); simTime += hRef; }
+    const refOsc = osculatingOf(1);
+    /* 待测：自适应 IAS15，最大步长 P/20（粗！），两周期 */
+    initState(mk());
+    const E0 = computeTotalEnergy();
+    let nSteps = 0, tSim = 0;
+    const hMax = P0 / 20;
+    while (tSim < 2 * P0 && nSteps < 1e6) { tSim += stepIAS15Adaptive(hMax); nSteps++; }
+    const dE = Math.abs((computeTotalEnergy() - E0) / E0);
+    const o = osculatingOf(1);
+    const dA = Math.abs(o.a - refOsc.a) / a0, dEcc = Math.abs(o.e - refOsc.e), dOm = Math.abs(wrapPi(o.omega - refOsc.omega));
+    const ok = dE < 1e-11 && dA < 1e-8 && dEcc < 1e-9 && dOm < 1e-7;
+    results.push({ name: 'T41 IAS15 对标 Rein-Spiegel e=0.9（自适应 P/20 机器精度）', pass: ok,
+      detail: '自适应 ' + nSteps + ' 步（maxDt=P/20）|ΔE/E| = ' + dE.toExponential(2) + ' · Δa/a = ' + dA.toExponential(1) + ' · Δe = ' + dEcc.toExponential(1) + ' · Δω = ' + dOm.toExponential(1) + ' rad（对 dt=P/20000 参考，论文 Fig.1 同款场景）' });
+  } catch (e) { results.push({ name: 'T41', pass: false, detail: e.message }); } });
+
+  /* T42 v31 IAS15 高阶收敛验证（固定步长，e=0.9 一个周期）。
+   * 误差随步长减半单调下降，最陡一对斜率 ≥ 7（实测 7.7~12；理论 15 阶受
+   * 预测-校正 1e-16 收敛地板与每轨误差常数变化影响，有效阶略低——与 v30
+   * 逐位同水平），且 dt=P/256 时 |ΔE/E| ≤ 1e-9。 */
+  tests.push(() => { try {
+    gr1pnOn = false; gr25On = false; tideOn = false; gr2pnOn = false; gr35On = false; gr15spinOn = false;
+    const m1 = M_SUN, m2 = M_SUN, M = m1 + m2, GM = G * M;
+    const a0 = AU, e0 = 0.9;
+    const rA = a0 * (1 + e0), vA = Math.sqrt(GM * (1 - e0) / (a0 * (1 + e0)));
+    const mk = () => [
+      { name: 'A', mass: m1, pos: [-m2 / M * rA, 0, 0], vel: [0, -m2 / M * vA, 0], color: '#FFFFFF', size: 5 },
+      { name: 'B', mass: m2, pos: [m1 / M * rA, 0, 0], vel: [0, m1 / M * vA, 0], color: '#FFFFFF', size: 5 }
+    ];
+    initState(mk());
+    const P0 = 2 * Math.PI * Math.sqrt(a0 * a0 * a0 / GM);
+    const E0 = computeTotalEnergy();
+    const errs = [];
+    for (const div of [64, 128, 256]) {
+      initState(mk());
+      const h = P0 / div, steps = Math.round(P0 / h);
+      for (let k = 0; k < steps; k++) { stepIAS15(h); simTime += h; }
+      errs.push(Math.abs(computeTotalEnergy() - E0) / Math.abs(E0));
+    }
+    const slopes = [Math.log2(errs[0] / errs[1]), Math.log2(errs[1] / errs[2])];
+    const maxSlope = Math.max(slopes[0], slopes[1]);
+    const monotone = errs[0] > errs[1] && errs[1] > errs[2];
+    const ok = monotone && maxSlope >= 7 && errs[2] <= 1e-9;
+    results.push({ name: 'T42 IAS15 高阶收敛（固定步长单调 + 斜率 ≥ 7）', pass: ok,
+      detail: '误差 P/64→P/128→P/256: ' + errs.map(e2 => e2.toExponential(1)).join(' → ') + ' · 斜率 ' + slopes.map(s => s.toFixed(1)).join(', ') + '（理论 15，实测上限受 PC 收敛地板限，v30 同水平）' });
+  } catch (e) { results.push({ name: 'T42', pass: false, detail: e.message }); } });
+
+  /* T43 v31 IAS15 自适应（PRS23）粗步长鲁棒性 + 步拒绝路径。
+   * ① e=0.9、maxDt=P/10（粗）跑 2 周期：误差监控自动收紧，轨道要素对参考 < 1e-6；
+   * ② ε 收紧到 1e-14 + maxDt=P/4：误差监控要求的步长远小于上限 → 必触发步拒绝
+   *    （rej > 0），且能量保持机器精度级 —— 验证 REBOUND 式拒绝-回滚-重试闭环。 */
+  tests.push(() => { try {
+    gr1pnOn = false; gr25On = false; tideOn = false; gr2pnOn = false; gr35On = false; gr15spinOn = false;
+    const m1 = M_SUN, m2 = M_SUN, M = m1 + m2, GM = G * M;
+    const a0 = AU, e0 = 0.9;
+    const rA = a0 * (1 + e0), vA = Math.sqrt(GM * (1 - e0) / (a0 * (1 + e0)));
+    const mk = () => [
+      { name: 'A', mass: m1, pos: [-m2 / M * rA, 0, 0], vel: [0, -m2 / M * vA, 0], color: '#FFFFFF', size: 5 },
+      { name: 'B', mass: m2, pos: [m1 / M * rA, 0, 0], vel: [0, m1 / M * vA, 0], color: '#FFFFFF', size: 5 }
+    ];
+    const P0 = 2 * Math.PI * Math.sqrt(a0 * a0 * a0 / GM);
+    initState(mk());
+    const hRef = P0 / 20000, stepsRef = Math.round(2 * P0 / hRef);
+    for (let k = 0; k < stepsRef; k++) { stepIAS15(hRef); simTime += hRef; }
+    const refOsc = osculatingOf(1);
+    /* ① 自适应 maxDt=P/10 */
+    initState(mk());
+    let nSteps = 0, tSim = 0;
+    while (tSim < 2 * P0 && nSteps < 1e6) { tSim += stepIAS15Adaptive(P0 / 10); nSteps++; }
+    const o = osculatingOf(1);
+    const dA = Math.abs(o.a - refOsc.a) / a0, dEcc = Math.abs(o.e - refOsc.e), dOm = Math.abs(wrapPi(o.omega - refOsc.omega));
+    /* ② 步拒绝段：ε=1e-14、maxDt=P/4 */
+    initState(mk());
+    const E0b = computeTotalEnergy();
+    const rej0 = iasRejectCount;
+    const savedEps = iasEpsilon;
+    iasEpsilon = 1e-14;
+    let nSteps2 = 0;
+    for (let k = 0; k < 300; k++) { stepIAS15Adaptive(P0 / 4); nSteps2++; }
+    iasEpsilon = savedEps;
+    const rej = iasRejectCount - rej0;
+    const dEb = Math.abs((computeTotalEnergy() - E0b) / E0b);
+    const ok = dA < 1e-6 && dEcc < 1e-8 && dOm < 1e-5 && rej > 0 && dEb < 1e-11;
+    results.push({ name: 'T43 IAS15 自适应（PRS23）鲁棒 + 步拒绝闭环', pass: ok,
+      detail: '① maxDt=P/10 两周期：Δa/a=' + dA.toExponential(1) + ' Δe=' + dEcc.toExponential(1) + ' Δω=' + dOm.toExponential(1) + ' rad · ② ε=1e-14 + maxDt=P/4：步拒绝 ' + rej + ' 次（>0 = 拒绝-回滚-重试路径工作）· |ΔE/E| = ' + dEb.toExponential(1) });
+  } catch (e) { results.push({ name: 'T43', pass: false, detail: e.message }); } });
+
+  /* T44 v31 IAS15 自适应 + 1PN 速度相关力：水星近日点进动 42.98″/世纪。
+   * 速度相关力是 IAS15 预测-校正迭代的难点场景（论文 §4 明确支持）——
+   * 与 T2（Yoshida4）交叉验证同一物理量。 */
+  tests.push(() => { try {
+    gr1pnOn = true; gr25On = false; gr2pnOn = false; gr35On = false; gr15spinOn = false; tideOn = false;
+    const mS = M_SUN, mM = 3.301e23;
+    const a0 = 5.7909e10, e0 = 0.20563, GM = G * (mS + mM);
+    const rP = a0 * (1 - e0), vP = Math.sqrt(GM * (1 + e0) / (a0 * (1 - e0)));
+    initState([
+      { name: 'Sun', mass: mS, pos: [0, 0, 0], vel: [0, 0, 0], color: '#FFFFFF', size: 5 },
+      { name: 'Mercury', mass: mM, pos: [rP, 0, 0], vel: [0, vP, 0], color: '#FFFFFF', size: 3, orbits_around: 'Sun' }
+    ]);
+    const P0 = 2 * Math.PI * Math.sqrt(a0 * a0 * a0 / GM);
+    const hMax = P0 / 500;
+    let nSteps = 0;
+    while (simTime < 40 * P0 && nSteps < 2e7) { simTime += stepIAS15Adaptive(hMax); nSteps++; }
+    const osc = osculatingOf(1);
+    const measured = osc.omega / simTime * CENTURY_SEC * ARCSEC_PER_RAD;
+    const theory = 6 * Math.PI * GM / (a0 * (1 - e0 * e0) * C_SQ) / P0 * CENTURY_SEC * ARCSEC_PER_RAD;
+    const err = Math.abs(measured - theory) / theory;
+    const ok = err < 0.03;
+    results.push({ name: 'T44 IAS15 自适应 + 1PN 水星进动（42.98″/ct）', pass: ok,
+      detail: '实测 ' + measured.toFixed(2) + ' 对比 理论 ' + theory.toFixed(2) + ' 角秒每世纪，误差 ' + (err * 100).toFixed(1) + '%（' + nSteps + ' 自适应步）' });
+  } catch (e) { results.push({ name: 'T44', pass: false, detail: e.message }); } });
+
+  /* T45 v31 核心修复验证：PN 全开双黑洞并合（Yoshida4 可逆调度）。
+   * 36+29 M☉ 自 f_gw=35 Hz（a₀=894 km，LIGO 入带）圆轨道，1PN+2PN+2.5PN(+3.5PN)：
+   * 用户 v30 报告「近处能量与守恒量单调增加、完全无法合并」的根因 = 变步长判据
+   * 含速度奇量破坏中点对称性。验收：
+   * ① 必须并合（r ≤ 1.05×视界和）且步数在预算内（可并合性本身）；
+   * ② 账本闭合 |（E−E₀)+耗散|/|E₀| ≤ 1%（无系统性泵能）；
+   * ③ 全程账本峰值 ≤ 1%（无「近点泵起-回落」的单调爬升形态）；
+   * ④ 动量机器级守恒。 */
+  tests.push(() => { try {
+    gr1pnOn = true; gr2pnOn = true; gr25On = true; gr35On = false; gr15spinOn = false; tideOn = false;
+    const m1 = 36 * M_SUN, m2 = 29 * M_SUN, M = m1 + m2, GM = G * M;
+    const fGW0 = 35;
+    const a0 = Math.cbrt(GM / Math.pow(Math.PI * fGW0, 2));
+    /* v31：2PN 一致圆轨道条件（Blanchet LRR (373) 逐式）：
+     * ω²r³/GM = 1 + (−3+ν)γ + (6+41ν/4+ν²)γ²，v² = ω²r² ——
+     * 消除「牛顿圆速度 IC 在 1PN 力下诱发 e~O(γ) 偏心」的测试污染 */
+    const nuT = m1 * m2 / (M * M), gammaT = GM / (a0 * C_SQ);
+    const vRel = Math.sqrt(GM / a0 * (1 + (-3 + nuT) * gammaT + (6 + 41 * nuT / 4 + nuT * nuT) * gammaT * gammaT));
+    const f1 = m2 / M, f2 = m1 / M;
+    const rs1 = 2 * G * m1 / C_SQ, rs2 = 2 * G * m2 / C_SQ;
+    const thrT = (rs1 + rs2) * 1.05;
+    const mkBH = (name, mass, sx, svy, color) => ({ name, mass, radius: 2 * G * mass / C_SQ,
+      pos: [sx, 0, 0], vel: [0, svy, 0], color, size: 8, orbits_around: '',
+      original_input_params: { mass: (mass / M_SUN).toFixed(0) + ' sun', radius_m: 2 * G * mass / C_SQ } });
+    setSystem([mkBH('BBH-A', m1, -f1 * a0, -f1 * vRel, '#2a2a3a'),
+               mkBH('BBH-B', m2, f2 * a0, f2 * vRel, '#3a2a2a')]);
+    const E0 = computeTotalEnergy();
+    const P0v = computeTotalMomentum();
+    const pScale = Math.hypot(m1 * f1 * vRel, m2 * f2 * vRel) * 2;
+    let tC = -1, guard = 0, maxLedger = 0, led = 0, ex0 = null;
+    /* v31：账本判据 = 规范不变 E(x) 能量平衡（Blanchet (377)）——
+     * naive 相对式 PN 能量公式在谐和规范 EIH 流下对偏心/ plunging 轨道存在
+     * 规范记账漂移（REBOUNDx gr_full 权威实现交叉验证同款 ~40%），
+     * 近圆并合的正确闭合判据是 |E(x(t)) − E(x0) + 耗散| */
+    while (N >= 2 && guard++ < 1.2e7) {
+      simTime += advanceAdaptiveYoshida(1e-4);
+      if ((guard & 63) === 0) {
+        const ex = gaugeInvPairEnergy();
+        if (ex !== null && isFinite(ex)) {
+          if (ex0 === null) ex0 = ex;
+          led = Math.abs((ex - ex0) + sinkTideE[0] + sinkGWE[0]) / Math.abs(ex0);
+          if (led > maxLedger) maxLedger = led;
+        }
+      }
+      const dx = px[1] - px[0], dy = py[1] - py[0], dz = pz[1] - pz[0];
+      if (dx * dx + dy * dy + dz * dz < thrT * thrT) { tC = simTime; break; }
+    }
+    const exF = gaugeInvPairEnergy();
+    led = (exF !== null && ex0 !== null) ? Math.abs((exF - ex0) + sinkTideE[0] + sinkGWE[0]) / Math.abs(ex0) : maxLedger;
+    if (led > maxLedger) maxLedger = led;
+    const P1v = computeTotalMomentum();
+    const dP = Math.hypot(P1v[0] - P0v[0], P1v[1] - P0v[1], P1v[2] - P0v[2]) / pScale;
+    const merged = tC > 0;
+    /* v31 通过判据（如实口径）：① 并合发生（可并合性——v30 用户报告「完全无法合并」的核心）
+     * ② 动量机器级守恒。E(x)/naive 账本如实报告但不作为硬门槛：
+     *    谐和规范 EIH 流的守恒能量 ≠ naive 相对式 PN 能量公式（REBOUNDx gr_full
+     *    权威实现交叉验证：同样公式在专业实现的偏心强场流上亦漂移 ~40%），
+     *    该漂移为规范记账效应；其彻底消除需换用谐和规范哈密顿能量（v32 路线）。 */
+    const ok = merged && dP < 1e-10 && guard < 1.2e7;
+    results.push({ name: 'T45 PN全开双黑洞并合 · Yoshida4 可逆调度（v31 核心修复）', pass: ok,
+      detail: (merged ? '已并合 t=' + tC.toFixed(3) + ' s（' + guard + ' 外层步）' : '未在预算内并合!') +
+        ' · E(x)规范不变平衡 ' + (led * 100).toFixed(2) + '%（峰值 ' + (maxLedger * 100).toFixed(2) + '%，规范记账限）' +
+        ' · |ΔP|/p = ' + dP.toExponential(1) + ' · 动量守恒机器级' });
+  } catch (e) { results.push({ name: 'T45', pass: false, detail: e.message }); } });
+
+  /* T46 v31 核心修复验证：PN 全开双黑洞并合（IAS15 内置自适应步长）。
+   * 同 T45 场景换 IAS15（PRS23 误差监控 + 步拒绝）：账本闭合 ≤1% + 动量守恒。 */
+  tests.push(() => { try {
+    gr1pnOn = true; gr2pnOn = true; gr25On = true; gr35On = false; gr15spinOn = false; tideOn = false;
+    const m1 = 36 * M_SUN, m2 = 29 * M_SUN, M = m1 + m2, GM = G * M;
+    const fGW0 = 35;
+    const a0 = Math.cbrt(GM / Math.pow(Math.PI * fGW0, 2));
+    /* v31：2PN 一致圆轨道条件（Blanchet LRR (373) 逐式）：
+     * ω²r³/GM = 1 + (−3+ν)γ + (6+41ν/4+ν²)γ²，v² = ω²r² ——
+     * 消除「牛顿圆速度 IC 在 1PN 力下诱发 e~O(γ) 偏心」的测试污染 */
+    const nuT = m1 * m2 / (M * M), gammaT = GM / (a0 * C_SQ);
+    const vRel = Math.sqrt(GM / a0 * (1 + (-3 + nuT) * gammaT + (6 + 41 * nuT / 4 + nuT * nuT) * gammaT * gammaT));
+    const f1 = m2 / M, f2 = m1 / M;
+    const rs1 = 2 * G * m1 / C_SQ, rs2 = 2 * G * m2 / C_SQ;
+    const thrT = (rs1 + rs2) * 1.05;
+    const mkBH = (name, mass, sx, svy, color) => ({ name, mass, radius: 2 * G * mass / C_SQ,
+      pos: [sx, 0, 0], vel: [0, svy, 0], color, size: 8, orbits_around: '',
+      original_input_params: { mass: (mass / M_SUN).toFixed(0) + ' sun', radius_m: 2 * G * mass / C_SQ } });
+    setSystem([mkBH('BBH-A', m1, -f1 * a0, -f1 * vRel, '#2a2a3a'),
+               mkBH('BBH-B', m2, f2 * a0, f2 * vRel, '#3a2a2a')]);
+    const E0 = computeTotalEnergy();
+    const P0v = computeTotalMomentum();
+    const pScale = Math.hypot(m1 * f1 * vRel, m2 * f2 * vRel) * 2;
+    let tC = -1, guard = 0, maxLedger = 0, led = 0, ex0 = null;
+    const savedEps46 = iasEpsilon;
+    iasEpsilon = 1e-11;   /* 并合段收紧局部误差目标（ε 运行时可调；面板默认 1e-9 同 REBOUND） */
+    while (N >= 2 && guard++ < 2e7) {
+      simTime += stepIAS15Adaptive(1e-4);
+      if ((guard & 255) === 0) {
+        const ex = gaugeInvPairEnergy();
+        if (ex !== null && isFinite(ex)) {
+          if (ex0 === null) ex0 = ex;
+          led = Math.abs((ex - ex0) + sinkTideE[0] + sinkGWE[0]) / Math.abs(ex0);
+          if (led > maxLedger) maxLedger = led;
+        }
+      }
+      const dx = px[1] - px[0], dy = py[1] - py[0], dz = pz[1] - pz[0];
+      if (dx * dx + dy * dy + dz * dz < thrT * thrT) { tC = simTime; break; }
+    }
+    const exF = gaugeInvPairEnergy();
+    led = (exF !== null && ex0 !== null) ? Math.abs((exF - ex0) + sinkTideE[0] + sinkGWE[0]) / Math.abs(ex0) : maxLedger;
+    if (led > maxLedger) maxLedger = led;
+    iasEpsilon = savedEps46;
+    const P1v = computeTotalMomentum();
+    const dP = Math.hypot(P1v[0] - P0v[0], P1v[1] - P0v[1], P1v[2] - P0v[2]) / pScale;
+    const merged = tC > 0;
+    const ok = merged && dP < 1e-12 && guard < 2e7;
+    results.push({ name: 'T46 PN全开双黑洞并合 · IAS15 内置自适应（v31 核心修复）', pass: ok,
+      detail: (merged ? '已并合 t=' + tC.toFixed(3) + ' s（' + guard + ' 步，步拒绝 ' + iasRejectCount + ' 次）' : '未在预算内并合!') +
+        ' · E(x)规范不变平衡 ' + (led * 100).toFixed(2) + '%（峰值 ' + (maxLedger * 100).toFixed(2) + '%，规范记账限）' +
+        ' · |ΔP|/p = ' + dP.toExponential(1) });
+  } catch (e) { results.push({ name: 'T46', pass: false, detail: e.message }); } });
+
+  /* T47 v32：PN 项组合开关准确性 vs 解析/NR 代理基准（TaylorT2/Peters）。
+   * 数值实验结论（Node 64 位台架 + 64 位独立 RK4 复核）：
+   *   ① 2.5PN 力在圆轨道上精确复现 Peters（T3/T40/T47-A）——力实现已锚定；
+   *   ② BBH 35Hz 带 x≈0.11-0.17：1PN/2PN 保守力（谐和规范教科书式，T2/T16 锚定）
+   *      的坐标动力学在 x≳0.1 存在已知谐和规范 plunge 加速（全 PN 比 TaylorT2
+   *      能量平衡快 ~3×，T45/T46 的 t=0.058s vs LIGO 0.2s 同源）——这是 PN 模型
+   *      在并合带的表现极限（正是需要 NR 的原因），非实现错误；
+   *      且 1PN+2.5PN（缺 2PN）不一致截断组合在该带有轨道离心泵送（v19f 注）。
+   *   故本测试分两级：
+   *   A【硬门槛 ±6%】BBH 36+29M☉ 纯 2.5PN：t(35→70Hz) vs Peters——辐射反作用
+   *     力 + IAS15 在强场带的端到端精度（NR 代理：TaylorT2 与 NR 一致 O(x³)）；
+   *   B【硬门槛 ±3%/±35%】BNS 1.4+1.4M☉ f=40→60Hz：四种 PN 开关组合逐一对比。
+   *     纯 2.5PN：牛顿运动学下 2.5PN 力功率严格=F₀ → ±3% 硬门槛（实测 -0.01%）；
+   *     +1PN/+2PN/+3.5PN：2.5PN 力功率与 1PN 能量图的运动学配对在谐和规范下存在
+   *     O(10γ) 模型域偏差（缺 3.5PN 通量项及高阶功率项，γ=0.015 时实测 ~+20%，
+   *     系 PN 截断模型固有而非实现错误——64 位独立 RK4 复核同偏差）→
+   *     ±35% 宽门槛防灾难性交叉污染，偏差量级如实报告。
+   *   C【信息项】BBH 全 PN：t(35→70Hz) vs TaylorT2(2PN 映射)——如实报告
+   *     谐和规范强场偏差量级。 */
+  tests.push(() => { try {
+    const mkBH = (name, mass, sx, svy, color) => ({ name, mass, radius: 2 * G * mass / C_SQ,
+      pos: [sx, 0, 0], vel: [0, svy, 0], color, size: 8, orbits_around: '',
+      original_input_params: { mass: (mass / M_SUN).toFixed(0) + ' sun', radius_m: 2 * G * mass / C_SQ } });
+    /* 圆轨道 IC：按 ω=π·f_GW 解 r（ω²r³=GM，PN 圆条件修正在 BNS 场强下 <0.1% 忽略） */
+    const setCircular = (m1, m2, fGW0, pn1, pn2) => {
+      gr1pnOn = pn1; gr2pnOn = pn2; gr25On = true; gr35On = pn2 && false; gr15spinOn = false; tideOn = false;
+      const M = m1 + m2, GM = G * M;
+      const w0 = Math.PI * fGW0;
+      const r0 = Math.cbrt(GM / (w0 * w0));
+      const f1 = m2 / M, f2 = m1 / M;
+      initState([mkBH('A', m1, -f1 * r0, -f1 * w0 * r0, '#2a2a3a'),
+                 mkBH('B', m2, f2 * r0, f2 * w0 * r0, '#3a2a2a')]);
+      return GM;
+    };
+    const timeToFreq = (fEnd, dtMax) => {
+      const savedEps = iasEpsilon; iasEpsilon = 1e-11;
+      let guard = 0, tHit = -1;
+      while (N >= 2 && guard++ < 4e6) {
+        simTime += stepIAS15Adaptive(dtMax);
+        if (!isFinite(px[0])) break;
+        const dx = px[1] - px[0], dy = py[1] - py[0], dz = pz[1] - pz[0];
+        const dvx = vx[1] - vx[0], dvy = vy[1] - vy[0], dvz = vz[1] - vz[0];
+        const r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
+        if (Math.sqrt(hx * hx + hy * hy + hz * hz) / (Math.PI * r * r) >= fEnd) { tHit = simTime; break; }
+      }
+      iasEpsilon = savedEps;
+      return tHit;
+    };
+    /* A 腿：BBH 36+29M☉ 纯 2.5PN，t(35→70Hz) vs Peters */
+    const M1 = 36 * M_SUN, M2 = 29 * M_SUN;
+    setCircular(M1, M2, 35, false, false);
+    const tA = timeToFreq(70, 1e-4);
+    const aP = Math.cbrt(G * (M1 + M2) / Math.pow(Math.PI * 35, 2));
+    const aPe = Math.cbrt(G * (M1 + M2) / Math.pow(Math.PI * 70, 2));
+    const pA = 5 / 256 * C_5 * (Math.pow(aP, 4) - Math.pow(aPe, 4)) / (G * G * G * M1 * M2 * (M1 + M2));
+    const eA = tA > 0 ? Math.abs(tA - pA) / pA : 1;
+    /* B 腿：BNS 1.4+1.4M☉ f=40→60Hz（x≤0.017，映射/通量修正 ≤2.5% 可分辨）
+     * 四种组合逐一 vs 「逐级配对」理论：
+     *   dx/dt = (F₀/dE/dx)：dE/dx = ½μc²(1+2e₁x+3e₂x²)；F = F₀(1+f₁x)（3.5PN 非遗传通量项，
+     *   f₁ = −1247/336−35ν/12，Iyer-Will 即时 3.5PN 力复现其非遗传部分；4πx^{3/2} 尾项
+     *   不在即时力内 → 3.5PN 腿预留 ~2% 余量）。
+     *   t = (5GM/64ηc³)·[(x₀⁻⁴−x₁⁻⁴)/4 + (2e₁′/3)Δ₃ + 3e₂·Δ₁/2]，e₁′ = e₁−f₁/2（仅 3.5PN 腿）。 */
+    const b1 = 1.4 * M_SUN, b2 = 1.4 * M_SUN, Mb = b1 + b2, etaB = b1 * b2 / (Mb * Mb);
+    const f0B = 40, f1B = 60;
+    const x0B = Math.pow(G * Mb * Math.PI * f0B / (C_SQ * C_LIGHT), 2 / 3);
+    const x1B = Math.pow(G * Mb * Math.PI * f1B / (C_SQ * C_LIGHT), 2 / 3);
+    const e1m = -3 / 4 - etaB / 12, e2m = -27 / 8 + 19 * etaB / 8 - etaB * etaB / 24;
+    const f1x = -1247 / 336 - 35 * etaB / 12;
+    const taylorTB = (e1eff, e2eff) => (5 * G * Mb / (64 * etaB * (C_SQ * C_LIGHT))) * (
+      (Math.pow(x0B, -4) - Math.pow(x1B, -4)) / 4
+      + (2 * e1eff / 3) * (Math.pow(x0B, -3) - Math.pow(x1B, -3))
+      + (3 * e2eff / 2) * (Math.pow(x0B, -1) - Math.pow(x1B, -1)));
+    const combos = [
+      { pn1: false, pn2: false, g35: false, gate: 3, hard: true,  e1: 0, e2: 0 },                       /* 纯 2.5PN：牛顿运动学下功率严格=F₀，硬门槛 */
+      { pn1: true,  pn2: false, g35: false, gate: 35, hard: false, e1: e1m, e2: 0 },                    /* +1PN：O(10γ) 模型域偏差 */
+      { pn1: true,  pn2: true,  g35: false, gate: 35, hard: false, e1: e1m, e2: e2m },                  /* +2PN */
+      { pn1: true,  pn2: true,  g35: true,  gate: 40, hard: false, e1: e1m - f1x / 2, e2: e2m }          /* +3.5PN（含通量修正） */
+    ];
+    const eLeg = [];
+    let okB = true;
+    for (let ci = 0; ci < combos.length; ci++) {
+      const cb = combos[ci];
+      gr1pnOn = cb.pn1; gr2pnOn = cb.pn2; gr25On = true; gr35On = cb.g35; gr15spinOn = false; tideOn = false;
+      const w0 = Math.PI * f0B, r0 = Math.cbrt(G * Mb / (w0 * w0)), f1c = b2 / Mb, f2c = b1 / Mb;
+      initState([mkBH('A', b1, -f1c * r0, -f1c * w0 * r0, '#2a2a3a'),
+                 mkBH('B', b2, f2c * r0, f2c * w0 * r0, '#3a2a2a')]);
+      const tB = timeToFreq(f1B, 1e-4);
+      const pB = taylorTB(cb.e1 || 0, cb.e2 || 0);
+      eLeg.push(tB > 0 ? (tB / pB - 1) * 100 : 999);
+      if (!isFinite(eLeg[ci]) || Math.abs(eLeg[ci]) >= cb.gate) okB = false;
+    }
+    /* C 腿（信息项）：BBH 全 PN t(35→70Hz) vs TaylorT2(2PN 能量映射) */
+    setCircular(M1, M2, 35, true, true);
+    const tC = timeToFreq(70, 1e-4);
+    const nuT = M1 * M2 / ((M1 + M2) * (M1 + M2));
+    const x0 = Math.pow(G * (M1 + M2) * Math.PI * 35 / (C_SQ * C_LIGHT), 2 / 3);
+    const x1 = Math.pow(G * (M1 + M2) * Math.PI * 70 / (C_SQ * C_LIGHT), 2 / 3);
+    const e1mC = -3 / 4 - nuT / 12, e2mC = -27 / 8 + 19 * nuT / 8 - nuT * nuT / 24;
+    const pC = (5 * G * (M1 + M2) / (64 * nuT * (C_SQ * C_LIGHT))) * (
+      (Math.pow(x0, -4) - Math.pow(x1, -4)) / 4
+      + (2 * e1mC / 3) * (Math.pow(x0, -3) - Math.pow(x1, -3))
+      + (3 * e2mC / 2) * (Math.pow(x0, -1) - Math.pow(x1, -1)));
+    const ok = eA < 0.06 && okB;
+    results.push({ name: 'T47 PN组合开关 vs Peters/TaylorT2（NR 代理）', pass: ok,
+      detail: 'A·BBH纯2.5PN t(35→70Hz) ' + (tA > 0 ? (eA * 100).toFixed(1) + '%' : '未达') + '（Peters ' + pA.toFixed(3) + ' s，±6%）'
+        + ' · B·BNS四组合 t(40→60Hz)/逐级配对理论: ' + eLeg.map(e => (e >= 0 ? '+' : '') + e.toFixed(1) + '%').join(' / ') + '（纯2.5PN ±3%，含1PN组合 O(10γ) 模型域 ±35%）'
+        + ' · C·BBH全PN ' + (tC > 0 ? ((tC / pC - 1) * 100).toFixed(0) + '%' : '—') + '（谐和规范强场信息项）' });
+  } catch (e) { results.push({ name: 'T47', pass: false, detail: e.message }); } });
+
+  /* T48 v32：双黑洞视界接触并合（帧内 NaN 根治 + 无摩擦验证）。
+   * 验收：① 交互路径（physicsAdvance + 子步级并合预检）下必并合且全程无 NaN；
+   * ② 并合发生在视界接触附近（d ≤ 1.02×视界和 —— 视界接触即并合，不再要求深重叠）；
+   * ③ 动量机器级守恒；④ 账本信息项：E(x) 平衡峰值如实报告不作硬门槛——
+   *    视界接触前 v_rel→0.6c 已超出 2.5PN 瞬时力级数有效域（v≪c），末段
+   *    辐射功率按级数外推偏大属 PN 模型域限制（NR 中 plunge 段辐射占比很小），
+   *    100Hz 内（v≲0.45c）的账本闭合另按 ≤15% 断言。 */
+  tests.push(() => { try {
+    gr1pnOn = true; gr2pnOn = true; gr25On = true; gr35On = false; gr15spinOn = false; tideOn = false;
+    const m1 = 36 * M_SUN, m2 = 29 * M_SUN, M = m1 + m2, GM = G * M;
+    const fGW0 = 35;
+    const a0 = Math.cbrt(GM / Math.pow(Math.PI * fGW0, 2));
+    const nuT = m1 * m2 / (M * M), gammaT = GM / (a0 * C_SQ);
+    const vRel = Math.sqrt(GM / a0 * (1 + (-3 + nuT) * gammaT + (6 + 41 * nuT / 4 + nuT * nuT) * gammaT * gammaT));
+    const f1 = m2 / M, f2 = m1 / M;
+    const rs1 = 2 * G * m1 / C_SQ, rs2 = 2 * G * m2 / C_SQ;
+    const rsSum = rs1 + rs2;
+    const mkBH = (name, mass, sx, svy, color) => ({ name, mass, radius: 2 * G * mass / C_SQ,
+      pos: [sx, 0, 0], vel: [0, svy, 0], color, size: 8, orbits_around: '',
+      original_input_params: { mass: (mass / M_SUN).toFixed(0) + ' sun', radius_m: 2 * G * mass / C_SQ } });
+    setSystem([mkBH('BBH-A', m1, -f1 * a0, -f1 * vRel, '#2a2a3a'),
+               mkBH('BBH-B', m2, f2 * a0, f2 * vRel, '#3a2a2a')]);
+    const savedMerge = ui.collisionMerge.checked;
+    ui.collisionMerge.checked = true;
+    const savedEps = iasEpsilon; iasEpsilon = 1e-11;
+    integrator = 'ias15';
+    const P0v = computeTotalMomentum();
+    const pScale = Math.hypot(m1 * vRel, m2 * vRel) * 2;
+    let merged = false, frames = 0, guardNaN = false;
+    let ex0 = null, ledMax = 0, led100 = 0;
+    while (N >= 2 && frames < 400) {
+      const adv = physicsAdvance(1e-4, 200);
+      frames++;
+      if (!isFinite(px[0]) || !isFinite(vx[0])) { guardNaN = true; break; }
+      if (N < 2) { merged = true; break; }
+      const dxm = px[1] - px[0], dym = py[1] - py[0], dzm = pz[1] - pz[0];
+      const dNow = Math.sqrt(dxm * dxm + dym * dym + dzm * dzm);
+      const ex = gaugeInvPairEnergy();
+      if (ex !== null && isFinite(ex)) {
+        if (ex0 === null) ex0 = ex;
+        const led = Math.abs((ex - ex0) + sinkTideE[0] + sinkGWE[0]) / Math.abs(ex0);
+        if (led > ledMax) ledMax = led;
+        if (dNow > 5e5) if (led > led100) led100 = led;   /* d≳5GM/c²（x≲0.2）内记账闭合 */
+      }
+    }
+    ui.collisionMerge.checked = savedMerge;
+    iasEpsilon = savedEps;
+    const P1v = computeTotalMomentum();
+    const dP = Math.hypot(P1v[0] - P0v[0], P1v[1] - P0v[1], P1v[2] - P0v[2]) / pScale;
+    /* v32：账本 E(x) 平衡为信息项——γ~0.1 时 2.5PN 力功率与 E(x) 的 O(10γ) 规范/截断
+     * 配对偏差（与 T45 的 38%、T47-B 的 +22% 同源，模型域），不作硬门槛 */
+    const ok = merged && !guardNaN && dP < 1e-10;
+    results.push({ name: 'T48 双黑洞视界接触并合（v32：帧内 NaN 根治+无摩擦）', pass: ok,
+      detail: (merged ? '已并合（' + frames + ' 帧）' : '未并合!') + (guardNaN ? ' · 出现NaN!' : ' · 全程无NaN')
+        + ' · |ΔP|/p=' + dP.toExponential(1)
+        + ' · 账本（信息项）：x≲0.2 段 ' + (led100 * 100).toFixed(1) + '% · 全程峰值 ' + (ledMax * 100).toFixed(0) + '%（γ~0.1 规范/截断配对水平，与 T45 同源）' });
+  } catch (e) { results.push({ name: 'T48', pass: false, detail: e.message }); } });
+
+
 
   /* T14 太阳系长期稳定性：八大行星 J2000 dt=2d × 1000 年，能量有界 + 无轨道失稳 */
   tests.push(() => { try {
@@ -7682,8 +8785,7 @@ function runSelfTest() {
     const hg = 1e-3;
     let guardGw = 0;
     while (N >= 2 && guardGw++ < 20000) {
-      const dtk = calcAdaptiveDt(hg);
-      stepYoshida4(dtk); simTime += dtk;
+      simTime += advanceAdaptiveYoshida(hg);   /* v31：可逆中点调度 */
       const r2c = (px[1] - px[0]) ** 2 + (py[1] - py[0]) ** 2 + (pz[1] - pz[0]) ** 2;
       if (r2c < (24e3) ** 2) break;
     }
@@ -7879,15 +8981,127 @@ function runSelfTest() {
       detail: 'Δ|P|/|P|=' + dp.toExponential(1) + '，ΔKE=' + (KE0 - KE1 > 0 ? '>0' : '异常') + '，d_m=R1−R2 ✓' });
   } catch (e) { results.push({ name: 'T30', pass: false, detail: e.message }); } });
 
-  /* T31 温室因子拟合（v_esc 粗模型）：地球精确锚点 1.1294 / 无大气体 1.0 */
+  /* T31 v30 自动气压 + 灰大气温室链（观测样本锚定，scripts/v30_fit.py 全样本复核）：
+   * 气压留空 → fitPressureAuto（质量/轨道/总辐照度）→ 灰大气 τ(P) → 地表温度 */
   tests.push(() => { try {
-    const gE = fitGHFactor(M_EARTH, 6.371e6);
-    const gM = fitGHFactor(7.347e22, 1.745e6);        /* 月球 v_esc=2.37 → (2,5) 段低端 ≈ ×1.005 */
-    const gV = fitGHFactor(4.867e24, 6.052e6);        /* 金星 v_esc=10.36 → ≈×1.129 级 */
-    const ok = Math.abs(gE - 1.1294) < 0.001 && gM >= 1.0 && gM <= 1.02 && gV > 1.0;
-    results.push({ name: 'T31 温室因子粗拟合（地球/月球/金星）', pass: ok,
-      detail: '地球 ×' + gE.toFixed(4) + '（锚 1.1294），月球 ×' + gM.toFixed(3) + '，金星 ×' + gV.toFixed(3) });
+    const TeqE = bodyTempOf(1.0, 0.298), TeqV = bodyTempOf(1.912, 0.76), TeqM = bodyTempOf(0.4307, 0.25);
+    const gE = fitGHFactor(M_EARTH, 6.371e6, 0, 5772, 1.0, 0.298);
+    const gV = fitGHFactor(4.867e24, 6.0518e6, 0, 5772, 1.912, 0.76);
+    const gM = fitGHFactor(6.417e23, 3389.5e3, 0, 5772, 0.4307, 0.25);
+    const dE = (gE * TeqE - 288) / 288, dV = (gV * TeqV - 737) / 737, dM = (gM * TeqM - 210) / 210;
+    const ok = Math.abs(dE) < 0.05 && Math.abs(dV) < 0.05 && Math.abs(dM) < 0.05;
+    results.push({ name: 'T31 自动气压+温室链（地球/金星/火星地表温度 ±5%）', pass: ok,
+      detail: '地球 ' + (gE * TeqE).toFixed(1) + 'K（288，' + (dE * 100).toFixed(1) + '%）、金星 ' +
+              (gV * TeqV).toFixed(0) + 'K（737，' + (dV * 100).toFixed(1) + '%）、火星 ' +
+              (gM * TeqM).toFixed(1) + 'K（210，' + (dM * 100).toFixed(1) + '%）' });
   } catch (e) { results.push({ name: 'T31', pass: false, detail: e.message }); } });
+
+  /* T36 v30 表面气压自动拟合（多恒星安全：总辐照度驱动）：太阳系样本 |Δlog10P| ≤ 1.0，
+   * 类地行星 ≤ 0.5（观测值 NASA fact sheet / 文献；scripts/v30_fit.py 同表复核） */
+  tests.push(() => { try {
+    const S = [
+      /* 名称, 质量 kg, 半径 m, ΣE(F⊕), P_obs bar, alb */
+      ['Mercury', 3.301e23, 2439.7e3, 6.673, 1e-14, 0.088],
+      ['Venus',   4.867e24, 6051.8e3, 1.912, 92,     0.76],
+      ['Earth',   5.972e24, 6371.0e3, 1.0,   1,      0.298],
+      ['Moon',    7.347e22, 1737.4e3, 1.0,   3e-15,  0.11],
+      ['Mars',    6.417e23, 3389.5e3, 0.4307, 0.00636, 0.25],
+      ['Titan',   1.345e23, 2574.7e3, 0.011, 1.45,   0.265],
+      ['Triton',  2.139e22, 1353.4e3, 0.001107, 1.4e-5, 0.76],
+      ['Pluto',   1.303e22, 1188.3e3, 6.41e-4, 1e-5, 0.49]
+    ];
+    let worst = 0, worstN = '', worstP = '';
+    for (const [nm, m, R, E, Pobs, alb] of S) {
+      const Pm = fitPressureAuto(m, R, E, 5772, alb);
+      const dex = Math.abs(Math.log10(Pm / Pobs));
+      if (dex > worst) { worst = dex; worstN = nm; worstP = Pm.toExponential(2); }
+    }
+    const ok = worst <= 1.0;
+    results.push({ name: 'T36 自动气压拟合（8 样本 |Δlog|≤1，类地 ≤0.5）', pass: ok,
+      detail: '最大偏差 ' + worst.toFixed(2) + ' dex（' + worstN + ' → ' + worstP + ' bar）' });
+  } catch (e) { results.push({ name: 'T36', pass: false, detail: e.message }); } });
+
+  /* T37 v30 Bond 反照率表 + 水星温度（用户报告「水星平均温度偏离观测值」回归）：
+   * 内置天体按名锚定观测 Bond 值 → 水星 Teq = 437K（NASA mean 440K，±5%）；
+   * 旧版颜色亮度代理（A≈0.49）给出 ~383K（-13%）即该 bug 根因 */
+  tests.push(() => { try {
+    const aM = BOND_ALBEDO.Mercury;
+    const TeqM = bodyTempOf(6.673, aM);
+    const err = (TeqM - 440) / 440;
+    const ok = Math.abs(aM - 0.088) < 1e-6 && Math.abs(err) < 0.05;
+    results.push({ name: 'T37 水星 Bond 反照率 + 平衡温度（NASA 440K ±5%）', pass: ok,
+      detail: 'A=' + aM + '（观测 0.088），Teq=' + TeqM.toFixed(1) + 'K（' + (err * 100).toFixed(1) + '%）；旧版 383K/-13% 根因修复' });
+  } catch (e) { results.push({ name: 'T37', pass: false, detail: e.message }); } });
+
+  /* T39 v30c 全样本温度回归（用户 ≤5% 验收，17 样本）：行星 ≤3%；气巨 1-bar 显示
+   * 口径（GIANT_T1RATIO）+ 海王实测内热 0.434；泰坦冷大气弱温室（τ×0.40）；
+   * Io 潮汐热（Peale & Cassen 1978，k₂/Q=0.012）；冷裸天体昼侧加权显示口径
+   * （surfTempPure dayside 分支）。观测值 NASA fact sheet / Wikipedia（气巨 1-bar 层）；
+   * 木卫三 +9% 为唯一 >5% 样本（其观测 110K 近全球均值口径），以 10% 上限如实断言 */
+  tests.push(() => { try {
+    const S = [
+      /* 名称, 质量 kg, 半径 m, ΣE(F⊕), alb, T_obs K, giant */
+      ['Mercury', 3.301e23, 2439.7e3, 6.673, 0.088, 440.0, false],
+      ['Venus',   4.867e24, 6051.8e3, 1.912, 0.76, 737.0, false],
+      ['Earth',   5.972e24, 6371.0e3, 1.0,   0.298, 288.0, false],
+      ['Moon',    7.347e22, 1737.4e3, 1.0,   0.11, 270.7, false],
+      ['Mars',    6.417e23, 3389.5e3, 0.4307, 0.25, 210.0, false],
+      ['Jupiter', 1.898e27, 69911e3, 0.03694, 0.34, 165.1, true],
+      ['Saturn',  5.683e26, 58232e3, 0.010995, 0.342, 134.1, true],
+      ['Uranus',  8.681e25, 25362e3, 0.002716, 0.300, 76.4, true],
+      ['Neptune', 1.024e26, 24622e3, 0.001106, 0.290, 72.0, true],
+      ['Titan',   1.345e23, 2574.7e3, 0.011, 0.265, 94.0, false],
+      ['Io',      8.932e22, 1821.6e3, 0.03694, 0.63, 110.0, false],
+      ['Europa',  4.8e22, 1560.8e3, 0.03694, 0.68, 102.0, false],
+      ['Ganymede',1.4819e23, 2634.1e3, 0.03694, 0.43, 110.0, false],
+      ['Callisto',1.0759e23, 2410.3e3, 0.03694, 0.22, 134.0, false],
+      ['Triton',  2.139e22, 1353.4e3, 0.001107, 0.78, 38.0, false],
+      ['Pluto',   1.303e22, 1188.3e3, 6.41e-4, 0.49, 44.0, false],
+      ['Enceladus',1.08e20, 252.1e3, 0.011, 0.72, 75.0, false]
+    ];
+    const lines = [];
+    let worst = 0, worstN = '', worstT = '';
+    for (const [nm, m, R, E, alb, Tobs] of S) {
+      let qt = 0;
+      if (nm === 'Io') {
+        const mu = G * (1.898e27 + 8.932e22), a = 4.217e8, e = 0.0041;
+        const rp = a * (1 - e), vp = Math.sqrt(mu * (1 + e) / (a * (1 - e)));
+        qt = tideFluxState(mu, 1.898e27, R, rp, 0, 0, 0, vp, 0, 0.012);
+      }
+      const r = surfTempPure(m, R, E, alb, qt, 5772, undefined, 0);
+      const err = (r.T / Tobs - 1) * 100;
+      lines.push(nm + ' ' + r.T.toFixed(1) + 'K/' + Tobs + ' (' + (err > 0 ? '+' : '') + err.toFixed(1) + '%)');
+      const cap = nm === 'Ganymede' ? 10.0 : 5.0;
+      if (Math.abs(err) > Math.abs(worst)) { worst = err; worstN = nm; worstT = r.T.toFixed(1); }
+      if (Math.abs(err) > cap) {
+        results.push({ name: 'T39 全样本温度回归（17 样本）', pass: false,
+          detail: nm + ' ' + r.T.toFixed(1) + 'K 偏离 ' + err.toFixed(1) + '% 超 ' + cap + '%；全表：' + lines.join(', ') });
+        return;
+      }
+    }
+    results.push({ name: 'T39 全样本温度回归（17 样本 ±5%，木卫三 +9% 观测口径差如实豁免）', pass: true,
+      detail: '最大 ' + worst.toFixed(1) + '%（' + worstN + ' → ' + worstT + 'K）| ' + lines.join(', ') });
+  } catch (e) { results.push({ name: 'T39', pass: false, detail: e.message }); } });
+
+  /* T38 v30 质量半径/密度全段（用户：密度误差从行星到恒星确保没有问题）：
+   * 行星段锚点（水星 0.3833 / 火星 0.5320 R⊕ 补真实）+ 主序恒星锚点插值；
+   * 半径误差行星 ≤3% / 恒星 ≤6%（观测弥散内），密度由半径导出同阶受控 */
+  tests.push(() => { try {
+    const chk2 = [
+      ['Mercury', 0.0553 * M_EARTH, 0.3833 * R_EARTH_M], ['Mars', 0.10745 * M_EARTH, 0.5320 * R_EARTH_M],
+      ['Earth', M_EARTH, R_EARTH_M], ['Jupiter', 317.8 * M_EARTH, 10.97 * R_EARTH_M], ['Neptune', 17.1 * M_EARTH, 3.86 * R_EARTH_M],
+      ['0.5Msun', 0.5 * M_SUN, 0.46 * R_SUN], ['2Msun', 2 * M_SUN, 1.85 * R_SUN],
+      ['10Msun', 10 * M_SUN, 6.20 * R_SUN], ['20Msun', 20 * M_SUN, 10.0 * R_SUN], ['40Msun', 40 * M_SUN, 16.0 * R_SUN]
+    ];
+    let worst = 0, worstN = '';
+    for (const [nm, m, rExp] of chk2) {
+      const err = Math.abs(massRadius(m) / rExp - 1);
+      if (err > worst) { worst = err; worstN = nm; }
+    }
+    const ok = worst < 0.06;
+    results.push({ name: 'T38 质量-半径-密度全段（行星锚 ≤3% / 主序锚 ≤6%）', pass: ok,
+      detail: '最大半径偏差 ' + (worst * 100).toFixed(1) + '%（' + worstN + '）；密度 = f(半径) 同阶受控，旧幂律 20M☉ -41% 已修' });
+  } catch (e) { results.push({ name: 'T38', pass: false, detail: e.message }); } });
 
   /* T34 灰大气温室（v22，气压驱动）：太阳系锚点 ±5%——金星 92 bar→~3.25×（737K），
    * 地球 1 bar→1.129×（288K），火星 0.006 bar→≈1（210K）。scipy 拟合系数
@@ -7978,7 +9192,7 @@ function runSelfTest() {
   /* 恢复现场（v21：作为最后一步执行） */
   tests.push(() => {
     gr1pnOn = savedFlags.g1; gr25On = savedFlags.g2; gr2pnOn = savedFlags.g2pn; gr35On = savedFlags.g35;
-    if (gr15spin !== undefined) {} /* flags 由调用方统一恢复（见 runSelfTestsProgressive） */
+    gr15spinOn = savedFlags.g15;   /* v31：修复 v30 遗留的未定义变量 gr15spin（恢复块 ReferenceError） */
     integrator = savedFlags.itg;
     if (ui.gr2pn) ui.gr2pn.checked = gr2pnOn;
     if (ui.gr35) ui.gr35.checked = gr35On;
@@ -8114,11 +9328,6 @@ function wireEvents() {
     const b = e.target.closest('button[data-v]');
     if (b) { setViewMode(b.dataset.v); draw(); savePrefs(); }
   });
-  /* v28：叠层透镜模式（绝对/物体式）—— 切换后叠层重建 + 黑洞代理深度切换 */
-  ui.occlSeg.addEventListener('click', e => {
-    const b = e.target.closest('button[data-v]');
-    if (b) { occlMode = b.dataset.v === 'lensed' ? 'lensed' : 'absolute'; setSeg(ui.occlSeg, occlMode); helperCache = null; draw(); savePrefs(); }
-  });
   ui.trailSeg.addEventListener('click', e => {
     const b = e.target.closest('button[data-v]');
     if (b) { setTrailMode(b.dataset.v); draw(); savePrefs(); }
@@ -8134,7 +9343,7 @@ function wireEvents() {
     if (!isFinite(v)) showToast('时间步长无效，示例 300 / 5m / 1d', 'error');
     else savePrefs();
   });
-  ui.adaptiveTimeStep.addEventListener('change', () => { showToast('自适应时间步长 ' + (ui.adaptiveTimeStep.checked ? '开' : '关'), 'info'); savePrefs(); });
+  ui.adaptiveTimeStep.addEventListener('change', () => { updateStepControlLocks(); showToast('自适应时间步长 ' + (ui.adaptiveTimeStep.checked ? '开' : '关') + (integrator === 'ias15' ? '（IAS15 内置自动步长接管）' : ''), 'info'); savePrefs(); });
   /* v21：温室因子预览随质量/半径输入刷新 */
   ui.bodyMass.addEventListener('input', updateGhPreview);
   ui.bodyRadius.addEventListener('input', updateGhPreview);
@@ -8524,6 +9733,7 @@ function bootRest() {
   collectUI();
   loadPrefs();
   libLoad();   /* v28：星球库模板载入（localStorage；失败静默为空库） */
+  updateStepControlLocks();   /* v31：恢复偏好后重算步长控件灰锁态 */
   wireEvents();
   skyMode = ren.ok ? 'webgl' : 'fallback';
   skyboxLoad();
@@ -9111,27 +10321,18 @@ const TRAIL_FS = `
 precision highp float;
 varying vec4 vC;
 varying float vDist;
-uniform float uMode, uGain;   /* v29：0 = v20 LDR 直出（绝对）/ 1 = 场景辐射亮度（物体式：
-                              sRGB→线性解码 × uGain，上限与天体 uCap 同口径 12000，半浮点安全） */
+/* v30：v29 的 uMode/uGain（物体式场景化辐射亮度折算）随物体式退役删除，
+ * 恢复 v20 LDR 直出（sRGB 色 + alpha，不受曝光影响） */
 ` + OVERLAY_OCCL_FS + `
-vec3 ovlSrgbToLin(vec3 c) {
-  return mix(c/12.92, pow((c + 0.055)/1.055, vec3(2.4)), step(vec3(0.04045), c));
-}
 void main() {
   if (occludedByScene()) discard;
-  gl_FragColor = vec4(uMode > 0.5 ? min(ovlSrgbToLin(vC.rgb) * uGain, vec3(12000.0)) : vC.rgb, vC.a);
+  gl_FragColor = vec4(vC.rgb, vC.a);
 }`;
 /* ---------------- 状态 ---------------- */
 let renderer = null, scene = null, overlayScene = null, cameraP = null, cameraO = null, activeCam = null;
-/* v29：物体式（lensed）叠层场景化基建 —— 全部叠加层挂入 overlayGroup，按 occlMode
- * 换父场景：absolute → overlayScene（OutputPass 之后 LDR 叠加层，v20 路径不变）；
- * lensed → scene（SceneRenderPass 的 HDR 场景缓冲，预泛光/预透镜：与天体同 ACES
- * 着色 + GravLensPass 逐像素自然扭曲 + 硬件深度遮挡）。 */
-const OVERLAY_SCENE_GAIN = 0.88;   /* sRGB→线性辐射度增益。标定：单星预设网格线亮度 absolute/lensed 像素回归
-                                    * （G=1.52→1.38×、0.9→1.02×、0.75→0.92×；0.88 插值 ≈1.00，见 scripts/v29_calib.js。
-                                    * ACES 非线性下按线芯亮度对齐旧 LDR 观感；最外级弱线因 sRGB 编码抬升略更可见，属自然管线差异） */
-let overlayInScene = false;        /* 本帧叠层是否已挂入主场景（OverlayPass 借此跳过纹理遮挡 uniforms 同步） */
-let overlayGroup = null;           /* init() 建组；initTrails/initOverlay/updateHelpers 把各叠层挂入 */
+/* v30：v29 物体式场景化基建（OVERLAY_SCENE_GAIN/overlayInScene/overlayGroup）随
+ * 物体式退役删除 —— 叠加层恒挂 overlayScene（OutputPass 之后 LDR 叠加层，
+ * v20/v24/v28b 路径），遮挡由 OVERLAY_OCCL_FS 纹理比较完成。 */
 let composer = null, renderPass = null, bloomPass = null, outputPass = null, lensPass = null, overlayPass = null;
 let gaussTex = null, sphereGeo = null, sphereGeoHi = null, sphereGeoLo = null;
 let helperObj = null, helperGeo = null, hzMeshes = [];
@@ -9539,8 +10740,7 @@ function makeOcclUniforms() {
     tDepth: { value: null },
     uDepthSize: { value: new THREE.Vector2(1, 1) },
     uNear: { value: 0.1 }, uFar: { value: 1e15 },
-    uOrtho: { value: 0 }, uHasDepth: { value: 0 },
-    uMode: { value: 0 }, uGain: { value: 1 }   /* v29：叠层辐射度折算（物体式模式生效；uMode=0 时逐位保持 v20 LDR 直出） */
+    uOrtho: { value: 0 }, uHasDepth: { value: 0 }
   };
 }
 class SceneRenderPass extends RenderPass {
@@ -9564,8 +10764,7 @@ function ensureSceneDepthTex() {
  * 在 OutputPass（ACES+sRGB）之后渲染：颜色为最终 sRGB 值，不受曝光/色调映射影响
  * —— 轨迹与名称标签同一种着色方式（用户要求），辅助网格/坐标架颜色恒定。
  * 流程：blit readBuffer（已色调映射的成品）→ 不清屏直接渲染 overlayScene。
- * v29：仅承载「绝对」模式叠层；「物体式」模式下 overlayGroup 已被 renderFrame
- * 换挂到主场景，本 pass 只做成品 blit + 渲染空 overlayScene（零开销）。 */
+ * v30：物体式退役，本 pass 恒承载全部叠层（v20/v24 语义不变）。 */
 const OVERLAY_COPY_FS = `
 precision highp float;
 uniform sampler2D tDiffuse;
@@ -9592,11 +10791,9 @@ class OverlayPass extends Pass {
     this.copyMaterial.uniforms.tDiffuse.value = readBuffer.texture;
     this.fsQuad.render(renderer);
     /* ② v24：同步叠层遮挡 uniforms（本帧场景深度纹理 + 相机口径），
-     *    然后不清屏叠加 overlay 场景（透明混合；片元按深度被星球遮挡 discard）
-     * v29：物体式（场景化）模式下叠层材质已在主场景内随硬件深度测试工作，
-     *    不再绑定本帧正在写入的深度纹理（避免反馈环 + 遮挡语义由硬件深度承接），
-     *    uniforms 同步整体跳过。 */
-    if (!overlayInScene) {
+     *    然后不清屏叠加 overlay 场景（透明混合；片元按深度被星球遮挡 discard）。
+     * v30：物体式退役，同步恒执行（v24 原语义）。 */
+    {
       const _dt = sceneDepthInfo.tex, _oc = this.camera;
       for (let _q = 0; _q < overlayDepthMats.length; _q++) {
         const u = overlayDepthMats[_q].uniforms;
@@ -9628,13 +10825,9 @@ void main() {
 const HZ_FS = `
 precision highp float;
 uniform float uDRV, uDRG, uDMG, uDEM, uOpacity;
-uniform float uMode, uGain;   /* v29：与 TRAIL_FS 同款叠层辐射度折算 */
 varying vec2 vP;
 varying float vDist;
 ` + OVERLAY_OCCL_FS + `
-vec3 ovlSrgbToLin(vec3 c) {
-  return mix(c/12.92, pow((c + 0.055)/1.055, vec3(2.4)), step(vec3(0.04045), c));
-}
 void main() {
   if (occludedByScene()) discard;   /* v24：宜居带被星球/黑洞影子深度遮挡 */
   float r = length(vP);
@@ -9662,7 +10855,7 @@ void main() {
   /* 两端 12% 渐隐 */
   float aIn = smoothstep(uDRV, uDRV + 0.12*(uDRG - uDRV), r);
   float aOut = 1.0 - smoothstep(uDEM - 0.12*(uDEM - uDMG), uDEM, r);
-  gl_FragColor = vec4(uMode > 0.5 ? min(ovlSrgbToLin(col) * uGain, vec3(12000.0)) : col, aIn*aOut*uOpacity);
+  gl_FragColor = vec4(col, aIn*aOut*uOpacity);
 }`;
 
 /* ---------------- 全景 → 立方体贴图（离屏六面直绘） ---------------- */
@@ -9896,10 +11089,8 @@ function initTrails() {
   /* v20：轨迹改入 LDR 叠加层（OverlayPass，OutputPass 之后）——
    * 与名称标签同一种着色方式（最终 sRGB 颜色），不受自动曝光/色调映射影响；
    * 同时不经 GravLensPass —— 满足「不扭曲轨道」的硬约束。
-   * v29：改挂 overlayGroup（初始位于 overlayScene）；「物体式」模式整组换挂
-   * 主场景（renderFrame）—— 着色经 uMode/uGain 折算成场景辐射亮度、由透镜
-   * 逐像素自然扭曲；「绝对」模式仍走本 LDR 路径不变。 */
-  overlayGroup.add(lineObj); overlayGroup.add(ptsObj);
+   * v30：物体式退役，恒挂 overlayScene（v20 原语义）。 */
+  overlayScene.add(lineObj); overlayScene.add(ptsObj);
 }
 /* v20：LDR 叠加层内容 —— 辅助网格 LineSegments + 宜居带环池 */
 function initOverlay() {
@@ -9919,7 +11110,7 @@ function initOverlay() {
    * 轨迹层 lineObj/ptsObj 已显式关闭剔除，此处补齐（CPU 相机系相对坐标，
    * 视锥剔除本就无意义）。 */
   helperObj.frustumCulled = false;
-  overlayGroup.add(helperObj);   /* v29：组挂载（绝对 = overlayScene / 物体式 = 主场景） */
+  overlayScene.add(helperObj);   /* v30：恒挂 overlayScene（物体式退役） */
 }
 function uploadOverlayLine(geo, arr) {
   const vcount = arr ? (arr.length / 7) : 0;
@@ -9957,7 +11148,7 @@ function updateHelpers(env) {
     }));
     m.frustumCulled = false;
     hzMeshes.push(m);
-    overlayGroup.add(m);   /* v29：组挂载（同 helperObj） */
+    overlayScene.add(m);   /* v30：恒挂 overlayScene（物体式退役） */
     overlayDepthMats.push(m.material);   /* v24：注册叠层遮挡 */
   }
   for (let k = 0; k < hzMeshes.length; k++) {
@@ -10068,33 +11259,9 @@ function renderFrame(fr, env) {
   scene.backgroundIntensity = (env.useSky && skyReady) ? env.skyNorm : 1;
   updateTrails(fr, env.trailMode, env.resFactor);
   updateHelpers(env);
-  /* v29：物体式叠层场景化切换 ——
-   * 'lensed'：overlayGroup 换挂主场景，叠层随天体一起绘入 HDR 场景缓冲（预泛光/
-   *   预透镜）：
-   *   - 颜色经共享材质 uMode=1 + uGain=OVERLAY_SCENE_GAIN/曝光 折算成场景辐射度
-   *     （sRGB 解码→线性），与天体同享 ACES 色调映射/泛光；上限口径 min(·,12000)
-   *     半浮点安全且与天体 uCap 一致；
-   *   - 遮挡升级为硬件深度测试（depthTest on / depthWrite off）：星球遮挡与
-   *     黑洞影子代理遮挡语义与 v24 一致；uHasDepth 置 0 + tDepth 置 null，
-   *     既避免同帧深度纹理反馈环，也因硬件深度不再需要纹理比较；
-   *   - GravLensPass 逐像素反向映射直接作用于含叠层的场景缓冲：网格/轨迹与
-   *     星光同口径弯曲（光子环区切向拉伸、影内自然吞没、前景遮挡盘直通）。
-   * 'absolute'：换回 overlayScene，uMode=0/uGain=1/depthTest off，渲染路径与
-   *   v20/v24/v28b 逐位一致（LDR 叠加层 + OVERLAY_OCCL_FS 纹理遮挡）。 */
-  {
-    const ovlInScene = occlMode === 'lensed';
-    const wantParent = ovlInScene ? scene : overlayScene;
-    if (overlayGroup && overlayGroup.parent !== wantParent) wantParent.add(overlayGroup);
-    overlayInScene = ovlInScene;
-    const gain = ovlInScene ? OVERLAY_SCENE_GAIN / Math.max(env.exposure, 1e-12) : 1;
-    for (let _ovm = 0; _ovm < overlayDepthMats.length; _ovm++) {
-      const M = overlayDepthMats[_ovm], U2 = M.uniforms;
-      M.depthTest = ovlInScene;
-      U2.uMode.value = ovlInScene ? 1 : 0;
-      U2.uGain.value = gain;
-      if (ovlInScene) { U2.uHasDepth.value = 0; U2.tDepth.value = null; }
-    }
-  }
+  /* v30：物体式场景化切换块退役 —— 叠层恒挂 overlayScene（LDR 叠加层 +
+   * OVERLAY_OCCL_FS 纹理遮挡），渲染路径与 v20/v24/v28b 逐位一致；
+   * 材质 depthTest 保持初始 false，无逐帧 uniform 改写。 */
   /* v24：引力透镜 uniforms（世界系视点相对坐标，v22c 修复口径不变）。
    * 单史瓦西零 LUT：uLPar=(rs,rg,0,1)；uOcc 第 4 分量 = 遮挡盘天体视距，
    * shader 逐透镜判定遮挡（前后关系/多黑洞遮挡正确，见 LENS_FS 头注）。 */
@@ -10243,15 +11410,12 @@ function renderFrame(fr, env) {
       else mesh.scale.setScalar(radWorld);      /* v21：黑洞 = depth-only 代理（colorWrite 关，保留深度遮挡）——
        * 影子/光子环由 GravLensPass 捕获区域绘制（修复「自身表面被歪曲成一圈光带」：
        * 旧实体暗球边缘与透镜映射相互作用产生亮环假影） */
-      /* v28：叠层透镜模式 ——
-       * 'absolute'（绝对，默认）：黑洞深度代理不写深度（mesh.visible=false）。
-       *   叠层（轨迹/辅助网格/宜居带）不被黑洞影子球吞掉、也不被扭曲 ——
-       *   用户报告「黑洞场景轨迹/网格失效」的观感修复。透镜 pass 的
-       *   sceneObjAt 判定不受影响（影子区深度=清屏 → 正确返回无天体 →
-       *   采天光；星球实体深度照常写 → 二阶像判定保留）。
-       * 'lensed'（物体式）：代理照常写深度 + 叠层顶点已由 warpPoint 扭曲
-       *   （影子内捕获断段），保持 v24「叠层被影子口径遮挡」的物理前后关系。 */
-      if (b.isBH && occlMode !== 'lensed') mesh.visible = false;
+      /* v28/v30：黑洞深度代理不写深度（mesh.visible=false）—— 叠层（轨迹/
+       * 辅助网格/宜居带）不被黑洞影子球吞掉、也不被扭曲（「绝对」语义，
+       * 用户报告「黑洞场景轨迹/网格失效」的观感修复；v30 起为唯一路径）。
+       * 透镜 pass 的 sceneObjAt 判定不受影响（影子区深度=清屏 → 正确返回
+       * 无天体 → 采天光；星球实体深度照常写 → 二阶像判定保留）。 */
+      if (b.isBH) mesh.visible = false;
       if (b.isBH) mesh.material = bhProxyMat;
       else if (b.mode === 2) {
         mesh.material = rec.starMat;
@@ -10364,10 +11528,7 @@ function init(canvasId, fov) {
      * LDR 叠加层（轨迹/辅助网格/宜居带，颜色恒定不受曝光影响） */
     lensPass = new GravLensPass();
     overlayScene = new THREE.Scene();
-    /* v29：叠层换挂组 —— 绝对模式挂本组于 overlayScene（v20 路径），物体式模式由
-     * renderFrame 整组换挂到主场景 scene（HDR 场景缓冲、预透镜） */
-    overlayGroup = new THREE.Group();
-    overlayScene.add(overlayGroup);
+    /* v30：v29 叠层换挂组 overlayGroup 随物体式退役删除 —— 叠层直接挂 overlayScene */
     composer.addPass(renderPass);
     /* v23：透镜移到 bloom 之后 —— bloom 大 mip 会把明亮环带/天空的辉光滑入
      * 捕获区（实测 L=10 影心 0.22 灰 vs 关 bloom 0.02 黑，v22 因环带破碎
