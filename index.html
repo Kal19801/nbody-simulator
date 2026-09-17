@@ -340,7 +340,7 @@ body.free-touch .pad{display:grid}
     <div class="row"><input type="checkbox" id="mtToggle"><label for="mtToggle" style="cursor:pointer" title="多核行分割并行：行逐位复刻串行累加次序，结果与单线程一致（SharedArrayBuffer + Atomics；需跨域隔离，coi-serviceworker 已自动注入；N≥256 时启用并行力核）">多核线程</label></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">Barnes-Hut</span>
       <select id="bhSelect" style="flex:1">
-        <option value="off" selected>精确成对（默认，严格守恒）</option>
+        <option value="off" selected>精确成对</option>
         <option value="0.6">近场树 θ=0.6（N≥512，~8×）</option>
         <option value="0.9">近场树 θ=0.9（N≥512，~20×）</option>
       </select>
@@ -348,7 +348,7 @@ body.free-touch .pad{display:grid}
     <div class="kv">
       <span class="k">引擎状态</span><span id="engineStatus">—</span>
     </div>
-    <div class="hint">WASM/多线程与原 JS 内核逐位一致，切换引擎不改变任何物理行为；多线程仅在跨域隔离环境（GitHub Pages 已配置 coi-serviceworker）可用。</div>
+    <div class="hint">WASM/多线程与原 JS 内核逐位一致，切换引擎不改变任何物理行为；多线程仅在跨域隔离环境可用。</div>
   </section>
     <div class="kicker">Conservation</div>
     <h2>守恒量</h2>
