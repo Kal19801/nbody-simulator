@@ -48,7 +48,7 @@ const core = globalThis.__NBODY_CORE__;
 const R = core.refs();
 const Fn = core.fns();
 
-let W = { inst: null, exp: null, cap: 0, base: 0, statsView: null, mpiView: null, scanView: null, myW: -1, useMT: false };
+let W = { inst: null, exp: null, cap: 0, base: 0, statsView: null, mpiView: null, scanView: null, myW: -1, useMT: false, bhTheta: null };
 
 function mask() {
   return (R.gr1pnOn ? 1 : 0) | (R.gr15spinOn ? 2 : 0) | (R.gr2pnOn ? 4 : 0) |
@@ -71,6 +71,7 @@ function buildViews(cap) {
   W.statsView = new Float64Array(W.memory.buffer, base + F_STATS * 8, 5);
   W.mpiView = new Float64Array(W.memory.buffer, base + F_MPI * 8, 2);
   W.scanView = new Float64Array(W.memory.buffer, base + F_SCAN * 8, 8);
+  W.iasRetView = new Float64Array(W.memory.buffer, base + 31 * 8, 1);   /* v34b: iasTry dtNext 回传位 */
   W.cap = cap;
   R.CAP = cap;
   R.bufVer = R.bufVer + 1;
@@ -87,7 +88,9 @@ globalThis.__ENGINE__ = {
   },
   accumDispatch() {
     const n = R.N, m = mask();
-    if (W.useMT && n >= MT_N_MIN) W.exp.accumMT(n, m);
+    /* v34b：BH 选择随帧传入（与主线程 accumDispatch 同规则：N≥512 才用树） */
+    if (W.bhTheta && n >= 512) W.exp.accumBH(n, m, W.bhTheta);
+    else if (W.useMT && n >= MT_N_MIN) W.exp.accumMT(n, m);
     else W.exp.accumST(n, m);
     syncStatsFromView();
   },
@@ -106,6 +109,16 @@ globalThis.__ENGINE__ = {
     out.minR2 = W.scanView[off + 0]; out.minPairM = W.scanView[off + 1];
     out.minPairV2 = W.scanView[off + 2]; out.spinCoef = W.scanView[off + 3];
     return out;
+  },
+  /* v34b: IAS15 整步核派发（iasTry 逐位移植；状态机与主线程引擎同构） */
+  iasStepTry(h, refresh, fixed) {
+    if (!R.iasReady) { W.exp.iasReset(); R.iasReady = true; }
+    const acc = W.exp.iasTry(R.N, h, mask(), fixed ? 1 : 0, refresh !== false ? 1 : 0,
+      R.iasLastDt, R.iasEpsilon, R.IAS_ADAPTIVE_MODE);
+    const dtNext = W.iasRetView ? W.iasRetView[0] : h;
+    if (acc) R.iasLastDt = h; else R.iasRejectCount++;
+    syncStatsFromView();
+    return { acc: acc === 1, dtNext };
   }
 };
 
@@ -148,8 +161,17 @@ async function doInit(msg) {
   const mod = await WebAssembly.compile(msg.wasm);
   W.inst = new WebAssembly.Instance(mod, { env: { memory: W.memory } });
   W.exp = W.inst.exports;
-  W.exp.init(R.G, R.C_SQ, R.C_5, R.GRAV_SOFTENING_SQ, R.PN_TIDE_R_MIN,
-    R.TIDE_LAG_MAX, R.YOSHIDA_W1, R.YOSHIDA_W0, 0);
+  /* v34b 修复：worker 不得调 init() —— 常量区/堆指针（heapPtr）与控制块位于共享
+   * 线性内存的数据段，init() 会把 heapPtr 重置回 __heap_base，使派发者之后任何
+   * bump 分配（BH 树、IAS15 arena、growCap 的新状态块）覆盖已存活状态。
+   * initWorker 只写物理常量，不动堆/控制块。 */
+  if (W.exp.initWorker) {
+    W.exp.initWorker(R.G, R.C_SQ, R.C_5, R.GRAV_SOFTENING_SQ, R.PN_TIDE_R_MIN,
+      R.TIDE_LAG_MAX, R.YOSHIDA_W1, R.YOSHIDA_W0);
+  } else {
+    W.exp.init(R.G, R.C_SQ, R.C_5, R.GRAV_SOFTENING_SQ, R.PN_TIDE_R_MIN,
+      R.TIDE_LAG_MAX, R.YOSHIDA_W1, R.YOSHIDA_W0, 0);
+  }
   W.exp.setBlock(msg.base, msg.cap);
   W.base = msg.base;
   W.useMT = !!msg.useMT;
@@ -183,13 +205,15 @@ self.onmessage = async (ev) => {
     R.gr1pnOn = fl.gr1pnOn; R.gr25On = fl.gr25On; R.gr2pnOn = fl.gr2pnOn; R.gr35On = fl.gr35On;
     R.gr15spinOn = fl.gr15spinOn; R.tideOn = fl.tideOn; R.integrator = fl.integrator;
     R.iasEpsilon = fl.iasEpsilon;
+    W.bhTheta = (fl.bhTheta === undefined || fl.bhTheta === null) ? null : fl.bhTheta;
     if (msg.cap !== W.cap) { W.exp.setBlock(msg.base, msg.cap); W.base = msg.base; buildViews(msg.cap); }
     const res = integrateFrame(msg.baseDt, msg.steps, msg.targetTime, {
       adaptive: fl.adaptive, mergeOn: msg.mergeOn, contactR2: msg.contactR2, budgetMs: msg.budgetMs
     });
     res.seq = msg.seq;
-    res.cap = W.cap;
-    res.capRev = 0;   // worker 不改 cap（主线程权威）
+    res.cap = msg.cap;
+    /* v34b 修复：原实现恒发 capRev=0 → 主线程每帧重建全部视图；改为原样回传。 */
+    res.capRev = msg.capRev;
     self.postMessage({ t: 'frame', ...res });
     return;
   }

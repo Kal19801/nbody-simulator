@@ -1129,6 +1129,7 @@ function iasPredictNextStep(ratio, n3, srcB, srcE, dstB, dstE) {
  * 收敛判据对齐 REBOUND：max|Δb₆| / max|a(末内部点)|（v30 及以前用步首 a₀ 归一，
  * 速度相关力下末点更贴近真残差）；迭代止于 <1e-16 / 振荡 / 12 次。 */
 function iasStepTry(h, refreshStats, fixed) {
+  if (globalThis.__ENGINE__ && __ENGINE__.active && __ENGINE__.iasStepTry) return __ENGINE__.iasStepTry(h, refreshStats, fixed);   /* v34b: WASM 整步派发（iasTry 逐位移植） */
   if (N === 0) return { acc: true, dtNext: h };
   iasEnsureBuffers();
   const n3 = 3 * N;

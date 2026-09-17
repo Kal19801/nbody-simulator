@@ -92,6 +92,7 @@
     E.statsView = new Float64Array(buf, base + F_STATS * 8, 5);
     E.mpiView = new Float64Array(buf, base + F_MPI * 8, 2);
     E.scanView = new Float64Array(buf, base + F_SCAN * 8, 8);
+    E.iasRetView = new Float64Array(buf, base + 31 * 8, 1);   /* v34b: F_WPART+0（iasTry dtNext 回传位，与 rowsJob 时序不重叠） */
     E.cap = cap;
     E.capRev++;
     R.bufVer = R.bufVer + 1;   // 包装数组缓存失效（v19f 机制复用）
@@ -135,6 +136,9 @@
     E.wasm.exports.blkResize(newCap);
     buildViews(newCap);
     R.CAP = newCap;
+    /* v34b：IAS15 预测器缓冲随 cap 重建 → JS 语义为冷启动（iasEnsureBuffers 置
+     * iasReady=false/iasN3=-1），引擎路径必须镜像，否则扩容后预测器继续用旧状态。 */
+    R.iasReady = false; R.iasN3 = -1;
     if (E.poolReady) {
       const base = E.wasm.exports.getBlkBase();
       E.workers.forEach(wk => wk.postMessage({ t: 'cap', base, cap: newCap, capRev: E.capRev }));
@@ -173,6 +177,19 @@
     out.minR2 = E.scanView[off + 0]; out.minPairM = E.scanView[off + 1];
     out.minPairV2 = E.scanView[off + 2]; out.spinCoef = E.scanView[off + 3];
     return out;
+  };
+
+  /* ---------- v34b: IAS15 整步钩子（iasTry 逐位移植） ----------
+   * R.iasReady=false（activate/growCap/initState 后）→ iasReset 冷启动，
+   * 与 JS 备份路径状态机一致；iasLastDt/iasRejectCount 由本侧维护。 */
+  E.iasStepTry = function (h, refresh, fixed) {
+    if (!R.iasReady) { E.wasm.exports.iasReset(); R.iasReady = true; }
+    const acc = E.wasm.exports.iasTry(R.N, h, mask(), fixed ? 1 : 0, refresh !== false ? 1 : 0,
+      R.iasLastDt, R.iasEpsilon, R.IAS_ADAPTIVE_MODE);
+    const dtNext = E.iasRetView ? E.iasRetView[0] : h;
+    if (acc) R.iasLastDt = h; else R.iasRejectCount++;
+    syncStatsFromView();
+    return { acc: acc === 1, dtNext };
   };
 
   /* ---------- WASM 加载（3 次重试，失败静默回退） ---------- */
@@ -261,7 +278,7 @@
 
   async function startPool() {
     if (E.poolReady || !E.active) return;
-    if (!crossOriginIsolated()) { showToastSafe('多线程需要跨域隔离（coi-serviceworker）。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
+    if (!crossOriginIsolated()) { uncheckMT(); showToastSafe('多线程需要跨域隔离（coi-serviceworker）。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
     const hw = (navigator.hardwareConcurrency || 4);
     const W = Math.max(2, Math.min(hw, 16));
     E.workers = [];
@@ -289,8 +306,14 @@
       console.info('[v34] 线程池创建失败，回退单线程 WASM：', err);
       stopPool();
       E.mtOn = false;
+      uncheckMT();
     }
     updateStatus();
+  }
+  /* v34b：池不可用时把开关 UI 同步回关闭（旧实现只改内部状态，复选框仍显示勾选） */
+  function uncheckMT() {
+    const mt = document.getElementById('mtToggle');
+    if (mt) mt.checked = false;
   }
   function stopPool() {
     if (E.workers.length) {
@@ -311,7 +334,8 @@
       n: R.N, flags: {
         gr1pnOn: R.gr1pnOn, gr25On: R.gr25On, gr2pnOn: R.gr2pnOn, gr35On: R.gr35On,
         gr15spinOn: R.gr15spinOn, tideOn: R.tideOn, integrator: R.integrator,
-        iasEpsilon: R.iasEpsilon, adaptive: opts.adaptive
+        iasEpsilon: R.iasEpsilon, adaptive: opts.adaptive,
+        bhTheta: E.bhTheta          /* v34b: BH 选择随帧传递（worker 侧同规则派发 accumBH） */
       },
       mergeOn: opts.mergeOn, contactR2: opts.contactR2, budgetMs: opts.budgetMs,
       cap: E.cap, capRev: E.capRev
@@ -321,7 +345,9 @@
     if (msg.seq !== E.dispatchSeq) return;
     const done = E.pending; E.pending = null;
     if (!done) return;
-    if (msg.capRev !== E.capRev) { buildViews(msg.cap); R.CAP = msg.cap; }
+    /* v34b 修复：worker 原样回传 capRev；旧实现 worker 恒发 capRev=0，
+     * 与主线程（buildViews 后 ≥1）永不相等 → 每帧重建 78 个视图（浪费 + GC 压力）。 */
+    if (msg.capRev !== E.capRev || msg.cap !== E.cap) { buildViews(msg.cap); R.CAP = msg.cap; }
     R.minR2 = msg.stats.minR2; R.maxAccMag = msg.stats.maxAccMag; R.minPairM = msg.stats.minPairM;
     R.minPairV2 = msg.stats.minPairV2; R.tideHeatW = msg.stats.tideHeatW;
     R.lastAdaptSteps = msg.lastAdaptSteps; R.lastAdaptAdvanced = msg.lastAdaptAdvanced;
@@ -360,19 +386,29 @@
       w.addEventListener('change', async () => {
         if (w.checked) {
           const ok = await activate();
-          if (ok && m && m.checked) await startPool();
+          if (ok && m && m.checked) { E.mtOn = true; await startPool(); }
         } else {
+          E.mtOn = false;
           await deactivate();
         }
+        updateStatus();
       });
-      if (w.checked) activate().then(ok => { if (ok && m && m.checked) startPool(); });
+      /* v34b 修复：多核开关打开后仍显示单核 —— E.mtOn 此前从未被置 true，
+       * 导致 accumDispatch / 帧派发 / 状态显示三处全部静默退回单线程。
+       * 现按开关当前态同步意图标志（含页面初载即勾选的场景）。 */
+      if (w.checked) activate().then(ok => {
+        if (ok && m && m.checked) { E.mtOn = true; startPool(); }
+        updateStatus();
+      });
     }
     if (m) {
       m.addEventListener('change', async () => {
         if (!E.active) { if (w && w.checked) await activate(); else { m.checked = false; showToastSafe('多线程需要 WASM 内核', 'info'); return; } }
+        E.mtOn = m.checked;   /* v34b 修复（同上）：意图标志与开关同步 */
         if (m.checked) await startPool(); else stopPool();
         updateStatus();
       });
+      if (m.checked && E.active) { E.mtOn = true; startPool(); }
     }
     const bh = document.getElementById('bhSelect');
     if (bh) {
