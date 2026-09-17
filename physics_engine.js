@@ -1,0 +1,389 @@
+/* physics_engine.js — v34 计算引擎管理器（主线程）
+ *
+ * 职责：
+ *   1. 加载 physics_core.wasm（最多 3 次重试；失败静默回退 JS 内核 —— 需求⑤）
+ *   2. WASM 内存接管：状态数组 → wasm 线性内存视图（业务/渲染/导出代码无感）
+ *   3. 派发钩子实现：accumDispatch / stepYoshida4 / scanStats / growCap
+ *   4. 多线程：physics-worker（帧级 postMessage）+ 计算 worker 池（行分割）
+ *   5. 面板 UI：WASM 开关、多线程开关、引擎状态显示
+ *
+ * 语义承诺：WASM 内核与 JS 内核逐位等价（IEEE754，见 physics_kernel.c 契约），
+ * 引擎切换仅搬运状态位，不改变任何物理行为。
+ */
+(function () {
+  'use strict';
+  if (window.__ENGINE__) return;   // 幂等
+
+  /* ---------- 内存布局（与 physics_kernel.c 严格一致） ---------- */
+  const SEC_ORDER = [
+    'px', 'py', 'pz', 'vx', 'vy', 'vz', 'ax', 'ay', 'az', 'massA',
+    'cpx', 'cpy', 'cpz', 'cvx', 'cvy', 'cvz',
+    'spinRate', 'spinAcc', 'spinTx', 'spinTy', 'spinTz', 'spinPhase', 'cspinPhase',
+    'spinAxX', 'spinAxY', 'spinAxZ',
+    'bodyRadA', 'bodyK2A', 'bodyLagA', 'bodyIA', 'bodyTideA0', 'bodyTideA03', 'bodyK2Auto', 'bodyLagAuto',
+    'axRR', 'ayRR', 'azRR', 'axTL', 'ayTL', 'azTL',
+    'mpPx', 'mpPy', 'mpPz', 'mpVx', 'mpVy', 'mpVz',
+    'mpAx', 'mpAy', 'mpAz', 'mpRX', 'mpRY', 'mpRZ', 'mpTX', 'mpTY', 'mpTZ',
+    'mpPnX', 'mpPnY', 'mpPnZ', 'mpVnX', 'mpVnY', 'mpVnZ', 'mpSpin',
+    'ySnapPx', 'ySnapPy', 'ySnapPz', 'ySnapVx', 'ySnapVy', 'ySnapVz',
+    'ySnapCpx', 'ySnapCpy', 'ySnapCpz', 'ySnapCvx', 'ySnapCvy', 'ySnapCvz',
+    'ySpinRate', 'ySpinPhase', 'yCspinPhase', 'ySpinAxX', 'ySpinAxY', 'ySpinAxZ'
+  ];                                   // 78 个 cap 区
+  const N_SEC = 80;                    // 内核 S_COUNT（预留 2 个对齐位）
+  const FIX_COUNT = 119;               // 固定区 f64 数
+  const FIX_BYTES = FIX_COUNT * 8;     // 952
+  const F_STATS = 0, F_MPI = 5, F_LEDGER = 7, F_SCAN = 23;
+  const LED_NAMES = ['sinkGWE', 'sinkTideE', 'sinkGWLx', 'sinkGWLv', 'sinkGWLz', 'fieldPx', 'fieldPv', 'fieldPz'];
+  const MEM_MAX_PAGES = 32768;         // 2 GB
+  const MEM_INIT_PAGES = 64;           // 4 MB
+  const WASM_URL = 'physics_core.wasm';
+  const WASM_RETRIES = 3;              // 需求⑤：失败多次后静默回退
+
+  const core = window.__NBODY_CORE__;
+  const R = core.refs();
+  const F = core.fns();
+
+  const E = {
+    state: 'idle',        // idle | loading | active | fallback
+    active: false,        // ensureCap/accumulateAccel 钩子的开关
+    mtOn: false,
+    mtAvail: false,
+    poolReady: false,
+    workers: [],
+    nWorkers: 0,
+    wasm: null,
+    memory: null,
+    wasmBytes: null,
+    cap: 0,
+    capRev: 0,
+    statsView: null,
+    mpiView: null,
+    scanView: null,
+    dispatchSeq: 0,
+    pending: null,        // MT 帧派发回调
+    lastError: null
+  };
+  window.__ENGINE__ = E;
+
+  function crossOriginIsolated() {
+    return typeof SharedArrayBuffer !== 'undefined' && self.crossOriginIsolated === true;
+  }
+
+  function mask() {
+    return (R.gr1pnOn ? 1 : 0) | (R.gr15spinOn ? 2 : 0) | (R.gr2pnOn ? 4 : 0) |
+      (R.gr25On ? 8 : 0) | (R.gr35On ? 16 : 0) | (R.tideOn ? 32 : 0);
+  }
+
+  /* ---------- 视图构建：把核心全局绑定接到 wasm 内存 ---------- */
+  function buildViews(cap) {
+    const buf = E.memory.buffer;
+    const base = E.wasm.exports.getBlkBase();
+    const arrs = {};
+    SEC_ORDER.forEach((name, s) => {
+      arrs[name] = new Float64Array(buf, base + FIX_BYTES + s * cap * 8, cap);
+    });
+    // mpSpin 之后两个对齐保留位（S_COUNT=80 与 JS 78 之差）不建视图
+    R.setArrs(arrs);
+    const led = {};
+    LED_NAMES.forEach((name, k) => {
+      led[name] = new Float64Array(buf, base + (F_LEDGER + k * 2) * 8, 2);
+    });
+    R.setLedgers(led);
+    E.statsView = new Float64Array(buf, base + F_STATS * 8, 5);
+    E.mpiView = new Float64Array(buf, base + F_MPI * 8, 2);
+    E.scanView = new Float64Array(buf, base + F_SCAN * 8, 8);
+    E.cap = cap;
+    E.capRev++;
+    R.bufVer = R.bufVer + 1;   // 包装数组缓存失效（v19f 机制复用）
+  }
+
+  /* ---------- 状态迁移（位级拷贝，切换引擎前后逐位一致） ---------- */
+  function snapshotJS() {
+    const a = R.arrs(), n = R.CAP, out = { n, cap: R.CAP, arrays: {}, ledgers: {}, stats: {} };
+    SEC_ORDER.forEach(k => {
+      const src = a[k];
+      const c = new Float64Array(n);
+      if (src) c.set(src.subarray(0, n));
+      out.arrays[k] = c;
+    });
+    const l = R.ledgers();
+    LED_NAMES.forEach(k => { out.ledgers[k] = [l[k][0], l[k][1]]; });
+    out.stats = { minR2: R.minR2, maxAccMag: R.maxAccMag, minPairM: R.minPairM, minPairV2: R.minPairV2, tideHeatW: R.tideHeatW };
+    return out;
+  }
+  function restoreToJS(snap) {
+    const fresh = {};
+    SEC_ORDER.forEach(k => { fresh[k] = snap.arrays[k]; });
+    R.setArrs(fresh);
+    const led = {};
+    LED_NAMES.forEach(k => { led[k] = snap.ledgers[k]; });   // 普通数组（JS 回退原语义）
+    R.setLedgers(led);
+    R.minR2 = snap.stats.minR2; R.maxAccMag = snap.stats.maxAccMag; R.minPairM = snap.stats.minPairM;
+    R.minPairV2 = snap.stats.minPairV2; R.tideHeatW = snap.stats.tideHeatW;
+    R.bufVer = R.bufVer + 1;
+  }
+
+  /* ---------- ensureCap 钩子路径 ---------- */
+  E.growCap = function (n) {
+    if (!E.active) { F.ensureCap(n); return; }
+    // 计算新块所需字节并先扩展 wasm 内存
+    const newCap = Math.max(n, E.cap ? E.cap * 2 : 64);
+    const needBytes = FIX_BYTES + N_SEC * newCap * 8 + 16;
+    const heapPtr = E.wasm.exports.getHeapPtr();
+    const pages = Math.ceil(Math.max(0, heapPtr + needBytes - E.memory.buffer.byteLength) / 65536);
+    if (pages > 0) E.memory.grow(pages);
+    E.wasm.exports.blkResize(newCap);
+    buildViews(newCap);
+    R.CAP = newCap;
+    if (E.poolReady) {
+      const base = E.wasm.exports.getBlkBase();
+      E.workers.forEach(wk => wk.postMessage({ t: 'cap', base, cap: newCap, capRev: E.capRev }));
+    }
+  };
+
+  /* ---------- accumulateAccel 钩子路径 ---------- */
+  E.bhTheta = null;   // null = 精确模式；0.6/0.9 = Barnes-Hut 近场树
+  E.accumDispatch = function () {
+    const n = R.N, m = mask();
+    if (E.bhTheta && n >= 512) E.wasm.exports.accumBH(n, m, E.bhTheta);
+    else if (E.mtOn && E.poolReady && n >= 256) E.wasm.exports.accumMT(n, m);
+    else E.wasm.exports.accumST(n, m);
+    E.statsView && syncStatsFromView();
+  };
+  function syncStatsFromView() {
+    R.minR2 = E.statsView[0]; R.maxAccMag = E.statsView[1]; R.minPairM = E.statsView[2];
+    R.minPairV2 = E.statsView[3]; R.tideHeatW = E.statsView[4];
+  }
+
+  /* ---------- stepYoshida4 钩子路径 ---------- */
+  E.stepYoshida4 = function (h, refresh) {
+    const a = R.YOSHIDA_W1 * h, b = R.YOSHIDA_W0 * h;
+    const fast = !R.gr1pnOn && !R.gr25On && !R.gr2pnOn && !R.tideOn;
+    if (fast) E.wasm.exports.yoshFast(a, b, R.N, mask());
+    else E.wasm.exports.yoshPN(a, b, R.N, mask(), refresh ? 1 : 0);
+    syncStatsFromView();
+    R.mpIterLast = E.mpiView[0]; R.mpConvLast = E.mpiView[1] !== 0;
+    return fast ? true : R.mpConvLast;
+  };
+
+  /* ---------- scanPairStats 钩子路径 ---------- */
+  E.scanStats = function (useMid, out) {
+    E.wasm.exports.scanStats(R.N, mask(), useMid ? 1 : 0, useMid ? 1 : 0);
+    const off = useMid ? 4 : 0;
+    out.minR2 = E.scanView[off + 0]; out.minPairM = E.scanView[off + 1];
+    out.minPairV2 = E.scanView[off + 2]; out.spinCoef = E.scanView[off + 3];
+    return out;
+  };
+
+  /* ---------- WASM 加载（3 次重试，失败静默回退） ---------- */
+  async function loadWasm() {
+    if (!E.wasmBytes) {
+      console.info('[v34] fetch wasm...');
+      const res = await fetch(WASM_URL);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      E.wasmBytes = await res.arrayBuffer();
+      console.info('[v34] wasm bytes:', E.wasmBytes.byteLength);
+    }
+    E.memory = new WebAssembly.Memory({ initial: MEM_INIT_PAGES, maximum: MEM_MAX_PAGES, shared: true });
+    console.info('[v34] compiling...');
+    const mod = await WebAssembly.compile(E.wasmBytes);
+    console.info('[v34] compiled, instantiating...');
+    const imports = WebAssembly.Module.imports(mod);
+    const env = {};
+    for (const im of imports) {
+      if (im.kind === 'memory') env[im.name] = E.memory;
+      else if (im.kind === 'global') env[im.name] = new WebAssembly.Global({ value: 'i32', mutable: true }, 0);
+      else if (im.kind === 'function') env[im.name] = () => { throw new Error('unreachable import: ' + im.name); };
+      else if (im.kind === 'table') env[im.name] = new WebAssembly.Table({ initial: 0, element: 'anyfunc' });
+    }
+    const inst = await new WebAssembly.Instance(mod, { env });
+    console.info('[v34] instantiated, version=', inst.exports.version());
+    return inst;
+  }
+
+  async function activate() {
+    if (E.active) return true;
+    if (E.state === 'loading') return false;
+    E.state = 'loading';
+    let inst = null, lastErr = null;
+    for (let attempt = 1; attempt <= WASM_RETRIES; attempt++) {
+      try { inst = await loadWasm(); break; }
+      catch (err) { lastErr = err; E.wasmBytes = null; console.info('[v34] 尝试 ' + attempt + ' 失败:', String(err && err.message || err)); await new Promise(r => setTimeout(r, 150 * attempt)); }
+    }
+    if (!inst) {
+      /* 静默回退 JS（不弹窗不打断；面板显示状态，console 留痕） */
+      E.state = 'fallback'; E.active = false; E.lastError = String(lastErr && lastErr.message || lastErr);
+      console.info('[v34] WASM 内核加载失败，已静默回退 JS 内核：', E.lastError);
+      updateStatus();
+      return false;
+    }
+    E.wasm = inst;
+    const v = inst.exports.version();
+    if (v !== 34) { E.state = 'fallback'; E.lastError = '内核版本不匹配: ' + v; return false; }
+    inst.exports.init(R.G, R.C_SQ, R.C_5, R.GRAV_SOFTENING_SQ, R.PN_TIDE_R_MIN,
+      R.TIDE_LAG_MAX, R.YOSHIDA_W1, R.YOSHIDA_W0, Math.max(R.CAP, 64));
+    const snap = snapshotJS();           // 先带走当前状态（JS 数组或旧视图）
+    buildViews(Math.max(R.CAP, 64));     // 再建视图
+    R.CAP = E.cap;
+    // 状态位级写入 wasm 内存
+    const a = R.arrs();
+    SEC_ORDER.forEach(k => {
+      const dst = a[k], src = snap.arrays[k];
+      dst.set(src.subarray(0, R.N));
+      for (let i = R.N; i < E.cap; i++) dst[i] = 0;
+    });
+    const led = R.ledgers();
+    LED_NAMES.forEach(k => { led[k][0] = snap.ledgers[k][0]; led[k][1] = snap.ledgers[k][1]; });
+    E.statsView[0] = snap.stats.minR2; E.statsView[1] = snap.stats.maxAccMag; E.statsView[2] = snap.stats.minPairM;
+    E.statsView[3] = snap.stats.minPairV2; E.statsView[4] = snap.stats.tideHeatW;
+    // IAS15 预测器重置（引擎切换一步冷启动，不改变物理语义）
+    R.iasReady = false; R.iasN3 = -1; R.iasLastDt = 0; R.iasDtNext = Infinity;
+    E.active = true; E.state = 'active';
+    E.mtAvail = crossOriginIsolated();
+    updateStatus();
+    return true;
+  }
+
+  async function deactivate() {
+    if (!E.active) return;
+    stopPool();
+    const snap = snapshotJS();
+    E.active = false; E.state = 'fallback';
+    restoreToJS(snap);
+    R.iasReady = false; R.iasN3 = -1; R.iasLastDt = 0; R.iasDtNext = Infinity;
+    updateStatus();
+  }
+
+  /* ---------- 多线程池 ---------- */
+  function postPool(msg, transfer) {
+    if (E.workers[0]) E.workers[0].postMessage(msg, transfer || []);
+  }
+
+  async function startPool() {
+    if (E.poolReady || !E.active) return;
+    if (!crossOriginIsolated()) { showToastSafe('多线程需要跨域隔离（coi-serviceworker）。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
+    const hw = (navigator.hardwareConcurrency || 4);
+    const W = Math.max(2, Math.min(hw, 16));
+    E.workers = [];
+    try {
+      await new Promise((resolve, reject) => {
+        let ready = 0, failed = false;
+        for (let w = 0; w < W; w++) {
+          const wk = new Worker('physics_worker.js');
+          wk.onmessage = (ev) => {
+            if (ev.data && ev.data.t === 'ready') {
+              ready++;
+              if (ready === W && !failed) { E.poolReady = true; E.nWorkers = W; resolve(); }
+            } else if (ev.data && ev.data.t === 'frame') {
+              onFrameResult(ev.data);
+            }
+          };
+          wk.onerror = (e) => { if (!failed) { failed = true; reject(new Error(e.message || 'worker error')); } };
+          wk.postMessage({ t: 'init', w, wasm: E.wasmBytes, memory: E.memory,
+            base: E.wasm.exports.getBlkBase(), cap: E.cap, useMT: true });
+          E.workers.push(wk);
+        }
+      });
+      E.poolReady = true; E.nWorkers = W;
+    } catch (err) {
+      console.info('[v34] 线程池创建失败，回退单线程 WASM：', err);
+      stopPool();
+      E.mtOn = false;
+    }
+    updateStatus();
+  }
+  function stopPool() {
+    if (E.workers.length) {
+      try { postPool({ t: 'quit' }); } catch (e) { }
+      E.workers.forEach(w => { try { w.terminate(); } catch (e) { } });
+    }
+    E.workers = []; E.poolReady = false; E.nWorkers = 0;
+  }
+
+  /* ---------- MT 帧派发 ---------- */
+  E.advanceAsync = function (baseDt, steps, targetTime, opts, done) {
+    if (!E.poolReady) { done(null); return; }
+    E.pending = done;
+    E.dispatchSeq++;
+    postPool({
+      t: 'frame', seq: E.dispatchSeq, baseDt, steps, targetTime,
+      base: E.wasm ? E.wasm.exports.getBlkBase() : 0,
+      n: R.N, flags: {
+        gr1pnOn: R.gr1pnOn, gr25On: R.gr25On, gr2pnOn: R.gr2pnOn, gr35On: R.gr35On,
+        gr15spinOn: R.gr15spinOn, tideOn: R.tideOn, integrator: R.integrator,
+        iasEpsilon: R.iasEpsilon, adaptive: opts.adaptive
+      },
+      mergeOn: opts.mergeOn, contactR2: opts.contactR2, budgetMs: opts.budgetMs,
+      cap: E.cap, capRev: E.capRev
+    });
+  };
+  function onFrameResult(msg) {
+    if (msg.seq !== E.dispatchSeq) return;
+    const done = E.pending; E.pending = null;
+    if (!done) return;
+    if (msg.capRev !== E.capRev) { buildViews(msg.cap); R.CAP = msg.cap; }
+    R.minR2 = msg.stats.minR2; R.maxAccMag = msg.stats.maxAccMag; R.minPairM = msg.stats.minPairM;
+    R.minPairV2 = msg.stats.minPairV2; R.tideHeatW = msg.stats.tideHeatW;
+    R.lastAdaptSteps = msg.lastAdaptSteps; R.lastAdaptAdvanced = msg.lastAdaptAdvanced;
+    R.iasDtNext = msg.ias.iasDtNext; R.iasRejectCount = msg.ias.iasRejectCount;
+    done(msg);
+  }
+
+  function showToastSafe(txt, kind) {
+    try { if (typeof window.showToast === 'function') showToast(txt, kind || 'info', 4000); } catch (e) { }
+  }
+
+  /* ---------- UI ---------- */
+  function updateStatus() {
+    const el = document.getElementById('engineStatus');
+    if (!el) return;
+    let txt;
+    if (E.state === 'active') {
+      const threads = E.mtOn && E.poolReady ? (E.nWorkers + ' 线程') : '单线程';
+      const bh = E.bhTheta ? ' · BH θ=' + E.bhTheta : '';
+      txt = 'WASM 内核 v34 · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
+    } else if (E.state === 'loading') txt = 'WASM 加载中…';
+    else if (E.state === 'fallback') txt = 'JS 内核（WASM 不可用，已静默回退）';
+    else txt = 'JS 内核';
+    el.textContent = txt;
+    const mt = document.getElementById('mtToggle');
+    if (mt) {
+      mt.disabled = !(E.active && (crossOriginIsolated() || E.poolReady));
+      mt.parentElement.title = mt.disabled ? '需要跨域隔离（COOP/COEP，经 coi-serviceworker 注入）' : '行分割并行（SharedArrayBuffer + Atomics）';
+    }
+  }
+
+  function wireUI() {
+    const w = document.getElementById('wasmToggle');
+    const m = document.getElementById('mtToggle');
+    if (w) {
+      w.addEventListener('change', async () => {
+        if (w.checked) {
+          const ok = await activate();
+          if (ok && m && m.checked) await startPool();
+        } else {
+          await deactivate();
+        }
+      });
+      if (w.checked) activate().then(ok => { if (ok && m && m.checked) startPool(); });
+    }
+    if (m) {
+      m.addEventListener('change', async () => {
+        if (!E.active) { if (w && w.checked) await activate(); else { m.checked = false; showToastSafe('多线程需要 WASM 内核', 'info'); return; } }
+        if (m.checked) await startPool(); else stopPool();
+        updateStatus();
+      });
+    }
+    const bh = document.getElementById('bhSelect');
+    if (bh) {
+      bh.addEventListener('change', () => {
+        const v = bh.value;
+        E.bhTheta = v === 'off' ? null : parseFloat(v);
+        updateStatus();
+      });
+    }
+    updateStatus();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireUI);
+  else wireUI();
+})();
