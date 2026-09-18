@@ -308,6 +308,8 @@ body.free-touch .pad{display:grid}
     <div class="row"><input type="checkbox" id="gr2pn" checked><label for="gr2pn" style="cursor:pointer">2PN 保守修正</label></div>
     <div class="row"><input type="checkbox" id="gr35"><label for="gr35" style="cursor:pointer">3.5PN 辐射反应</label></div>
     <div class="row"><input type="checkbox" id="tideToggle" checked><label for="tideToggle" style="cursor:pointer">潮汐相互作用</label></div>
+    <div class="row"><input type="checkbox" id="j2Toggle" checked><label for="j2Toggle" style="cursor:pointer" title="v35：旋转扁体（流体平衡扁率 J2 = (2/3)k2·q）的保守四极摄动 —— 轨道节点/近心点进动与自转轴进动+章动（地球 25772 年岁差、18.6 年章动主项）。v35 修复了 v34 及以前 J2 力/力矩/势能符号全部相反的问题（经薄环精确级数 + 椭球直接积分双重数值裁决），现与 Vallado 8-57 / Murray & Dermott 标准方向一致：月球升交点后退、地球岁差 retrograde">J2 扁率摄动</label></div>
+    <div class="row"><input type="checkbox" id="pwToggle"><label for="pwToggle" style="cursor:pointer" title="v35：强场 Paczyński–Wiita 伪牛顿势（1980），成对替换牛顿项：a = ∓Gm/(r−r_g)²，r_g = G(m1+m2)/c²。精确再现 Schwarzschild ISCO（6GM/c²）、边缘束缚圆轨（4GM/c²）与近心点进动 6πGM/(c²a(1-e²))，强场 plunge 更物理。与 1PN 叠加会双重计入同类效应（建议二选一）">强场 PW 伪牛顿势</label></div>
     <div class="kv">
       <span class="k">潮汐耗散功率</span><span id="tideHeat">—</span>
       <span class="k">自转角动量占比</span><span id="tideSpinFrac">—</span>
@@ -574,6 +576,34 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v35 物理修正与强场模式（用户 7 项反馈；详见 deploy/README.md §十 与 worklog）：
+ *      ① J2 四极摄动符号修正（重大）：v34 及以前 J2 力/力矩/势能符号全部相反
+ *         （等效负 J2）。经薄环精确级数（零噪声解析）+ 均匀扁椭球 GL 求积
+ *         （收敛 5e-4）+ 轨道进动方向三重裁决后全部翻转为标准方向
+ *         （Vallado 8-57 / Murray & Dermott）：月球升交点后退、地球岁差 retrograde、
+ *         自转轴章动（18.6y 主项）由瞬时力矩自然涌现。J2 力/力矩/势能/JS/C/
+ *         能量账本五处同步翻转，动量守恒与 r×F=−N 闭合复验。
+ *      ② J2 独立开关（MASK_J2=64）：不再依附潮汐耗散总开关；UI 新增复选框；
+ *         classic/地月预设启用。新增 tests/j2.test.mjs（6 项：节点后退方向+
+ *         量级 0.02%、自转轴 retrograde 进动 0.01%、能量/动量机器级闭合）。
+ *      ③ 强场 PW 伪牛顿势（MASK_PW=128，新增）：Paczyński–Wiita 成对替换牛顿项，
+ *         r_g = 2G(m₁+m₂)/c²（成对 Schwarzschild 半径和）。精确再现 ISCO
+ *         3r_g=6GM/c²、边缘束缚圆轨 2r_g=4GM/c²；UI 新增复选框（与 1PN 叠加提示）。
+ *         新增 tests/pw.test.mjs（6 项：进动 vs Binet 4.08%、ISCO 失稳/稳定、
+ *         动量/能量机器级）。
+ *      ④ Barnes–Hut 四极矩修复重启用（v34b TODO(v34d)）：gq 多乘节点质量 +
+ *         Q·D 符号反 两处修复；B2 能量漂移 7.08e-4 → 5.10e-4。
+ *      ⑤ MT 引力波修复：v34 的 GW 采样只在主线程 physicsAdvance —— MT 模式下
+ *         波形/读数永不更新。新增内核级 computeGWStrainCore（主/worker 同源），
+ *         worker 逐位同构节奏采样随帧回传（W4：末样本位一致）。
+ *      ⑥ 预设切换偶发发散根因修复：a) 在飞帧竞态 —— initState 重写共享状态与
+ *         worker 晚到写入竞态 → 状态纪元（stateEpoch）+ 挂起重放协议；
+ *         b) worker 侧 IAS15 预测器/步长控制器跨 initState 残留 → 'reload'
+ *         消息 + N 变化自动冷启动（W3：reload 后轨迹与新鲜 worker 逐位一致）。
+ *      ⑦ 内存泄漏/损坏修复：a) 引擎 growCap 缺 n<=cap 守卫 → 反复切换预设
+ *         wasm 状态块指数增长（真泄漏，V9 回归覆盖）；b) 编排 worker heapPtr=0
+ *         → MT+IAS15/BH 时 bump 分配从地址 0 踩踏共享内存（潜在损坏，
+ *         新增 setHeapPtr/reserveHeap 隔离）；c) 池 worker onerror 释放挂起帧。
  * v33 显示一致性与预设修复（用户 6 项反馈；数值验证：Node 无头驱动真实积分器
  *      scripts/verify_conservation.js 太阳系 10 万年守恒性 + 解析解对照，见文件尾注）：
  *      ① 预设下拉补上「双中子星并合」（bns）：PRESETS 早已定义（T13/T21 在用），
@@ -2411,9 +2441,20 @@ function resolveBodies(rawArray) {
 
 /* ---------------- 系统状态应用 ---------------- */
 function initState(list) {
+  /* v35：MT 在飞帧与新状态互斥 —— 若 worker 正在积分旧状态，立刻写入新状态会
+   * 与 worker 的晚到写入竞态（实测表现：切换预设后偶发「数值发散」，重置后恢复、
+   * 无法稳定复现）。此处改走 deferred 路径：引擎作弃在飞帧结果并在 worker 停写后
+   * 重放 initStateFull(list)，同时 post 'reload' 复位 worker 侧 IAS 状态机。 */
   iasReady = false; iasN3 = -1; iasLastDt = 0; iasDtSuggest = Infinity;   /* v21：状态跳变 → IAS15 预测器失效 */
   iasDtNext = Infinity; iasRejectCount = 0;   /* v31：自适应步长控制器同步复位 */
   gaugeInvE0 = null;                          /* v31：E(x) 平衡参考值复位 */
+  if (window.__ENGINE__ && __ENGINE__.active && __ENGINE__.mtOn && __ENGINE__.poolReady) {
+    if (__ENGINE__.invalidateFrames()) { __ENGINE__.pendingInit = list; return; }
+  }
+  initStateFull(list);
+}
+/* v35：initState 的实际状态写入部分（可被引擎在在飞帧结束后安全重放） */
+function initStateFull(list) {
   meta = list.map(b => ({
     gh: (typeof b.gh === 'number' && isFinite(b.gh) && b.gh >= 1 && b.gh <= 6) ? b.gh : 0,
     pressure: (typeof b.pressure === 'number' && isFinite(b.pressure) && b.pressure > 0) ? b.pressure : 0,   /* v22：表面气压 bar */
@@ -2948,22 +2989,10 @@ function grUpdateReadout() {
  * 面板上 f_GW 取主导对（max mᵢmⱼ/r³）的 2f_orb；并合倒计时按 Peters 圆轨道
  * 公式从当前瞬时根数估计。h 随 1/D 缩放，面板用标称距离 100 Mpc。 */
 function computeGWStrain() {
-  let Qxx = 0, Qyy = 0, Qxy = 0;
-  for (let i = 0; i < N; i++) {
-    const xi = px[i], yi = py[i], zi = pz[i];
-    const vxi = vx[i], vyi = vy[i], vzi = vz[i];
-    const axi = ax[i], ayi = ay[i], azi = az[i];
-    const v2 = vxi * vxi + vyi * vyi + vzi * vzi;
-    const v2xa = v2 + xi * axi + yi * ayi + zi * azi;
-    const mi = massA[i];
-    Qxx += mi * (2 * xi * axi + 2 * vxi * vxi - v2xa / 3);
-    Qyy += mi * (2 * yi * ayi + 2 * vyi * vyi - v2xa / 3);
-    Qxy += mi * (xi * ayi + yi * axi + 2 * vxi * vyi);
-  }
-  const D = GW_DIST_MPC * 3.0856775814913673e22;   // 标称观测距离（1 pc = 3.0857e16 m，100 Mpc）
-  const c4D = C_SQ * C_SQ * D;
-  const hp = G * (Qxx - Qyy) / c4D;
-  const hx = 2 * G * Qxy / c4D;
+  /* v35：h₊/h× 采样统一走内核 computeGWStrainCore（主线程与 physics-worker
+   * 逐位同式；多线程波形拼接与单线程完全一致）。此处只补读数量。 */
+  const hw = computeGWStrainCore();
+  const hp = hw[0], hx = hw[1];
   /* 主导对：max mᵢmⱼ/r³ → f_GW = 2f_orb = |r×v|/(πr²) */
   let fGW = 0, tMerge = Infinity;
   if (N >= 2) {
@@ -3108,7 +3137,7 @@ const PRESETS = {
         spin_tilt_deg: '6.68', spin_period: '27.3217d', tide_k2: '0.0242' } });   // 月球已潮汐锁定，无耗散项贡献
       return bodies;
     },
-    settings: { dt: '6h', gr1pn: true }
+    settings: { dt: '6h', gr1pn: true, j2: true }
   },
   earthmoon: {
     label: '地月系',
@@ -3123,7 +3152,7 @@ const PRESETS = {
         spin_tilt_deg: '6.68', spin_period: '27.3217d', tide_k2: '0.0242' } });
       return bodies;
     },
-    settings: { dt: '60' }
+    settings: { dt: '60', j2: true }
   },
   bns: {
     label: '双中子星并合',
@@ -3246,7 +3275,7 @@ function collectUI() {
    'bodyTrueAnomaly', 'bodyPosX', 'bodyPosY', 'bodyPosZ', 'bodyVelX', 'bodyVelY', 'bodyVelZ',
    'bodySpinTilt', 'bodySpinPeriod', 'spinAuto', 'tideAuto',
    'bodyTideK2', 'bodyTideLag',
-   'tideToggle', 'tideHeat', 'tideSpinFrac', 'gwWaveToggle', 'gwWaveCanvas', 'gwF', 'gwH', 'gwT',
+   'tideToggle', 'j2Toggle', 'pwToggle', 'tideHeat', 'tideSpinFrac', 'gwWaveToggle', 'gwWaveCanvas', 'gwF', 'gwH', 'gwT',
    'texUploadBtn', 'texClearBtn', 'texFileInput', 'texPreview', 'texInfo',
    'texUploadBtn2', 'texClearBtn2', 'texPreview2', 'texInfo2', 'texOp1', 'texOp2', 'texOp1Val', 'texOp2Val', 'texDark1', 'texDark2',
    'matScanBtn', 'matGrid', 'matBodyBtn', 'matInfo', 'matBig', 'matBigInfo', 'matBigWrap', 'matTargetSel',
@@ -5262,16 +5291,26 @@ function frame() {
   /* ===== v34: 双路径 —— 主线程直跑 / physics-worker 帧级派发（接触即停→并合→续派） ===== */
   if (window.__ENGINE__ && __ENGINE__.active && __ENGINE__.mtOn && __ENGINE__.poolReady) {
     const targetTime = baseDt * steps;
+    const gwEveryMT = gwWaveOn ? Math.max(1, Math.floor(steps / 48)) : 0;   /* v35：与 physicsAdvance 同式 */
     let advancedTotal = 0;
     const dispatchOnce = () => {
       __ENGINE__.advanceAsync(baseDt, steps, targetTime - advancedTotal, {
         adaptive: ui.adaptiveTimeStep.checked, mergeOn: !!ui.collisionMerge.checked,
         contactR2: __computeContactR2(),
-        budgetMs: Math.max(30, FRAME_WALL_BUDGET_MS - (performance.now() - now))
+        budgetMs: Math.max(30, FRAME_WALL_BUDGET_MS - (performance.now() - now)),
+        gwEvery: gwEveryMT
       }, (res) => {
         if (!res) { __finishFrame(physicsAdvance(baseDt, steps)); return; }   // 池不可用兜底
         advancedTotal += res.advanced;
         simTime += res.advanced;
+        /* v35：worker 侧子步引力波采样拼接（修复 MT 开启后波形/观测失效）。
+         * 采样值与主线程 computeGWStrainCore 完全同式（同一共享状态）；
+         * 读数量（f_GW/并合倒计时）依赖 meta/massRadius → 由最终态计算一次。 */
+        if (gwEveryMT && res.gw && res.gw.length) {
+          for (let g = 0; g < res.gw.length; g += 2) gwSamples.push(res.gw[g], res.gw[g + 1]);
+          if (gwSamples.length > GW_MAX_SAMPLES * 2) gwSamples.splice(0, gwSamples.length - GW_MAX_SAMPLES * 2);
+          gwLast = computeGWStrain();
+        }
         if (res.mergeHit && ui.collisionMerge.checked) {
           const mc = mergeCollisions(0, res.advanced);
           if (mc > 0) { markCustom(); showToast('发生 ' + mc + ' 次碰撞合并', 'info'); }
@@ -5505,6 +5544,9 @@ function applyPreset(name) {
   if (gr35On && !gr25On) { gr35On = false; ui.gr35.checked = false; }    /* 3.5PN 需 2.5PN */
   grSamples = [];
   if (s.tide !== undefined) { tideOn = !!s.tide; ui.tideToggle.checked = tideOn; }
+  /* v35：J2/PW 预设显式复位（语义同 tide：未声明则保留当前值） */
+  if (s.j2 !== undefined) { j2On = !!s.j2; if (ui.j2Toggle) ui.j2Toggle.checked = j2On; }
+  if (s.pw !== undefined) { pwOn = !!s.pw; if (ui.pwToggle) ui.pwToggle.checked = pwOn; }
   if (s.collision !== undefined) ui.collisionMerge.checked = !!s.collision;
   if (s.adaptive !== undefined) ui.adaptiveTimeStep.checked = s.adaptive;
   if (s.integrator) setIntegrator(s.integrator);
@@ -6198,7 +6240,7 @@ function savePrefs() {
       /* v31：speed 灰锁时落盘解锁值（speedBeforeLock），恢复时不丢失用户步数 */
       speed: ui.speed.disabled ? speedBeforeLock : ui.speed.value, dt: ui.dt.value, adaptive: ui.adaptiveTimeStep.checked,
       integrator,
-      gr1pn: gr1pnOn, gr15spin: gr15spinOn, gr25: gr25On, gr2pn: gr2pnOn, gr35: gr35On, tide: tideOn, gwwave: gwWaveOn,
+      gr1pn: gr1pnOn, gr15spin: gr15spinOn, gr25: gr25On, gr2pn: gr2pnOn, gr35: gr35On, tide: tideOn, j2: j2On, pw: pwOn, gwwave: gwWaveOn,
       collision: ui.collisionMerge.checked,
       trailMode, trailDays: ui.trailDuration.value, trailRef: ui.trailRefMode.value,
       skybox: ui.skyboxEnabled.checked, res: ui.resSelect.value,
@@ -6232,6 +6274,9 @@ function loadPrefs() {
     gr2pnOn = !!p.gr2pn; if (ui.gr2pn) ui.gr2pn.checked = gr2pnOn;
     gr35On = !!p.gr35; if (ui.gr35) ui.gr35.checked = gr35On;
     if (p.tide !== undefined) { tideOn = !!p.tide; ui.tideToggle.checked = tideOn; }
+    /* v35：J2/PW 偏好恢复（v35mig 一次性迁移：旧存档未落盘 → J2 开 / PW 关） */
+    j2On = p.j2 !== undefined ? !!p.j2 : true; if (ui.j2Toggle) ui.j2Toggle.checked = j2On;
+    pwOn = !!p.pw; if (ui.pwToggle) ui.pwToggle.checked = pwOn;
     gwWaveOn = !!p.gwwave; ui.gwWaveToggle.checked = gwWaveOn;
     /* v22：默认开（用户要求）；v22First 一次性迁移覆盖旧落盘值 */
     ui.collisionMerge.checked = v22First ? true : (p.collision !== undefined ? !!p.collision : true);
@@ -7941,6 +7986,21 @@ function wireEvents() {
     showToast('潮汐相互作用（动力学） ' + (tideOn ? '开' : '关'), 'info');
     if (tideOn) { computeAccel(); refreshBodyTideCache(); }
     updateConservationUI(true);
+    savePrefs(); draw();
+  });
+  /* v35：J2 扁率摄动独立开关（保守进动/章动；与潮汐耗散解耦） */
+  if (ui.j2Toggle) ui.j2Toggle.addEventListener('change', () => {
+    j2On = ui.j2Toggle.checked;
+    showToast('J2 扁率摄动（进动+章动） ' + (j2On ? '开' : '关'), 'info');
+    computeAccel(); updateConservationUI(true);
+    savePrefs(); draw();
+  });
+  /* v35：强场 PW 伪牛顿势开关（成对替换牛顿项；与 1PN 叠加提示） */
+  if (ui.pwToggle) ui.pwToggle.addEventListener('change', () => {
+    pwOn = ui.pwToggle.checked;
+    if (pwOn && gr1pnOn) showToast('PW 伪牛顿势与 1PN 已同时开启：二者近心进动同式，叠加会双重计入同类效应', 'info', 6000);
+    showToast('强场 PW 伪牛顿势 ' + (pwOn ? '开' : '关') + (pwOn ? '（牛顿项已替换为 a=Gm/(r-r_g)²）' : ''), 'info');
+    computeAccel(); updateConservationUI(true);
     savePrefs(); draw();
   });
   ui.gwWaveToggle.addEventListener('change', () => {
