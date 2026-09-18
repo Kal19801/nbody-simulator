@@ -308,7 +308,7 @@ body.free-touch .pad{display:grid}
     <div class="row"><input type="checkbox" id="gr2pn" checked><label for="gr2pn" style="cursor:pointer">2PN 保守修正</label></div>
     <div class="row"><input type="checkbox" id="gr35"><label for="gr35" style="cursor:pointer">3.5PN 辐射反应</label></div>
     <div class="row"><input type="checkbox" id="tideToggle" checked><label for="tideToggle" style="cursor:pointer">潮汐相互作用</label></div>
-    <div class="row"><input type="checkbox" id="j2Toggle" checked><label for="j2Toggle" style="cursor:pointer" title="v35：旋转扁体（流体平衡扁率 J2 = (2/3)k2·q）的保守四极摄动 —— 轨道节点/近心点进动与自转轴进动+章动（地球 25772 年岁差、18.6 年章动主项）。v35 修复了 v34 及以前 J2 力/力矩/势能符号全部相反的问题（经薄环精确级数 + 椭球直接积分双重数值裁决），现与 Vallado 8-57 / Murray & Dermott 标准方向一致：月球升交点后退、地球岁差 retrograde">J2 扁率摄动</label></div>
+    <div class="row"><input type="checkbox" id="j2Toggle" checked><label for="j2Toggle" style="cursor:pointer" title="v35：旋转扁体（流体平衡扁率 J2 = (2/3)k2·q）的保守四极摄动 —— 轨道节点/近心点进动与自转轴进动+章动（地球 25772 年岁差、18.6 年章动主项）。v35 修复了 v34 及以前 J2 力/力矩/势能符号全部相反的问题（经薄环精确级数 + 椭球直接积分双重数值裁决），现与 Vallado 8-57 / Murray & Dermott 标准方向一致：月球升交点后退、地球岁差 retrograde">J2 扁率摄动（进动+章动）</label></div>
     <div class="row"><input type="checkbox" id="pwToggle"><label for="pwToggle" style="cursor:pointer" title="v35：强场 Paczyński–Wiita 伪牛顿势（1980），成对替换牛顿项：a = ∓Gm/(r−r_g)²，r_g = G(m1+m2)/c²。精确再现 Schwarzschild ISCO（6GM/c²）、边缘束缚圆轨（4GM/c²）与近心点进动 6πGM/(c²a(1-e²))，强场 plunge 更物理。与 1PN 叠加会双重计入同类效应（建议二选一）">强场 PW 伪牛顿势</label></div>
     <div class="kv">
       <span class="k">潮汐耗散功率</span><span id="tideHeat">—</span>
@@ -576,6 +576,42 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v36 渲染/网络/状态卫生修复（用户 8 项反馈；物理内核零改动 → 全部轨迹逐位不变，详见 deploy/README.md §十一 与 worklog）：
+ *      ① MT 播放中 UI 事件绘制撕裂修复：多线程在飞帧期间 worker 正 drift/kick 写共享
+ *         内存，mousemove/滚轮等事件直呼 draw() 会读到半新半旧天体位置 —— 即用户报告
+ *         「播放中转动视角星球闪烁/短暂错位又回正」。draw() 增加在飞帧守卫（推迟到本帧
+ *         完成回调统一绘制，≤下一帧），暂停/单线程路径不受影响。
+ *      ② 帧率自适应物理预算：旧版自适应路径恒 220ms 墙钟预算、固定步长路径完全无预算
+ *         —— 快进（大 dt × 多步）时一帧阻塞数百 ms（4-10fps），而拖拽视角的事件插帧
+ *         形成「转动反而流畅」的错觉。现：固定步长路径接入同款预算（每 8 步检查，超限
+ *         帧内停 —— 语义与自适应路径一致：宁可减速不弃精度）；预算按实测整帧耗时
+ *         乘性自适应（目标 ~22ms/帧，夹 [8,220]ms），主/worker 同源。步序列确定 →
+ *         轨迹逐位不变，仅改变每帧跑多少步（墙钟 pacing）。
+ *      ③ 轨迹预测式真实弧线：histRecord 补存速度快照（histVel），轨迹细分新增「开普勒
+ *         预测弧」—— 对每段用通用变量传播 + 密切根数（均匀偏近点角）解析采样两点间
+ *         真实动力学弧线（绕主星二体近似，多圈自动展开），端点自校验（预测终点 vs 实际
+ *         下一采样，失配即回退原弦线/条样）保证强场/多体扰动场景不画错。逐段缓存
+ *         （播放中每帧只算最新段；暂停转动零重算）。大步长下轨迹由多边形变为真实
+ *         平滑轨道弧。
+ *      ④ 编辑面板状态污染修复（用户报告「编辑过一个后暂停切换预设仍残留污染轨道自转」）：
+ *         a) setSystem 关闭打开中的编辑模态（editingIndex 跨预设残留 → 保存会写入新
+ *            系统同索引天体 = 全字段污染）；b) openBodyForm 轨道回填改用
+ *            currentOsculatingSixElements 全六根数（旧代码 L5892-5893 无条件用创建时刻
+ *            的 orig 覆盖 LAN/ν，使 v20「当前真近点角同步」失效 —— 开普勒天体每次编辑
+ *            保存后轨道相位跳回创建时刻）；c) initStateFull 清零 gwSamples/gwLast（GW
+ *            波形跨预设混叠）；d) 轨迹预测缓存代数随 initState/histClear 失效；
+ *            e) window.__linkParent 悬挂清理。同族排查：bodyTex（reloadAll 整体重建）、
+ *            initialSnapshot（深拷贝）、helperCache（键覆盖 eye）、IAS 状态机（reload）
+ *            均已正确失效，无需改动。
+ *      ⑤ 贴图扫描重构（快速聚焦）：目录列表/manifest 请求加 8s AbortController 超时；
+ *         无列表服务器的 fallback 探测从「全别名 × 34 后缀 × 2 分隔 × 3-6 扩展 ≈ 6000+
+ *         请求」改为场景聚焦两波 —— 第一波只探当前场景天体名 + 其相关别名纯名（×6 图片
+ *         扩展），第二波命中驱动（仅对第一波命中的名字探 12 个常用后缀 × 2 分隔 × 3 快速
+ *         扩展）。首轮请求数 ~200-800（典型 < 300），负缓存后续 ~0；只看图片后缀语义
+ *         保持（发现链 push 过滤 + 探测 URL 恒为图片扩展）。
+ *      ⑥ 待机循环相机全帧率：idleLoop 原恒 33ms 门控重绘，相机平滑运动（飞行键/惯性）
+ *         在高刷屏上抖动；现相机运动激活时逐 rAF 重绘，静止时保持 33ms 省电语义。
+ *      ⑤/⑥ 与 ④ 的完整回归见 tests/browser.test.mjs V10-V14 与 tests/trail.test.mjs。
  * v35 物理修正与强场模式（用户 7 项反馈；详见 deploy/README.md §十 与 worklog）：
  *      ① J2 四极摄动符号修正（重大）：v34 及以前 J2 力/力矩/势能符号全部相反
  *         （等效负 J2）。经薄环精确级数（零噪声解析）+ 均匀扁椭球 GL 求积
@@ -1776,10 +1812,16 @@ async function matScan() {
     if (found.some(f => f.url === url)) return;
     if (/\.(jpe?g|png|webp|avif|gif)$/i.test(name)) found.push({ name, url });
   };
+  /* v36：带超时的 fetch（8s）—— 旧版无超时，服务器无响应时扫描永久挂起。
+   * 仅用于目录列表/manifest 探测（响应小、可中断）；图片探测仍走 <img> 加载。 */
+  const fetchTO = (url, ms) => {
+    try { return fetch(url, { signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined }); }
+    catch (e) { return fetch(url); }
+  };
   /* 1) 目录列表 */
   let listed = false;
   try {
-    const r = await fetch(MAT_DIR);
+    const r = await fetchTO(MAT_DIR, 8000);
     if (r.ok) {
       const ct = (r.headers.get('content-type') || '');
       const txt = await r.text();
@@ -1810,7 +1852,7 @@ async function matScan() {
   /* 2) manifest.json */
   if (!listed) {
     try {
-      const r = await fetch(MAT_DIR + 'manifest.json');
+      const r = await fetchTO(MAT_DIR + 'manifest.json', 8000);
       if (r.ok) {
         const j = await r.json();
         if (Array.isArray(j)) {
@@ -1823,17 +1865,19 @@ async function matScan() {
       }
     } catch (e) { /* 无 manifest */ }
   }
-  /* 3) 常规名称探测（v19b 重设计：并发探测 + 宽后缀表 + 实际天体名）——
-   *    file:// 无目录列表时的唯一发现途径。旧版逐名串行试扩展名且后缀表只有
-   *    cloud/night 等五个词，venus_atmosphere.jpg 这类第二层贴图扫不到、还慢。
-   * v19d：① 四波探测 —— 当前天体纯名 / 别名纯名（全 6 扩展）先行，主贴图秒级
-   *    出现并即时自动应用；后缀名随后（限 jpg/jpeg/png —— 罕见格式的后缀贴图
-   *    让位于 2 倍提速，纯名仍全扩展覆盖，总请求数约减半）。② 发现即渐进渲染
-   *    （节流 150ms），缩略图先模糊占位、解码后渐显（blur-up）。③ 探测用 <img>
-   *    加载不解码像素（浏览器按需解码）；命中需下载全图字节属不可避免成本，
-   *    由清单缓存（下次秒开）与渐进呈现摊平体感。
-   *    注：浏览器对同 host 仅 6 条 http/1.1 连接，请求数是硬成本；并发池 48 在
-   *    file:// 下有效，http 下超出连接数的并发自动排队，无害 */
+  /* 3) 常规名称探测（v36 场景聚焦重构）—— file:// 无目录列表时的唯一发现途径。
+   *    v19b~v20 旧方案的问题：探测矩阵 = 全部 11 键 26 别名 × 34 后缀词 × 2 分隔符
+   *    × 3-6 扩展 ≈ 6000+ 请求（其中绝大多数是必然 404 的猜测），首次扫描慢、
+   *    服务器日志被垃圾请求淹没。v36 原则：「快速、专注只扫本文件夹内容、只看
+   *    图片后缀」——
+   *    ① 第一波（场景聚焦纯名）：仅探测【当前场景天体名 + 其相关别名的纯名】
+   *       （× 全部 6 图片扩展）—— 自动应用本来就只对场景内天体生效，场景外的
+   *       别名探测是纯浪费；典型 ≤ (N+别名数)×6 ≈ 200 请求。
+   *    ② 第二波（命中驱动后缀）：仅对第一波【命中】的 stem 探测「stem + 分隔符
+   *       + 常用后缀」（12 后缀 × 2 分隔符 × 3 快速扩展）—— 有 earth.jpg 才可能
+   *       有 earth_clouds.jpg；无命中则零请求。上限 12 stem，典型 ≤ 300 请求。
+   *    合计：首轮 ~200-800 请求（旧 ~6000+），负缓存后续 ~0；发现即渐进渲染
+   *    （节流 150ms blur-up）与自动应用节奏保持 v19d 语义。 */
   let scanPrevItems = null;   /* v27 修复：旧版在第二 if(!listed) 块引用第一块内 const
    * prevItems —— 块作用域不可见，零发现时 ReferenceError（无 textures 目录
    * 的首次运行/无缓存清单环境必崩，材质面板与后续级联中断）。提升到函数域 */
@@ -1856,69 +1900,76 @@ async function matScan() {
       matItems.push({ name, url, w: 0, h: 0 });
       liveFlush(false);
     };
-    /* 常见第二层后缀词表（中英）：任意后缀规则下的发现面尽量宽 */
-    const SUFFIX_PROBES = ['cloud', 'clouds', 'cloudmap', 'cloudsmap', 'atmosphere', 'atmo',
-      'surface', 'albedo', 'color', 'colour', 'topo', 'topography', 'terrain', 'night', 'nightside',
-      'lights', 'ocean', 'land', 'sea', 'ice', 'map', 'texture', 'tex', 'diffuse', 'bump', 'normal',
-      'spec', 'specular', 'hd', 'hq', '4k', '8k', '2k',
-      '云', '云层', '云图', '大气', '夜光', '海洋', '陆地', '地形', '表面', '高清'];
-    /* 四波名单（共享 seen 去重，语义与 v19b 一致：toLowerCase 池、别名表先注册——
-     * 大小写敏感文件系统上「Earth 抢注 earth」会让 earth.jpg 永不被请求，故
-     * 注册顺序必须是别名表在前、天体名在后；仅执行顺序按天体相关性调度） */
+    /* v36：常用第二层后缀词表（收紧到 12 个高频词；全量 34 词的发现面增益
+     * 远小于其请求代价，罕见后缀建议用 manifest.json 显式列出） */
+    const SUFFIX_PROBES = ['cloud', 'clouds', 'atmosphere', 'surface', 'night', 'map',
+      'texture', 'hd', '4k', '8k', '云', '云层', '大气', '夜光'].slice(0, 12);
+    const EXT_FAST = MAT_EXT.slice(0, 3);   /* jpg/jpeg/png */
     const seen = new Set();
     const mkProbe = nm => {
       const k = String(nm).toLowerCase();
       if (!k || seen.has(k)) return false;
       seen.add(k); return true;
     };
-    const bodyBase = [], aliasBase = [], bodySuf = [], aliasSuf = [];
-    for (const key of Object.keys(MAT_ALIAS)) {
-      for (const a of MAT_ALIAS[key]) {
-        if (mkProbe(a)) aliasBase.push(a);
-        for (const suf of SUFFIX_PROBES) {
-          if (mkProbe(a + '_' + suf)) aliasSuf.push(a + '_' + suf);
-          if (mkProbe(a + '-' + suf)) aliasSuf.push(a + '-' + suf);
-        }
-      }
+    /* 第一波名单：当前场景天体名 + 场景内天体命中别名键的全部别名（纯名）。
+     * 注册顺序：别名在前、天体名在后（大小写敏感文件系统上「Earth 抢注 earth」
+     * 会让 earth.jpg 永不被请求，与 v19b 语义一致）。 */
+    const probeBase = [];
+    const keyHit = new Set();
+    for (let i = 0; i < N; i++) {
+      const stem = matStem(meta[i].name);
+      const key = stem ? matMatchKey(stem) : null;
+      if (key) keyHit.add(key);
     }
-    /* 用户当前天体名（含自建天体）：别名表之外的变体（Trappist1e 等）进天体波优先探测 */
+    for (const key of keyHit) for (const a of MAT_ALIAS[key]) if (mkProbe(a)) probeBase.push(a);
     for (let i = 0; i < N; i++) {
       const nm = String(meta[i].name || '').trim();
-      if (!nm) continue;
-      if (mkProbe(nm)) bodyBase.push(nm);
-      for (const suf of SUFFIX_PROBES) {
-        if (mkProbe(nm + '_' + suf)) bodySuf.push(nm + '_' + suf);
-        if (mkProbe(nm + '-' + suf)) bodySuf.push(nm + '-' + suf);
-      }
+      if (nm && mkProbe(nm)) probeBase.push(nm);
     }
-    const EXT_FAST = MAT_EXT.slice(0, 3);   /* jpg/jpeg/png */
-    /* v20 重构：四波顺序 await → 单一优先级池（body 纯名 → 别名纯名 →
-     * body 后缀 → 别名后缀）。旧实现每波全部完成才开下一波，
-     * planet_任意.jpg 等后缀贴图需等全部纯名探测完才被请求（用户报告偏慢）；
-     * 合并后总耗时 ≈ 最长流而非各波之和。并发降至 12（GitHub 限速友好，
-     * 浏览器 HTTP/1.1 同 host 6 连接下有效并发不变）。负缓存命中的 URL 零请求。 */
-    const probeList = [];
-    for (const nm of bodyBase) probeList.push({ nm, exts: MAT_EXT });
-    for (const nm of aliasBase) probeList.push({ nm, exts: MAT_EXT });
-    for (const nm of bodySuf) probeList.push({ nm, exts: EXT_FAST });
-    for (const nm of aliasSuf) probeList.push({ nm, exts: EXT_FAST });
     let autoApplyTimer = 0;
     const debouncedAutoApply = () => {
       if (autoApplyTimer) return;
       autoApplyTimer = setTimeout(() => { autoApplyTimer = 0; if (matItems.length) matAutoApply(); }, 800);
     };
-    let probeDone = 0;
-    await matRunPool(probeList, async it => {
-      const hits = await Promise.all(it.exts.map(ext =>
-        matProbeCached(MAT_DIR + encodeURIComponent(it.nm) + '.' + ext).then(ok => ok ? ext : null)));
-      const ext = hits.find(Boolean);
+    /* 探测一个 stem 的全部扩展，返回命中扩展（零请求当负缓存全命中） */
+    let probeDone = 0, probeTotal = 0;
+    const probeStem = async (nm, exts) => {
+      const hits = await Promise.all(exts.map(ext =>
+        matProbeCached(MAT_DIR + encodeURIComponent(nm) + '.' + ext).then(ok => ok ? ext : null)));
       probeDone++;
-      if (probeDone % 24 === 0) matSetInfo('扫描中… ' + probeDone + '/' + probeList.length + ' · 已发现 ' + matItems.length + ' 张');
+      if (probeDone % 24 === 0) matSetInfo('扫描中… ' + probeDone + '/' + probeTotal + ' · 已发现 ' + matItems.length + ' 张');
+      const ext = hits.find(Boolean);
       if (ext) {
-        livePush(it.nm + '.' + ext, MAT_DIR + encodeURIComponent(it.nm) + '.' + ext);
+        livePush(nm + '.' + ext, MAT_DIR + encodeURIComponent(nm) + '.' + ext);
         debouncedAutoApply();   /* 发现即渐进自动应用（幂等） */
       }
-    }, 12);
+      return ext;
+    };
+    /* 第一波：场景纯名 × 6 扩展（并发池 12，负缓存命中零请求） */
+    probeTotal = probeBase.length;
+    await matRunPool(probeBase, nm => probeStem(nm, MAT_EXT), 12);
+    /* 第二波：命中驱动后缀探测（≤12 个命中 stem × 12 后缀 × 2 分隔 × 3 快速扩展） */
+    const sufStems = [];
+    for (const it of matItems) {
+      const stem = matStem(it.name);
+      if (stem && !sufStems.includes(stem)) sufStems.push(stem);
+      if (sufStems.length >= 12) break;
+    }
+    const probeSuf = [];
+    const seenSuf = new Set();
+    for (const stem of sufStems) {
+      for (const suf of SUFFIX_PROBES) {
+        for (const sep of ['_', '-']) {
+          const nm = stem + sep + suf;
+          const k = nm.toLowerCase();
+          if (seenSuf.has(k)) continue;
+          seenSuf.add(k);
+          if (mkProbe(nm)) probeSuf.push(nm);
+        }
+      }
+    }
+    probeTotal = probeDone + probeSuf.length;
+    if (probeSuf.length) await matRunPool(probeSuf, nm => probeStem(nm, EXT_FAST), 12);
     if (autoApplyTimer) { clearTimeout(autoApplyTimer); autoApplyTimer = 0; }
     liveFlush(true);
     matMissSave();   /* 负缓存持久化（下次启动重复探测请求数大幅下降） */
@@ -2511,6 +2562,9 @@ function initStateFull(list) {
   refreshBodyTideCache();
   zeroKahan();
   simTime = 0; histClear(); grSamples = [];
+  /* v36：GW 波形/读数随系统切换清零 —— 旧版跨预设残留上一系统的波形样本，
+   * 波形面板与新系统 h+/h× 混叠（状态污染审计发现，同 grSamples 语义） */
+  gwSamples = []; gwLast = null;
   computeAccel();
   refreshStarPhysics();      // 恒星亮度 L=4πR²σT⁴ 一次计算并缓存
   bodyTexReloadAll();        // 星球全景贴图异步加载（含平均色推导）
@@ -2533,6 +2587,14 @@ function uiAfterState() {
   populateSelects(); saveLocalStorage(); updateConservationUI(true); grUpdateReadout(); draw();
 }
 function setSystem(rawList) {
+  /* v36：系统替换时的编辑器状态隔离 —— 编辑模态若跨预设打开，editingIndex 会
+   * 指向新系统的同索引天体；此时点保存会把旧表单值（质量/轨道/自转/贴图）
+   * 写入新系统天体 = 全字段污染（用户报告「编辑过一个后切换预设仍残留污染」
+   * 根因之一）。系统替换一律关闭表单（ saveBodyForm 自身在 setSystem 前
+   * 已写入，调用顺序安全：list[editingIndex] 赋值在 setSystem 之前）。
+   * 同类悬挂：__linkParent（联动母星速度写回标记）一并清零。 */
+  if (ui.bodyFormModal && ui.bodyFormModal.classList.contains('show')) closeBodyForm();
+  window.__linkParent = null;
   const res = resolveBodies(rawList);
   for (const w of res.warnings) showToast(w, 'info', 4000);
   initState(res.bodies);
@@ -2730,10 +2792,18 @@ function strongFieldBalanceEnergy() {
 /* ===== v34: 物理核区块 HTML L4364-L4383 已原样外置至 physics_core.js（见 scripts/extract_core.py） ===== */
 
 /* ---------------- 轨迹环形缓冲 ---------------- */
+/* v36：histRecord 增存速度快照 histVel（与位置同环形槽位、同 Float32 精度）——
+ * 轨迹预测式细分（见 trailArcPoints）需要段起点的 (r₀,v₀) 做开普勒传播。
+ * Float32 速度误差 ~6e-8 相对 → 一周步长位置误差 ~km 量级（AU 尺度 1e-8 相对），
+ * 渲染精度充分；不改变任何物理语义（快照仅渲染读取）。 */
 function histRecord() {
   const snap = new Float32Array(N * 3);
-  for (let i = 0; i < N; i++) { snap[i * 3] = px[i]; snap[i * 3 + 1] = py[i]; snap[i * 3 + 2] = pz[i]; }
-  histT[histHead] = simTime; histPos[histHead] = snap;
+  const vsnap = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    snap[i * 3] = px[i]; snap[i * 3 + 1] = py[i]; snap[i * 3 + 2] = pz[i];
+    vsnap[i * 3] = vx[i]; vsnap[i * 3 + 1] = vy[i]; vsnap[i * 3 + 2] = vz[i];
+  }
+  histT[histHead] = simTime; histPos[histHead] = snap; histVel[histHead] = vsnap;
   histHead = (histHead + 1) % HIST_MAX;
   if (histCount < HIST_MAX) histCount++;
 }
@@ -2745,7 +2815,8 @@ function histTrim(durSec) {
     else break;
   }
 }
-function histClear() { histHead = 0; histCount = 0; }
+/* v36：histClear 同步失效轨迹预测弧缓存（环形槽位复用前旧弧必须作废） */
+function histClear() { histHead = 0; histCount = 0; trailArcGen++; trailArcCache.clear(); }
 
 /* ---------------- 轨道根数 / 进动测量 ---------------- */
 function findPrimaryIdx(idx) {
@@ -4528,6 +4599,206 @@ function crPoint(P0, P1, P2, P3, t, out) {
       (-P0[c] + 3 * P1[c] - 3 * P2[c] + P3[c]) * t3);
   }
 }
+/* ================= v36 轨迹预测式细分（真实动力学弧线） =================
+ * 问题：histRecord 每帧 1 采样，大步长（快进）时相邻采样间隔可达轨道的大半周 ——
+ * 折线连接 + Catmull-Rom（过样点的条样，预算耗尽后整段退化为弦）→ 用户看到的
+ * 「轨迹变多边形」。条样只能圆角，不能还原两点之间的真实路径。
+ * 方案：利用 v36 新增的速度快照 histVel，对每段用【密切二体开普勒弧】预测两点间
+ * 的真实运动学路径：
+ *   ① 由段起点相对（主星）状态 (r₀,v₀) 构建密切轨道（p/e/近日点基）；
+ *   ② 椭圆用开普勒方程时间→偏近点角求终点（多圈自动展开），双曲/抛物用通用变量
+ *      传播求终点；全部情形用解析 r(ν) = p/(1+e·cosν) 沿均匀真近点角采样（弧密度
+ *      与视点缩放无关、近地点不欠采样）；
+ *   ③ 端点自校验：预测终点 vs 实际下一采样，失配（多体摄动/2.5PN 螺旋/强场场景）
+ *      返回 null → 回退原弦线/条样 —— 保证「预测错时不画错」；
+ *   ④ 逐段缓存（buildTrails 每帧只新增最新段；暂停/转动零重算）。
+ * 本模块为纯数学（无 DOM 依赖），tests/trail.test.mjs 按标记提取后与数值积分对照。 */
+/* === v36 TRAIL-PREDICT BEGIN === */
+/* Stumpff 函数 C(z)、S(z)（z=0 极限解析） */
+function stumpffC(z) {
+  if (z > 1e-8) { const s = Math.sqrt(z); return (1 - Math.cos(s)) / z; }
+  if (z < -1e-8) { const s = Math.sqrt(-z); return (Math.cosh(s) - 1) / (-z); }
+  return 0.5 - z / 24 + z * z / 720;
+}
+function stumpffS(z) {
+  if (z > 1e-8) { const s = Math.sqrt(z); return (s - Math.sin(s)) / (s * s * s); }
+  if (z < -1e-8) { const s = Math.sqrt(-z); return (Math.sinh(s) - s) / (s * s * s); }
+  return 1 / 6 - z / 120 + z * z / 5040;
+}
+/* 通用变量开普勒传播（Curtis Algorithm 3.4）：由 (r₀,v₀) 传播 dt 秒。
+ * 返回 [x,y,z]（新数组）或 null（未收敛/退化）。牛顿迭代 + 步长阻尼，50 次上限。 */
+function keplerPropagateU(r0x, r0y, r0z, v0x, v0y, v0z, dt, mu) {
+  if (!isFinite(dt) || dt === 0) return [r0x, r0y, r0z];
+  const r0 = Math.sqrt(r0x * r0x + r0y * r0y + r0z * r0z);
+  if (!(r0 > 0) || !(mu > 0)) return null;
+  const v2 = v0x * v0x + v0y * v0y + v0z * v0z;
+  const vr0 = (r0x * v0x + r0y * v0y + r0z * v0z) / r0;
+  const alpha = 2 / r0 - v2 / mu;                    // 1/a（椭圆 >0，双曲 <0）
+  const sqmu = Math.sqrt(mu);
+  let chi;
+  if (alpha > 1e-12) chi = sqmu * alpha * dt;        // 椭圆初值（多圈自然放大）
+  else if (alpha < -1e-12) chi = Math.sign(dt) * Math.sqrt(-1 / alpha) *
+    Math.log(1 + 2 * sqmu * Math.sqrt(-alpha) * Math.abs(dt) / r0);
+  else chi = sqmu * dt / (2 * r0);                   // 抛物初值
+  if (!isFinite(chi)) chi = sqmu * dt / r0;
+  let A = r0 * vr0 / sqmu;
+  for (let it = 0; it < 50; it++) {
+    const z = alpha * chi * chi;
+    const C = stumpffC(z), S = stumpffS(z);
+    const F = A * chi * chi * C + (1 - alpha * r0) * chi * chi * chi * S + r0 * chi - sqmu * dt;
+    const dF = A * chi * (1 - z * S) + (1 - alpha * r0) * chi * chi * C + r0;
+    if (!isFinite(F) || !isFinite(dF) || Math.abs(dF) < 1e-300) return null;
+    const d = F / dF;
+    chi -= Math.max(-Math.abs(chi) * 0.5 - 1e-6, Math.min(Math.abs(chi) * 0.5 + 1e-6, d));  // 阻尼防发散
+    if (Math.abs(d) < 1e-10 * (1 + Math.abs(chi))) {
+      const z2 = alpha * chi * chi;
+      const f = 1 - chi * chi * stumpffC(z2) / r0;
+      const g = dt - chi * chi * chi * stumpffS(z2) / sqmu;
+      const rx = f * r0x + g * v0x, ry = f * r0y + g * v0y, rz = f * r0z + g * v0z;
+      const rm = Math.sqrt(rx * rx + ry * ry + rz * rz);
+      if (!isFinite(rm) || !(rm > 0)) return null;
+      return [rx, ry, rz];
+    }
+  }
+  return null;
+}
+/* 开普勒方程 M = E − e·sinE 求解（椭圆，弧度；M 可超 2π = 多圈） */
+function keplerSolveE(M, e) {
+  let E = e < 0.8 ? M : Math.PI * Math.sign(M || 1);
+  for (let it = 0; it < 30; it++) {
+    const f = E - e * Math.sin(E) - M;
+    const d = f / (1 - e * Math.cos(E));
+    E -= Math.max(-1, Math.min(1, d));               // 阻尼
+    if (Math.abs(d) < 1e-12 * (1 + Math.abs(E))) return E;
+  }
+  return isFinite(E) ? E : null;
+}
+/* 由相对状态 (r₀,v₀) 构建密切轨道采样器。
+ * 返回 { p, e, Px,Py,Pz, Qx,Qy,Qz, nu0, a, M0, n } 或 null：
+ *   p = 半通径, e = 偏心率, P̂/Q̂ = 近点方向/横向单位矢（ĥ = r̂×v̂ 方向）,
+ *   nu0 = 起点 true anomaly, a/M0/n 仅椭圆（时间→M 用）。
+ * 真近点角参数化位置：r(ν) = p/(1+e·cosν) · (cosν·P̂ + sinν·Q̂)，对椭圆/抛物/双曲统一成立。 */
+function trailConicFromRV(r0x, r0y, r0z, v0x, v0y, v0z, mu) {
+  const r0 = Math.sqrt(r0x * r0x + r0y * r0y + r0z * r0z);
+  const v2 = v0x * v0x + v0y * v0y + v0z * v0z;
+  if (!(r0 > 0) || !(mu > 0) || !(v2 > 0)) return null;
+  const hx = r0y * v0z - r0z * v0y, hy = r0z * v0x - r0x * v0z, hz = r0x * v0y - r0y * v0x;
+  const h2 = hx * hx + hy * hy + hz * hz;
+  const hm = Math.sqrt(h2);
+  if (!(hm > 1e-12 * r0 * Math.sqrt(v2))) return null;           // 径向轨道（无确定轨道面）→ 放弃
+  const eps = v2 / 2 - mu / r0;
+  const ex = (v0y * hz - v0z * hy) / mu - r0x / r0;
+  const ey = (v0z * hx - v0x * hz) / mu - r0y / r0;
+  const ez = (v0x * hy - v0y * hx) / mu - r0z / r0;
+  let e = Math.sqrt(ex * ex + ey * ey + ez * ez);
+  let Px, Py, Pz;
+  if (e > 1e-9) { Px = ex / e; Py = ey / e; Pz = ez / e; }
+  else { Px = r0x / r0; Py = r0y / r0; Pz = r0z / r0; e = 0; }   // 圆轨道：近点方向取 r̂
+  const Qx = hy * Pz - hz * Py, Qy = hz * Px - hx * Pz, Qz = hx * Py - hy * Px;   // ĥ×P̂（右手）
+  const Qm = Math.sqrt(Qx * Qx + Qy * Qy + Qz * Qz);
+  if (!(Qm > 1e-300)) return null;
+  const p = h2 / mu;
+  if (!(p > 0)) return null;
+  const nu0 = Math.atan2((r0x * Qx + r0y * Qy + r0z * Qz) / Qm, r0x * Px + r0y * Py + r0z * Pz);
+  let a = 0, M0 = 0, n = 0;
+  if (eps < -1e-12) {                                            // 椭圆：记录时间参数化
+    a = -mu / (2 * eps);
+    if (!(a > 0)) return null;
+    n = Math.sqrt(mu / (a * a * a));
+    const E0 = Math.atan2((r0x * Qx + r0y * Qy + r0z * Qz) / (Qm * a * Math.sqrt(Math.max(0, 1 - e * e))),
+      (r0x * Px + r0y * Py + r0z * Pz) / a + e);
+    M0 = E0 - e * Math.sin(E0);
+  }
+  return { p, e, Px, Py, Pz, Qx: Qx / Qm, Qy: Qy / Qm, Qz: Qz / Qm, nu0, a, M0, n };
+}
+/* 密切轨道位置（真近点角 ν）→ [x,y,z] */
+function trailConicPos(c, nu, out) {
+  const r = c.p / (1 + c.e * Math.cos(nu));
+  const cv = Math.cos(nu) * r, sv = Math.sin(nu) * r;
+  out[0] = cv * c.Px + sv * c.Qx; out[1] = cv * c.Py + sv * c.Qy; out[2] = cv * c.Pz + sv * c.Qz;
+  return r;
+}
+/* === v36 TRAIL-PREDICT END === */
+/* 预测一段轨迹弧（相对主星坐标系）。
+ * rel0 = 段起点相对主星位置，vel0 = 段起点相对速度，rel1 = 段终点相对位置（实际采样），
+ * dt = 段时长，mu = G(m_i + m_host)。返回中间点 flat 数组（不含端点）或 null（回退）。
+ * 校验：终点 |r(νb) − rel1| ≤ max(5e-3·|rel1−rel0|, 1e-5·|rel1|) —— 二体近似失效
+ * （多体强摄动 / 2.5PN 螺旋 / 碰撞过程）时自动放弃预测。 */
+const TRAIL_ARC_MAX_RAD = 8 * Math.PI;    // 单段最多预测 4 圈（超出回退：样本密度与缓存代价失衡）
+const TRAIL_ARC_DNU = 0.055;              // 采样角步长目标（≈3.2°，弦差 ~1.5e-4·r，全缩放亚像素）
+const TRAIL_ARC_MAX_PTS = 96;             // 多圈段的密度上限（2.3 圈时 ≈8.6°/点，弦差 0.28%·r）
+function trailArcPredict(r0x, r0y, r0z, v0x, v0y, v0z, r1x, r1y, r1z, dt, mu) {
+  if (!(dt > 0) || !isFinite(dt) || !(mu > 0)) return null;
+  const c = trailConicFromRV(r0x, r0y, r0z, v0x, v0y, v0z, mu);
+  if (!c) return null;
+  let nuB = null;
+  if (c.a > 0) {                                   // 椭圆：时间→M→E→ν（多圈展开）
+    if (!(c.n > 0)) return null;
+    const Eb = keplerSolveE(c.M0 + c.n * dt, c.e);
+    if (Eb === null || !isFinite(Eb)) return null;
+    /* ν(E)：tanν = √(1−e²)·sinE / (cosE − e)。直接计算避免分支歧义 */
+    nuB = Math.atan2(Math.sqrt(Math.max(0, 1 - c.e * c.e)) * Math.sin(Eb), Math.cos(Eb) - c.e);
+    nuB += 2 * Math.PI * Math.round((Eb - nuB) / (2 * Math.PI));   // 解卷绕到 E 附近（多圈保持单调）
+    if (Math.abs(nuB - c.nu0) < 1e-6) return null;  // 零扫角（dt 过小）→ 弦线即可
+  } else {                                          // 双曲/抛物：通用变量传播求终点
+    const rb = keplerPropagateU(r0x, r0y, r0z, v0x, v0y, v0z, dt, mu);
+    if (!rb) return null;
+    nuB = Math.atan2(rb[1] * c.Qy + rb[0] * c.Qx + rb[2] * c.Qz,
+      rb[0] * c.Px + rb[1] * c.Py + rb[2] * c.Pz);
+    if (Math.abs(nuB - c.nu0) < 1e-6) return null;
+  }
+  const out = [0, 0, 0];
+  trailConicPos(c, nuB, out);
+  const dxb = out[0] - r1x, dyb = out[1] - r1y, dzb = out[2] - r1z;
+  const segLen = Math.sqrt((r1x - r0x) * (r1x - r0x) + (r1y - r0y) * (r1y - r0y) + (r1z - r0z) * (r1z - r0z));
+  const r1m = Math.sqrt(r1x * r1x + r1y * r1y + r1z * r1z);
+  const err = Math.sqrt(dxb * dxb + dyb * dyb + dzb * dzb);
+  if (!(err <= Math.max(5e-3 * segLen, 1e-5 * r1m, 1e-9))) return null;   // 端点自校验失败 → 回退
+  let dNu = nuB - c.nu0;
+  if (Math.abs(dNu) > TRAIL_ARC_MAX_RAD) return null;
+  if (dNu < 0) dNu += 2 * Math.PI * Math.ceil(-dNu / (2 * Math.PI));      // 椭圆 ĥ 基下随时间恒 +ν；防御性归一
+  const s = Math.min(TRAIL_ARC_MAX_PTS, Math.max(2, Math.ceil(dNu / TRAIL_ARC_DNU)));
+  /* 每点带时间分数 τ∈[0,1]（真近点角→偏近点角/双曲异常→平近点角差分），供参考系
+   * 原点线性插值用（主星/质心/跟随体在段内的平动修正）。差分形式免去近点时刻。
+   * v36b 修复：双曲段均匀 ν ≠ 均匀 t —— 旧版双曲 τ 用 j/s（均匀时间假设），
+   * 参考系修正与渐隐在双曲段失真；现用双曲异常 H(ν) 差分（与椭圆 M 差分同构）。 */
+  const EofNu = nu => {
+    const raw = Math.atan2(Math.sqrt(Math.max(0, 1 - c.e * c.e)) * Math.sin(nu), c.e + Math.cos(nu));
+    return raw + 2 * Math.PI * Math.round((nu - raw) / (2 * Math.PI));
+  };
+  const HofNu = nu => {
+    const ch = (c.e + Math.cos(nu)) / (1 + c.e * Math.cos(nu));
+    const sh = Math.sqrt(Math.max(0, c.e * c.e - 1)) * Math.sin(nu) / (1 + c.e * Math.cos(nu));
+    return Math.acosh(Math.min(Math.max(ch, 1), 1e300)) * Math.sign(sh || 1);
+  };
+  let tauOf;
+  if (c.a > 0) {
+    const Eb2 = EofNu(nuB);
+    const Mb = Eb2 - c.e * Math.sin(Eb2);
+    tauOf = nu => {
+      const Ej = EofNu(nu), Mj = Ej - c.e * Math.sin(Ej);
+      return Math.abs(Mb - c.M0) > 1e-15 ? Math.min(1, Math.max(0, (Mj - c.M0) / (Mb - c.M0))) : -1;
+    };
+  } else if (c.e > 1.000001) {
+    const Hb = HofNu(nuB), H0 = HofNu(c.nu0);
+    const Mh = H => c.e * Math.sinh(H) - H;
+    const Mb = Mh(Hb), M0h = Mh(H0);
+    tauOf = nu => {
+      const Mj = Mh(HofNu(nu));
+      return Math.abs(Mb - M0h) > 1e-15 ? Math.min(1, Math.max(0, (Mj - M0h) / (Mb - M0h))) : -1;
+    };
+  } else tauOf = null;                              // 抛物边界：退化为均匀 τ（罕见且视觉不可辨）
+  const pts = new Float64Array((s - 1) * 4);
+  for (let j = 1; j < s; j++) {
+    const nu = c.nu0 + dNu * j / s;
+    trailConicPos(c, nu, out);
+    const t2 = tauOf ? tauOf(nu) : j / s;
+    const tau = t2 < 0 ? j / s : t2;
+    const o = (j - 1) * 4;
+    pts[o] = out[0]; pts[o + 1] = out[1]; pts[o + 2] = out[2]; pts[o + 3] = tau;
+  }
+  return pts;
+}
 /* 对单个天体的世界坐标折线（wp = [x,y,z,...]，cnt 点）做平滑细分并投影。
  * 输出屏幕坐标 flat 数组，段断开处以 NaN 分隔（GL 拆 range / 2D 断笔共用）。
  * 返回细分消耗的点数预算（调用方累计跨天体共享预算）。 */
@@ -4542,6 +4813,14 @@ const trailWpBuf = new Float64Array(HIST_MAX * 3);        // 世界坐标折线�
 const trailPt = { f64: new Float64Array(0), n: 0 };       // 相机系细分点（NaN 断段）
 const trailLineBuf = { f32: new Float32Array(0), n: 0 };  // 线模式顶点（7 float/顶点）
 const trailDotBuf = { f32: new Float32Array(0), n: 0 };   // 点迹顶点
+/* v36：预测弧缓存 —— key = bi*HIST_MAX+环形槽位，值 = {gen,ref,ta,tb,pts|null}
+ * （null 负缓存：二体近似失效的段不再重算）。pts 为【绘制系】坐标
+ * （已含主星/参考系原点插值修正与 sh 平移），播放中每帧仅最新段新增。 */
+let trailArcGen = 0;
+const trailArcCache = new Map();
+const TRAIL_ARC_BUILD_BUDGET = 3000;    // 单次 buildTrails 新算弧数上限（换参考系/初次铺满时的限流）
+let trailArcLast = { hit: 0, calc: 0, ok: 0, fail: 0 };   // 诊断/测试（最近一次 buildTrails）
+const trailSlotMap = new Int32Array(HIST_MAX);   // 折线序号 → 快照环形槽位（缺帧跨越时二者不一致）
 function trailGrowF64(buf, needFloats) {
   if (buf.f64.length >= needFloats) return;
   let cap = buf.f64.length || 4096;
@@ -4556,7 +4835,7 @@ function trailGrowF32(buf, needFloats) {
   while (cap < needFloats) cap *= 2;
   const nb = new Float32Array(cap); nb.set(buf.f32.subarray(0, buf.n * 7)); buf.f32 = nb;
 }
-function trailSmoothBody(wp, cnt, proj, eye, budgetLeft) {
+function trailSmoothBody(wp, cnt, proj, eye, budgetLeft, arcOf) {
   let used = 0;
   trailPt.n = 0;
   /* v20：顶点改为 4 float（x,y,z + 时间分数 frac∈[0,1]，0=最老端，用于渐隐 alpha） */
@@ -4579,6 +4858,24 @@ function trailSmoothBody(wp, cnt, proj, eye, budgetLeft) {
     if (!pb) continue;                       /* 下一段起点处理时再断开 */
     const dx = pb[0] - pa[0], dy = pb[1] - pa[1];
     const lenPx = Math.hypot(dx, dy);
+    /* v36：预测弧优先 —— 段在屏上可辨且有开普勒预测弧（缓存命中或本帧新算）时，
+     * 取代 Catmull-Rom 条样：弧点沿真实动力学路径（均匀真近点角），渐隐 frac
+     * 沿段内时间分数插值。弧点不消耗细分预算（逐段缓存，播放中仅最新段新算）。 */
+    if (arcOf && lenPx > trailSmoothPx) {
+      const arc = arcOf(j);
+      if (arc && arc.length >= 4) {
+        const m2 = arc.length / 4;
+        let broken = false;
+        for (let q = 0; q < m2; q++) {
+          const o = q * 4;
+          const pc = proj.pt(arc[o], arc[o + 1], arc[o + 2]);
+          if (!pc) { if (started) brk(); broken = true; break; }
+          push(arc[o], arc[o + 1], arc[o + 2], fa + (fb - fa) * arc[o + 3]);
+        }
+        if (!broken && started) push(bx, by, bz, fb);
+        continue;
+      }
+    }
     let m = 0;
     if (lenPx > trailSmoothPx && budgetLeft - used > 0) {
       m = Math.min(TRAIL_SMOOTH_MAX_SEG, Math.ceil(lenPx / 3) - 1, budgetLeft - used);
@@ -4619,6 +4916,68 @@ function buildTrails(fr) {
   const eye = fr.eye;                        // 相机系（与渲染层天体位置同一视点）
   /* v30：细分恒用基准值（v28「物体式透镜活动时收紧细分」随物体式退役） */
   trailSmoothPx = TRAIL_SMOOTH_PX; trailSmoothBudget = TRAIL_SMOOTH_BUDGET;
+  /* v36：预测弧回调构建 —— 线模式且 N 有界时启用；逐段缓存（key=天体×环形槽位，
+   * 验证 gen/ref/ta/tb），每帧只为新出现的段新算（限流 TRAIL_ARC_BUILD_BUDGET）。
+   * 参考系修正：X = rel弧点 + lerp(主星,τ) − lerp(参考系原点,τ) + sh，
+   * 其中主星/原点线性插值沿段内时间分数 τ —— 参考系平动的一阶修正，
+   * 原点=主星自身时两者相消，弧即为精确相对二体轨迹。 */
+  trailArcLast.hit = 0; trailArcLast.calc = 0; trailArcLast.ok = 0; trailArcLast.fail = 0;
+  const arcRefKey = trailMode + '|' + ui.trailRefMode.value + '|' + (useRel ? tf : '') + '|N' + N;
+  let arcNewBudget = TRAIL_ARC_BUILD_BUDGET;
+  const hostCache = new Int32Array(N).fill(-2);   // -2 未算 / -1 无主星 / ≥0 主星索引
+  const ringSlot = k => (histHead - histCount + k + HIST_MAX) % HIST_MAX;
+  const arcOfFor = bi => j => {
+    if (j < 0 || j + 1 >= histCount) return null;
+    const k0 = trailSlotMap[j], k1 = trailSlotMap[j + 1];
+    if (k1 !== k0 + 1) return null;                 // 缺帧跨越段：二体弧不适用
+    const sA = ringSlot(k0), sB = ringSlot(k1);
+    const key = bi * HIST_MAX + sA;
+    const hit = trailArcCache.get(key);
+    if (hit && hit.gen === trailArcGen && hit.ref === arcRefKey && hit.ta === histT[sA] && hit.tb === histT[sB]) {
+      trailArcLast.hit++; if (hit.pts) trailArcLast.ok++;
+      return hit.pts;
+    }
+    if (trailArcCache.size > 12000) trailArcCache.clear();
+    if (!(arcNewBudget > 0) || N < 2 || N > 128 || !histVel[sA] || !histPos[sA] || !histPos[sB]) return null;   // 预算/门控未评估：不写缓存（后续帧再试）
+    trailArcNewCalc: {
+      arcNewBudget--; trailArcLast.calc++;
+      const A = hostCache[bi] === -2 ? (hostCache[bi] = boundHostIdx(bi)) : hostCache[bi];
+      if (A < 0 || A === bi) break trailArcNewCalc;
+        const mu = G * (massA[bi] + massA[A]);
+        if (!(mu > 0)) break trailArcNewCalc;
+        const p0 = histPos[sA], p1 = histPos[sB], v0 = histVel[sA];
+        const dt = histT[sB] - histT[sA];
+        if (!(dt > 0) || p0.length < Math.max(bi, A) * 3 + 3 || p1.length < Math.max(bi, A) * 3 + 3) break trailArcNewCalc;
+        const rel = trailArcPredict(
+          p0[bi * 3] - p0[A * 3], p0[bi * 3 + 1] - p0[A * 3 + 1], p0[bi * 3 + 2] - p0[A * 3 + 2],
+          v0[bi * 3] - v0[A * 3], v0[bi * 3 + 1] - v0[A * 3 + 1], v0[bi * 3 + 2] - v0[A * 3 + 2],
+          p1[bi * 3] - p1[A * 3], p1[bi * 3 + 1] - p1[A * 3 + 1], p1[bi * 3 + 2] - p1[A * 3 + 2],
+          dt, mu);
+        if (!rel) break trailArcNewCalc;
+        /* 相对弧 → 绘制系：主星/原点位置沿 τ 线性插值（快照端点精确） */
+        let pts = null;
+        const AX0 = p0[A * 3], AY0 = p0[A * 3 + 1], AZ0 = p0[A * 3 + 2];
+        const AX1 = p1[A * 3], AY1 = p1[A * 3 + 1], AZ1 = p1[A * 3 + 2];
+        const OX0 = useRel ? refOff.off[k0 * 3] : 0, OY0 = useRel ? refOff.off[k0 * 3 + 1] : 0, OZ0 = useRel ? refOff.off[k0 * 3 + 2] : 0;
+        const OX1 = useRel ? refOff.off[k1 * 3] : OX0,
+          OY1 = useRel ? refOff.off[k1 * 3 + 1] : OY0,
+          OZ1 = useRel ? refOff.off[k1 * 3 + 2] : OZ0;
+        pts = new Float64Array(rel.length);
+        for (let q = 0; q < rel.length; q += 4) {
+          const tau = rel[q + 3], g1 = tau, g0 = 1 - tau;
+          pts[q] = rel[q] + AX0 * g0 + AX1 * g1 - (OX0 * g0 + OX1 * g1) + shv[0];
+          pts[q + 1] = rel[q + 1] + AY0 * g0 + AY1 * g1 - (OY0 * g0 + OY1 * g1) + shv[1];
+          pts[q + 2] = rel[q + 2] + AZ0 * g0 + AZ1 * g1 - (OZ0 * g0 + OZ1 * g1) + shv[2];
+          pts[q + 3] = tau;
+        }
+        if (pts) trailArcLast.ok++; else trailArcLast.fail++;
+        trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts });
+        return pts;
+      }
+      trailArcLast.fail++;
+      trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts: null });   // 已评估且失败：负缓存
+      return null;
+  };
   const ends = [];
   let budget = trailSmoothBudget;
   trailLineBuf.n = 0; trailDotBuf.n = 0;
@@ -4635,6 +4994,7 @@ function buildTrails(fr) {
       if (trailWorldAt(k, bi, useRel, refOff, shv, W1)) {
         const o = cnt * 3;
         trailWpBuf[o] = W1[0]; trailWpBuf[o + 1] = W1[1]; trailWpBuf[o + 2] = W1[2];
+        trailSlotMap[cnt] = k;
         cnt++;
       }
     }
@@ -4660,7 +5020,7 @@ function buildTrails(fr) {
       continue;
     }
     /* 线模式：平滑细分后输出相机系坐标（NaN 分段），展开为 LineSegments 顶点对 */
-    budget -= trailSmoothBody(trailWpBuf, cnt, fr.proj, eye, Math.max(0, budget));
+    budget -= trailSmoothBody(trailWpBuf, cnt, fr.proj, eye, Math.max(0, budget), arcOfFor(bi));
     const P = trailPt.f64;
     let havePrev = false, px0 = 0, py0 = 0, pz0 = 0, pf0 = 0, endX = 0, endY = 0, endZ = 0;
     for (let k = 0; k < trailPt.n; k++) {
@@ -4788,8 +5148,19 @@ function drawTo2D(c2, W, H) {
 }
 
 /* 主绘制入口：three.js 渲染全场景，2D 图层仅叠加标签；three.js 不可用走极简 2D 回退 */
+let uiDrawPending = 0;   /* v36：MT 在飞帧期间被推迟的绘制计数（诊断用） */
 function draw() {
   if (headlessOn) { drawHeadlessBadge(); return; }
+  /* v36：MT 在飞帧守卫 —— 多线程帧派发期间 worker 正对共享线性内存做 drift/kick
+   * 写入，主线程 px/py/pz 视图同一块内存：此时 mousemove/滚轮/按钮等事件路径直呼
+   * draw() 会读到半新半旧的天体位置（用户报告「播放中转动视角星球闪烁、短暂错位
+   * 又回正」的根因：事件绘制与完成回调绘制交替呈现不一致状态）。守卫推迟到本帧
+   * 完成回调统一绘制（完成回调必 draw，延迟 ≤ 一帧）。
+   * v36b：守卫条件去掉 playing —— 暂停态若恰有在飞帧（切预设后晚到帧收尾窗口，
+   * 与 v35 竞态修复同场景），撕裂读取风险完全相同（V10 确定性单测发现）；
+   * 单线程路径 frameInFlight 恒 false，行为不变。 */
+  if (window.__ENGINE__ && __ENGINE__.frameInFlight) { uiDrawPending++; return; }
+  uiDrawPending = 0;
   ren.drawCount++;
   const now = performance.now();
   const fr = buildSceneFrame();
@@ -5106,13 +5477,34 @@ function readDt() {
  * 补步数不再由「步数预算」旋钮控制，改为墙钟自动预算：一帧内跑「安全框架时间」
  * 内能跑的尽量多步 —— 步便宜（少体）时自动多跑、步贵（大 N/强场）时自动少跑，
  * 即「最优误差下平衡时间步与单步时间，达到安全的最快」。 */
-const FRAME_WALL_BUDGET_MS = 220;      // 每帧物理墙钟预算（安全上限，防卡顿掉帧）
+const FRAME_WALL_BUDGET_MS = 220;      // 每帧物理墙钟预算上限（安全上限，防卡顿掉帧）
 const ADAPTIVE_HARD_MAX_STEPS = 40000; // 二级硬上限（极端小步长防死循环，v30 语义保留）
-function physicsAdvance(baseDt, steps) {
+/* v36：帧率自适应预算 —— 旧版只有自适应路径有 220ms 恒定预算，固定步长路径完全无
+ * 预算：快进（大 dt × 多步）时一帧物理阻塞数百 ms，渲染帧率跌到个位数（用户报告
+ * 「不操作时刷新卡顿、步长快进尤其明显；转动视角反而感觉流畅」—— 流畅错觉来自
+ * 事件插帧）。修复：
+ *  ① 预算按实测整帧耗时乘性自适应（frameEmaMs 由 frame() 逐帧回报，含 MT 等待/
+ *     绘制/派发全部开销）：帧慢 → 收缩预算（保帧率），帧快 → 放宽至上限（保吞吐），
+ *     目标 ~22ms/帧，夹 [8, 220]ms。
+ *  ② 固定步长路径接入同款预算（每 8 步检查，与自适应路径同节奏）。步序列本身
+ *     确定（预算只截断每帧步数、下帧续跑），轨迹逐位不变 —— 仅墙钟 pacing 变化。 */
+const FRAME_TARGET_MS = 22;
+let frameEmaMs = 0;          // 整帧耗时 EMA（ms）；0 = 尚无测量（headless/首帧用上限）
+let physBudgetMs = FRAME_WALL_BUDGET_MS;   // 当前有效预算（乘性控制器状态）
+function effectivePhysBudget() {
+  if (!(frameEmaMs > 0)) return FRAME_WALL_BUDGET_MS;
+  physBudgetMs = Math.max(8, Math.min(FRAME_WALL_BUDGET_MS,
+    physBudgetMs * FRAME_TARGET_MS / Math.max(frameEmaMs, 1)));
+  return physBudgetMs;
+}
+function physicsAdvance(baseDt, steps, budgetMs) {
   const isIAS = integrator === 'ias15';
   const stepFn = isIAS ? stepIAS15 : stepYoshida4;
   /* IAS15 内置自动步长（Rein-Spiegel/PRS23）——自适应恒开；Yoshida4 遵循开关 */
   const adaptiveOn = isIAS ? true : ui.adaptiveTimeStep.checked;
+  /* v36：墙钟预算可选注入（MT 路径与主线程共用同一控制器值；headless 等无测量
+   * 场景回落到 FRAME_WALL_BUDGET_MS 上限） */
+  const budget = budgetMs !== undefined ? budgetMs : effectivePhysBudget();
   const gwEvery = gwWaveOn ? Math.max(1, Math.floor(steps / 48)) : 0;
   /* v32：子步级并合预检。根因修复：v31 及以前接触/并合判定只在帧级，
    * 末段 plunge（双黑洞视界接触前后 v~0.4c）在一帧内部直达 r→0，
@@ -5145,7 +5537,7 @@ function physicsAdvance(baseDt, steps) {
     const t0 = performance.now();
     let k = 0;
     for (; k < ADAPTIVE_HARD_MAX_STEPS && advanced < target; k++) {
-      if ((k & 7) === 7 && performance.now() - t0 > FRAME_WALL_BUDGET_MS) break;
+      if ((k & 7) === 7 && performance.now() - t0 > budget) break;
       let dtk;
       if (isIAS) dtk = stepIAS15Adaptive(baseDt);
       else dtk = advanceAdaptiveYoshida(baseDt);
@@ -5174,14 +5566,22 @@ function physicsAdvance(baseDt, steps) {
     lastAdaptSteps = k; lastAdaptAdvanced = advanced;
   } else {
     lastAdaptSteps = 0; lastAdaptAdvanced = 0;
+    /* v36：固定步长路径接入墙钟预算（旧版无预算 —— 快进时一帧阻塞数百 ms）。
+     * 超限即帧内停（语义与自适应路径一致：宁可减速不弃精度）；实际步数回写
+     * lastSteps 使性能条 dt 显示保持诚实。预算只截断每帧步数、下帧续跑，
+     * 步序列确定 → 轨迹逐位不变。 */
+    const t0f = performance.now();
+    let kRun = 0;
     for (let k = 0; k < steps; k++) {
+      if ((k & 7) === 7 && performance.now() - t0f > budget) break;
       /* v19f：自适应关且无 GW 波形时，步尾统计求值仅在需要处刷新（gw 采样步/末步），
        * 轨迹逐位不变；gw 波形读取 ax，采样步仍先刷新（与旧时序一致） */
       const gwK = gwEvery && k % gwEvery === 0;
       stepFn(baseDt, gwK || k === steps - 1 ? true : false);
-      simTime += baseDt; advanced += baseDt;
+      simTime += baseDt; advanced += baseDt; kRun++;
       if (gwK) gwSamplePush();
     }
+    lastSteps = kRun;
   }
   return advanced;
 }
@@ -5217,7 +5617,10 @@ function idleLoop(now) {
   const dt = lastIdleT ? Math.min(0.05, (now - lastIdleT) / 1000) : 0.016;
   lastIdleT = now;
   updateCameraMotion(dt);
-  if (now - lastIdleDrawT >= 33 || !lastIdleDrawT) { lastIdleDrawT = now; draw(); }
+  /* v36：相机运动激活时逐 rAF 重绘（33ms 门控在高刷屏上帧间隔 16.7/33.4 交替
+   * 造成可察抖动 —— 用户报告「暂停转动视角时刷新不如拖拽流畅」）；静止时保持
+   * 33ms 轻量门控（省电，画面恒定无感知差异） */
+  if (camMotionActive() || now - lastIdleDrawT >= 33 || !lastIdleDrawT) { lastIdleDrawT = now; draw(); }
   idleRaf = requestAnimationFrame(idleLoop);
 }
 function ensureIdleLoop() {
@@ -5286,6 +5689,12 @@ function frame() {
   if (gwWaveOn) drawGWWave();
   updateTideReadout();
     updatePerf(now);
+    /* v36：整帧耗时回报（帧首 now → 完成，含 MT 等待/物理/绘制/派发全部开销）
+     * —— 帧率自适应预算的测量源；EMA α=0.25 平滑 vsync 抖动 */
+    {
+      const fms = performance.now() - now;
+      frameEmaMs = frameEmaMs > 0 ? frameEmaMs * 0.75 + fms * 0.25 : fms;
+    }
     rafId = requestAnimationFrame(frame);
   };
   /* ===== v34: 双路径 —— 主线程直跑 / physics-worker 帧级派发（接触即停→并合→续派） ===== */
@@ -5297,7 +5706,9 @@ function frame() {
       __ENGINE__.advanceAsync(baseDt, steps, targetTime - advancedTotal, {
         adaptive: ui.adaptiveTimeStep.checked, mergeOn: !!ui.collisionMerge.checked,
         contactR2: __computeContactR2(),
-        budgetMs: Math.max(30, FRAME_WALL_BUDGET_MS - (performance.now() - now)),
+        /* v36：worker 预算与主线程同一自适应控制器（帧慢 → worker 提前回巢，
+         * MT 快进的绘帧间隔与单线程路径一致收紧） */
+        budgetMs: Math.max(8, effectivePhysBudget() - (performance.now() - now)),
         gwEvery: gwEveryMT
       }, (res) => {
         if (!res) { __finishFrame(physicsAdvance(baseDt, steps)); return; }   // 池不可用兜底
@@ -5853,12 +6264,25 @@ function openBodyForm(idx) {
     if (ui.texDark1) ui.texDark1.checked = !!meta[editingIndex].textureMode1;
     if (ui.texDark2) ui.texDark2.checked = !!meta[editingIndex].textureMode2;
     populateBodyOrbitSelects(orig.orbits_around || meta[editingIndex].orbits_around || '');
-    /* 轨道根数：以当前密切根数为准（v33：相对实际束缚宿主，配置主星绑定即用），
-     * 无宿主/真双曲时回退原输入 */
+    /* 轨道根数：以当前密切六根数为准（v33：相对实际束缚宿主，配置主星绑定即用）。
+     * v36 修复：改用 currentOsculatingSixElements 回填全部六根数 —— 旧代码在
+     * haveOsc 分支后无条件用创建时刻的 orig 覆盖 LAN/ν，使 v20「当前真近点角
+     * 同步」失效：开普勒天体每次编辑保存后轨道相位跳回创建时刻（轨道状态污染，
+     * 且与「按根数保存时位置不跳变」的设计意图相悖）。无宿主/真双曲时回退原输入。 */
     const oscNow = osculatingOf(editingIndex);
     const pIdx = (oscNow && oscNow.bound && oscNow.primary >= 0) ? oscNow.primary : findPrimaryIdx(editingIndex);
     const haveOsc = pIdx >= 0 && pIdx !== editingIndex && oscNow && oscNow.bound && isFinite(oscNow.a);
-    if (haveOsc) {
+    const el6 = haveOsc ? currentOsculatingSixElements(editingIndex, pIdx) : null;
+    if (haveOsc && el6) {
+      ui.bodySemiMajorAxis.value = String(+(el6.a).toPrecision(8));   // 米（与表单解析器单位约定一致）
+      ui.bodyEccentricity.value = el6.e.toFixed(4);
+      ui.bodyInclination.value = el6.inc.toFixed(3);
+      ui.bodyLongitudeOfAscendingNode.value = el6.raan.toFixed(3);
+      ui.bodyArgumentOfPeriapsis.value = el6.argP.toFixed(3);
+      ui.bodyTrueAnomaly.value = el6.nu.toFixed(3);
+    } else if (haveOsc) {
+      /* 密切根数计算不可用（极端边界）：保留 v33 的部分同步行为（a/e/i/ω 当前值），
+       * LAN/ν 用创建值（与旧版一致，不再重复计算） */
       ui.bodySemiMajorAxis.value = oscNow.a.toPrecision(8);
       ui.bodyEccentricity.value = oscNow.e.toFixed(4);
       const rx = px[editingIndex] - px[pIdx], ry = py[editingIndex] - py[pIdx], rz = pz[editingIndex] - pz[pIdx];
@@ -5867,30 +6291,17 @@ function openBodyForm(idx) {
       const hMag = Math.sqrt(hxv * hxv + hyv * hyv + hz * hz);
       const incNow = hMag > 0 ? Math.acos(clampNum(hz / hMag, -1, 1)) * 180 / Math.PI : 0;
       ui.bodyInclination.value = incNow.toFixed(3);
-      ui.bodyArgumentOfPeriapsis.value = isFinite(oscNow.omega) ? oscNow.omega.toFixed(3) : '0.0';
-      /* 真近点角同样同步为当前值（保证按根数保存时位置不跳变）：
-       * ν = atan2(sin ν, cos ν)，sin ν = (ê×r̂)·ĥ，cos ν = ê·r̂ */
-      if (hMag > 0 && isFinite(oscNow.omega) && oscNow.GM > 0) {
-        const rN = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1;
-        const ux = rx / rN, uy = ry / rN, uz = rz / rN;
-        const exv = (dvy * hz - dvz * hyv) / oscNow.GM - ux;
-        const eyv = (dvz * hxv - dvx * hz) / oscNow.GM - uy;
-        const ezv = (dvx * hyv - dvy * hxv) / oscNow.GM - uz;
-        const cosNu = clampNum(exv * ux + eyv * uy + ezv * uz, -1, 1);
-        const hnx = hxv / hMag, hny = hyv / hMag, hnz = hz / hMag;
-        const sinNu = (eyv * uz - ezv * uy) * hnx + (ezv * ux - exv * uz) * hny + (exv * uy - eyv * ux) * hnz;
-        let nu = Math.atan2(sinNu, cosNu) * 180 / Math.PI;
-        if (nu < 0) nu += 360;
-        ui.bodyTrueAnomaly.value = nu.toFixed(3);
-      }
+      ui.bodyArgumentOfPeriapsis.value = isFinite(oscNow.omega) ? ((oscNow.omega * 180 / Math.PI + 360) % 360).toFixed(3) : '0.0';
+      ui.bodyLongitudeOfAscendingNode.value = orig.longitude_of_ascending_node_deg ?? '0.0';
+      ui.bodyTrueAnomaly.value = orig.true_anomaly_deg ?? '0.0';
     } else {
       ui.bodySemiMajorAxis.value = orig.semimajor_axis || '';
       ui.bodyEccentricity.value = orig.eccentricity ?? '0.0';
       ui.bodyInclination.value = orig.inclination_deg ?? '0.0';
       ui.bodyArgumentOfPeriapsis.value = orig.argument_of_periapsis_deg ?? '0.0';
+      ui.bodyLongitudeOfAscendingNode.value = orig.longitude_of_ascending_node_deg ?? '0.0';
+      ui.bodyTrueAnomaly.value = orig.true_anomaly_deg ?? '0.0';
     }
-    ui.bodyLongitudeOfAscendingNode.value = orig.longitude_of_ascending_node_deg ?? '0.0';
-    ui.bodyTrueAnomaly.value = orig.true_anomaly_deg ?? '0.0';
     /* 自转/潮汐：当前实际值（自转周期 = 2π/当前Ω；倾角 = 当前自转轴；k2/Δt = 当前缓存） */
     const spinPNow = spinRate[editingIndex] > 1e-12 ? 2 * Math.PI / spinRate[editingIndex] : 0;
     ui.bodySpinPeriod.value = spinPNow > 0 ? spinPNow.toPrecision(8) : '';
@@ -8317,6 +8728,16 @@ window.__SIM__ = {
     return true;
   },
   forceDraw: () => { skybox.dirty = true; draw(); },
+  /* v36：渲染/网络/状态卫生诊断（browser V10-V14 用） */
+  diag: () => ({
+    uiDrawPending, frameEmaMs, physBudgetMs,
+    trailArc: { gen: trailArcGen, cache: trailArcCache.size, last: { ...trailArcLast } },
+    hist: { count: histCount, head: histHead, velSlots: histVel.filter(Boolean).length },
+    gwSamples: gwSamples.length,
+    editorOpen: !!(ui.bodyFormModal && ui.bodyFormModal.classList.contains('show')),
+    editingIndex
+  }),
+  forceTrailArcStats: () => { draw(); return { ...trailArcLast, cache: trailArcCache.size }; },
   astro: () => {
     const sp = starPhysCache[meta.findIndex(m => m.name === 'Sun')] || starPhysOf(M_SUN);
     return {
