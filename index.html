@@ -576,6 +576,33 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v37 三问题修复（用户反馈；内核仅调度改动 → 数值位等价，详见 deploy/README.md §十二 与 worklog）：
+ *      ① 多线程更卡顿（挤占渲染/过于激进）根因修复：
+ *         a) C 内核 accumMT 派发者等待 = wait32 timeout 0 = 纯忙等自旋 —— 每次并行
+ *            求力期间派发者整核空转 + W-1 计算 worker，整机饱和，主线程渲染/rAF 被
+ *            OS 调度挤压。改 notify + 阻塞等待（workerLoop 写 DONE 后 notify；调度
+ *            语义改动，数值位等价，equiv 34/34 直接复验）。b) 线程池 W = hw-1 留
+ *            一核给渲染/合成器。c) MT 在飞帧重放路径补跑 afterSystemReplaced
+ *            （与 ③ 同根：重放路径缺系统替换后处理）。
+ *      ② 大步长快进轨迹多边形化（6h/1000 月球仍折线）根因修复：轨迹采样率与帧推进
+ *         脱节 —— 每帧仅 1 采样，6h×1000 时相邻采样相隔 9.15 圈月球轨道；且
+ *         「轨迹时长」为模拟时间窗（默认 8 天 < 1 帧推进），环内只剩 1-2 个采样
+ *         （实测 histCount=1），v36 预测弧无段可用；数值探针进一步证明密切锥线
+ *         对月球 9 圈段终点偏差达 3×10⁵ km（多体摄动），「预测弧无法诚实还原」。
+ *         修复：a) 子帧采样 —— 帧内按模拟时间阈值（目标 ~2h，按天体数限流）采样
+ *         【真实积分器状态】入轨迹环（主线程/worker 同阈值逻辑，worker 快照
+ *         transferable 零拷贝回传；只加快照不改积分序列，物理逐位不变）；
+ *         b) histTrim 最小窗口 = max(用户窗, 6×帧推进)，快进时轨迹至少容纳 6 帧；
+ *         c) 采样入环零分配化（环形槽位数组复用 / MT 缓冲直接采纳）。
+ *      ③ 切换预设丢天体贴图/天空盒：预设/导入不携带贴图字段 —— 切预设后 meta 重建，
+ *         贴图全丢（材质库扫描环境部分救回；file://、无 textures/、扫描未完成、
+ *         MT 重放路径全部丢失，用户必须刷新页面）。修复：a) 贴图记忆（按天体名）——
+ *         系统替换前收割、新 meta 建成后同名重附（预设显式贴图优先，表单清空即
+ *         忘记）；b) afterSystemReplaced 统一后处理（setSystem 直接路径 + 引擎重放
+ *         路径对齐），含 matAutoApply + fallback 扫描环境的新场景补探（串行化
+ *         matScan 防交错）；c) WebGL 上下文丢失自愈（显存压力峰值在预设切换重建
+ *         立方体贴图时：preventDefault + 恢复后重建天空盒/天体贴图 RT + toast 提示），
+ *         另增 skyState/GL 诊断钩子。
  * v36 渲染/网络/状态卫生修复（用户 8 项反馈；物理内核零改动 → 全部轨迹逐位不变，详见 deploy/README.md §十一 与 worklog）：
  *      ① MT 播放中 UI 事件绘制撕裂修复：多线程在飞帧期间 worker 正 drift/kick 写共享
  *         内存，mousemove/滚轮等事件直呼 draw() 会读到半新半旧天体位置 —— 即用户报告
@@ -1503,6 +1530,13 @@ function tjsPushTexture(i, e) {
 function bodyTexEnsure(i) {
   const t = meta[i] && meta[i].texture;
   const t2 = meta[i] && meta[i].texture2;
+  /* v37：贴图记忆同步（设/清贴图的公共入口，覆盖表单/材质库/自动应用全部路径） */
+  if (meta[i] && meta[i].name) {
+    if (t || t2) bodyTexMemory.set(meta[i].name, { texture: t || null, textureOp: meta[i].textureOp,
+      texture2: t2 || null, texture2Op: meta[i].texture2Op,
+      textureMode1: meta[i].textureMode1, textureMode2: meta[i].textureMode2 });
+    else bodyTexMemory.delete(meta[i].name);
+  }
   if (!t && !t2) { bodyTex.cache.delete(i); return; }
   let e = bodyTex.cache.get(i);
   if (e && e.src === t && e.src2 === (t2 || null)) return;
@@ -1806,6 +1840,31 @@ function matAutoApply() {
   return n1 + n2;
 }
 async function matScan() {
+  /* v37：串行化 —— 异步扫描进行中再次触发（切预设 → scheduleSceneMatScan）会交
+   * 错写 matItems。改为排队：当前轮结束后自动重跑一轮（新场景名单）。
+   * 手动/程序化扫描同时取消待触发的补探定时器（本轮扫描已覆盖当前场景；
+   * 若场景再变，applyPreset 会重新调度 —— 防止旧定时器在后继测量窗口内发炮）。 */
+  if (sceneScanTimer) { clearTimeout(sceneScanTimer); sceneScanTimer = 0; }
+  if (matScanRunning) { matScanQueued = true; return; }
+  matScanRunning = true;
+  try { await matScanInner(); }
+  finally {
+    matScanRunning = false;
+    if (matScanQueued) { matScanQueued = false; scheduleSceneMatScan(0); }
+  }
+}
+let matScanRunning = false, matScanQueued = false;
+let matScanMode = 'none';   /* v37：'none' | 'list' | 'manifest' | 'fallback'（scheduleSceneMatScan 依据） */
+/* v37：场景变更后的补探调度 —— 防抖 600ms（连续切预设只探一次）；仅在 fallback
+ * 模式（无目录列表/manifest）下需要（列表模式已覆盖全部文件名）。负缓存命中时
+ * 补探零请求；新名单存在 textures/ 时即可发现并自动应用。 */
+let sceneScanTimer = 0;
+function scheduleSceneMatScan(delay = 600) {
+  if (matScanMode !== 'fallback') return;
+  if (sceneScanTimer) clearTimeout(sceneScanTimer);
+  sceneScanTimer = setTimeout(() => { sceneScanTimer = 0; matScan(); }, delay);
+}
+async function matScanInner() {
   matSetInfo('扫描中…');
   const found = [];   /* {name, url} */
   const push = (name, url) => {
@@ -1845,7 +1904,7 @@ async function matScan() {
           if (/\/$/.test(nm)) continue;   /* 子目录不递归（提示用 manifest） */
           push(nm, MAT_DIR + nm);
         }
-        if (found.length) listed = true;
+        if (found.length) { listed = true; matScanMode = 'list'; }
       }
     }
   } catch (e) { /* file:// 或 404 */ }
@@ -1860,7 +1919,7 @@ async function matScan() {
             nm = String(nm).replace(/^\.\//, '');
             push(nm, MAT_DIR + nm);
           }
-          if (found.length) listed = true;
+          if (found.length) { listed = true; matScanMode = 'manifest'; }
         }
       }
     } catch (e) { /* 无 manifest */ }
@@ -1882,6 +1941,7 @@ async function matScan() {
    * prevItems —— 块作用域不可见，零发现时 ReferenceError（无 textures 目录
    * 的首次运行/无缓存清单环境必崩，材质面板与后续级联中断）。提升到函数域 */
   if (!listed) {
+    matScanMode = 'fallback';   /* v37：无列表/manifest —— 场景变更后需要补探 */
     scanPrevItems = matItems;   /* 缓存清单副本：本轮零发现时恢复展示 */
     matItems = [];
     matSelected = -1;
@@ -2495,17 +2555,41 @@ function initState(list) {
   /* v35：MT 在飞帧与新状态互斥 —— 若 worker 正在积分旧状态，立刻写入新状态会
    * 与 worker 的晚到写入竞态（实测表现：切换预设后偶发「数值发散」，重置后恢复、
    * 无法稳定复现）。此处改走 deferred 路径：引擎作弃在飞帧结果并在 worker 停写后
-   * 重放 initStateFull(list)，同时 post 'reload' 复位 worker 侧 IAS 状态机。 */
+   * 重放 initStateFull(list)，同时 post 'reload' 复位 worker 侧 IAS 状态机。
+   * v37：返回值告知调用方本次是否同步生效（false = 已挂起，由引擎在帧收尾时
+   * 重放并回调 afterSystemReplaced）—— setSystem 据此避免对旧 meta 跑
+   * matAutoApply/贴图重附（旧版在 deferred 场景下这些写入随旧 meta 一起被丢弃，
+   * 且重放路径没有补跑 → MT 开着切预设必丢贴图）。 */
   iasReady = false; iasN3 = -1; iasLastDt = 0; iasDtSuggest = Infinity;   /* v21：状态跳变 → IAS15 预测器失效 */
   iasDtNext = Infinity; iasRejectCount = 0;   /* v31：自适应步长控制器同步复位 */
   gaugeInvE0 = null;                          /* v31：E(x) 平衡参考值复位 */
   if (window.__ENGINE__ && __ENGINE__.active && __ENGINE__.mtOn && __ENGINE__.poolReady) {
-    if (__ENGINE__.invalidateFrames()) { __ENGINE__.pendingInit = list; return; }
+    if (__ENGINE__.invalidateFrames()) { __ENGINE__.pendingInit = list; return false; }
   }
   initStateFull(list);
+  return true;
+}
+/* v37：贴图记忆（按天体名索引）—— 预设/导入不会携带贴图字段，切换预设后旧版
+ * 直接丢贴图（材质库扫描环境 matAutoApply 能部分救回；file://、无 textures/、
+ * 扫描未完成、MT 在飞帧重放路径下全部丢失，用户必须刷新页面恢复）。现每次
+ * 系统替换前收割当前场景的全部贴图设置，新 meta 建成后按【同名天体】重新附着
+ * （预设显式携带自己的贴图字段时不覆盖）。清空贴图（编辑表单置空）同步删记忆。
+ * 与刷新页面等效的持久性，但无需刷新。 */
+const bodyTexMemory = new Map();   // name -> {texture, textureOp, texture2, texture2Op, textureMode1, textureMode2}
+function bodyTexMemoryHarvest() {
+  for (let i = 0; i < N && meta; i++) {
+    const m = meta[i];
+    if (!m || !m.name) continue;
+    if (m.texture || m.texture2) {
+      bodyTexMemory.set(m.name, { texture: m.texture || null, textureOp: m.textureOp,
+        texture2: m.texture2 || null, texture2Op: m.texture2Op,
+        textureMode1: m.textureMode1, textureMode2: m.textureMode2 });
+    } else bodyTexMemory.delete(m.name);   /* 用户显式清空 → 不再记忆 */
+  }
 }
 /* v35：initState 的实际状态写入部分（可被引擎在在飞帧结束后安全重放） */
 function initStateFull(list) {
+  bodyTexMemoryHarvest();   /* v37：旧系统贴图收割（在 meta 重建前） */
   meta = list.map(b => ({
     gh: (typeof b.gh === 'number' && isFinite(b.gh) && b.gh >= 1 && b.gh <= 6) ? b.gh : 0,
     pressure: (typeof b.pressure === 'number' && isFinite(b.pressure) && b.pressure > 0) ? b.pressure : 0,   /* v22：表面气压 bar */
@@ -2519,6 +2603,17 @@ function initStateFull(list) {
     textureMode2: (b.textureMode2 === 1 || b.textureMode2 === '1' || b.textureMode2 === true) ? 1 : 0,
     orbits_around: b.orbits_around || '', original_input_params: b.original_input_params || {}
   }));
+  /* v37：同名天体贴图重附（预设未显式给贴图字段时）—— 与刷新后 localStorage/
+   * matAutoApply 的效果一致，但跨预设即时生效且不依赖扫描基础设施 */
+  for (let i = 0; i < meta.length; i++) {
+    if (meta[i].texture || meta[i].texture2) continue;
+    const mem = bodyTexMemory.get(meta[i].name);
+    if (mem) {
+      meta[i].texture = mem.texture; meta[i].textureOp = mem.textureOp;
+      meta[i].texture2 = mem.texture2; meta[i].texture2Op = mem.texture2Op;
+      meta[i].textureMode1 = mem.textureMode1; meta[i].textureMode2 = mem.textureMode2;
+    }
+  }
   N = meta.length; ensureCap(N);
   for (let i = 0; i < N; i++) {
     px[i] = list[i].pos[0]; py[i] = list[i].pos[1]; pz[i] = list[i].pos[2];
@@ -2586,6 +2681,16 @@ function initStateFull(list) {
 function uiAfterState() {
   populateSelects(); saveLocalStorage(); updateConservationUI(true); grUpdateReadout(); draw();
 }
+/* v37：系统替换后的统一后处理 —— setSystem 直接路径与引擎在飞帧重放路径（physics_engine.js
+ * onFrameResult）都必须走这里。旧版重放路径只调 uiAfterState：matAutoApply/场景重扫
+ * 不执行 → MT 播放中切预设必丢贴图；直接路径也缺少「新场景重新探测」（fallback
+ * 扫描环境只探启动场景的天体名，切到新预设后同名贴图永远发现不到，除非刷新页面）。
+ * matAutoApply 幂等（只填空贴图字段），重复调用安全。 */
+function afterSystemReplaced() {
+  uiAfterState();
+  if (matScanned && matItems.length) matAutoApply();   /* 材质库已就绪 → 新场景自动换同名贴图 */
+  scheduleSceneMatScan();   /* v37：fallback 扫描环境为新场景补探（串行 + 防抖） */
+}
 function setSystem(rawList) {
   /* v36：系统替换时的编辑器状态隔离 —— 编辑模态若跨预设打开，editingIndex 会
    * 指向新系统的同索引天体；此时点保存会把旧表单值（质量/轨道/自转/贴图）
@@ -2597,9 +2702,10 @@ function setSystem(rawList) {
   window.__linkParent = null;
   const res = resolveBodies(rawList);
   for (const w of res.warnings) showToast(w, 'info', 4000);
-  initState(res.bodies);
-  uiAfterState();
-  if (matScanned && matItems.length) matAutoApply();   /* 材质库已扫描 → 新场景自动换同名贴图 */
+  const sync = initState(res.bodies);
+  /* v37：deferred（MT 在飞帧）时不在此跑后处理 —— 此时 meta 还是旧系统，
+   * 写入会被重放丢弃；引擎帧收尾重放 initStateFull 后回调 afterSystemReplaced 对齐 */
+  if (sync !== false) afterSystemReplaced();
 }
 
 /* ---------------- 导出 / 快照 ---------------- */
@@ -2795,18 +2901,40 @@ function strongFieldBalanceEnergy() {
 /* v36：histRecord 增存速度快照 histVel（与位置同环形槽位、同 Float32 精度）——
  * 轨迹预测式细分（见 trailArcPoints）需要段起点的 (r₀,v₀) 做开普勒传播。
  * Float32 速度误差 ~6e-8 相对 → 一周步长位置误差 ~km 量级（AU 尺度 1e-8 相对），
- * 渲染精度充分；不改变任何物理语义（快照仅渲染读取）。 */
-function histRecord() {
-  const snap = new Float32Array(N * 3);
-  const vsnap = new Float32Array(N * 3);
-  for (let i = 0; i < N; i++) {
-    snap[i * 3] = px[i]; snap[i * 3 + 1] = py[i]; snap[i * 3 + 2] = pz[i];
-    vsnap[i * 3] = vx[i]; vsnap[i * 3 + 1] = vy[i]; vsnap[i * 3 + 2] = vz[i];
+ * 渲染精度充分；不改变任何物理语义（快照仅渲染读取）。
+ * v37：拆出 histPushSample(t, pos, vel) —— ① 帧内子步采样（子帧轨迹采样，
+ * 修复大步长快进轨迹折线化）与帧尾采样共用同一条入环路径；② pos/vel 传 null
+ * 时读实时状态并【复用环形槽位数组】（N 不变时零分配，旧版每帧 2 个
+ * Float32Array 垃圾；子帧采样放大 ~128 倍后必须复用）；③ MT 路径传入
+ * worker 回传的 transferable 缓冲直接采纳为槽位数组（零拷贝）。 */
+function histPushSample(t, pos, vel) {
+  const s = histHead, need = N * 3;
+  let snap = histPos[s], vsnap = histVel[s];
+  if (!pos) {
+    if (!snap || snap.length !== need) snap = new Float32Array(need);
+    if (!vsnap || vsnap.length !== need) vsnap = new Float32Array(need);
+    for (let i = 0; i < N; i++) {
+      snap[i * 3] = px[i]; snap[i * 3 + 1] = py[i]; snap[i * 3 + 2] = pz[i];
+      vsnap[i * 3] = vx[i]; vsnap[i * 3 + 1] = vy[i]; vsnap[i * 3 + 2] = vz[i];
+    }
+    histPos[s] = snap; histVel[s] = vsnap;
+  } else {
+    /* worker 回传缓冲：长度匹配直接采纳（所有权已转移），否则拷贝兜底 */
+    if (pos.length === need && vel.length === need) {
+      histPos[s] = pos; histVel[s] = vel;
+    } else {
+      if (!snap || snap.length !== need) snap = new Float32Array(need);
+      if (!vsnap || vsnap.length !== need) vsnap = new Float32Array(need);
+      snap.set(pos.subarray(0, Math.min(need, pos.length)));
+      vsnap.set(vel.subarray(0, Math.min(need, vel.length)));
+      histPos[s] = snap; histVel[s] = vsnap;
+    }
   }
-  histT[histHead] = simTime; histPos[histHead] = snap; histVel[histHead] = vsnap;
+  histT[s] = t;
   histHead = (histHead + 1) % HIST_MAX;
   if (histCount < HIST_MAX) histCount++;
 }
+function histRecord() { histPushSample(simTime, null, null); }
 function histTrim(durSec) {
   if (durSec < 0) return;
   while (histCount > 0) {
@@ -5497,7 +5625,7 @@ function effectivePhysBudget() {
     physBudgetMs * FRAME_TARGET_MS / Math.max(frameEmaMs, 1)));
   return physBudgetMs;
 }
-function physicsAdvance(baseDt, steps, budgetMs) {
+function physicsAdvance(baseDt, steps, budgetMs, subT) {
   const isIAS = integrator === 'ias15';
   const stepFn = isIAS ? stepIAS15 : stepYoshida4;
   /* IAS15 内置自动步长（Rein-Spiegel/PRS23）——自适应恒开；Yoshida4 遵循开关 */
@@ -5505,6 +5633,10 @@ function physicsAdvance(baseDt, steps, budgetMs) {
   /* v36：墙钟预算可选注入（MT 路径与主线程共用同一控制器值；headless 等无测量
    * 场景回落到 FRAME_WALL_BUDGET_MS 上限） */
   const budget = budgetMs !== undefined ? budgetMs : effectivePhysBudget();
+  /* v37：轨迹子帧采样 —— subT = 帧目标推进/K（K 由 frame() 按帧推进/天体数算出）。
+   * 累计推进达到阈值即入环一个【真实积分器状态】快照；帧尾采样仍由 __finishFrame
+   * 统一记录（并合后状态）。与 worker integrateFrame 同一阈值逻辑。 */
+  let nextSampleT = subT > 0 ? subT : Infinity;
   const gwEvery = gwWaveOn ? Math.max(1, Math.floor(steps / 48)) : 0;
   /* v32：子步级并合预检。根因修复：v31 及以前接触/并合判定只在帧级，
    * 末段 plunge（双黑洞视界接触前后 v~0.4c）在一帧内部直达 r→0，
@@ -5542,6 +5674,7 @@ function physicsAdvance(baseDt, steps, budgetMs) {
       if (isIAS) dtk = stepIAS15Adaptive(baseDt);
       else dtk = advanceAdaptiveYoshida(baseDt);
       simTime += dtk; advanced += dtk;
+      if (advanced >= nextSampleT) { histRecord(); nextSampleT += subT; }   /* v37：子帧采样 */
       if (gwEvery && k % gwEvery === 0) gwSamplePush();
       /* v32：子步级接触预检 → 及时并合（防 plunge 直达 r→0 产生 NaN） */
       if (mergeOn && minR2 < contactR2) {
@@ -5579,6 +5712,7 @@ function physicsAdvance(baseDt, steps, budgetMs) {
       const gwK = gwEvery && k % gwEvery === 0;
       stepFn(baseDt, gwK || k === steps - 1 ? true : false);
       simTime += baseDt; advanced += baseDt; kRun++;
+      if (advanced >= nextSampleT) { histRecord(); nextSampleT += subT; }   /* v37：子帧采样 */
       if (gwK) gwSamplePush();
     }
     lastSteps = kRun;
@@ -5660,6 +5794,17 @@ function frame() {
   lastDt = baseDt;
   const steps = clampNum(parseInt(ui.speed.value) || 200, 1, 1000);
   lastSteps = steps;
+  /* v37：轨迹子帧采样规划 —— 帧目标推进越大（快进），每帧仅 1 采样的轨迹越折线化
+   * （月球 6h×1000 时相邻采样相隔 9.15 圈，预测弧诚实回退弦线 → 多边形外观）。
+   * 改为帧内按时间阈值采样【真实积分器状态】：目标间隔 ~2h，K 按天体数限流
+   * （大 N 快照成本高）。轨迹关闭/无头模式不采样（subT=0），物理行为零影响
+   * （只加快照读取，不改积分序列 → 守恒/等价性不受影响）。 */
+  const advTarget = baseDt * steps;
+  const TRAIL_SUBSAMPLE_SEC = 7200;                       /* 目标采样间隔 ≈2h 模拟时 */
+  const kCap = N <= 64 ? 128 : N <= 512 ? 32 : 8;         /* 每帧采样数上限（按 N 限流） */
+  const subK = (trailMode !== 'off' && !headlessOn && N >= 1)
+    ? Math.min(kCap, Math.max(1, Math.ceil(advTarget / TRAIL_SUBSAMPLE_SEC))) : 0;
+  const subT = subK > 0 ? advTarget / subK : 0;
   /* ===== v34: 帧体拆分 —— 计算完成后的统一后处理（原 frame() 后半段） ===== */
   const __finishFrame = (advanced) => {
     lastAdvanced = advanced;
@@ -5668,9 +5813,14 @@ function frame() {
     if (mc > 0) { markCustom(); showToast('发生 ' + mc + ' 次碰撞合并', 'info'); }
   }
   if (trailMode !== 'off') {
-    histRecord();
+    histRecord();   /* v37：帧尾采样（含并合后状态语义）；子帧采样在 physicsAdvance/worker 内完成 */
     const days = parseFloat(ui.trailDuration.value);
-    histTrim(isFinite(days) ? days * DAY_SEC : 8 * DAY_SEC);
+    /* v37：最小窗口 —— 轨迹时长是【模拟时间】窗，快进时单帧推进可达数百天：旧版把
+     * 窗口外采样全部裁掉 → 环内只剩 1-2 个采样（折线/多边形外观，预测弧无段可用，
+     * 实测 6h×1000 下 histCount=1）。现保底最近 6 帧推进量（子帧采样修复的另一半：
+     * 加密采样 + 窗口至少容纳数帧）。正常速度下 userWin ≥ 6×advance，窗口不变。 */
+    const userWin = isFinite(days) ? days * DAY_SEC : 8 * DAY_SEC;
+    histTrim(userWin < 0 ? -1 : Math.max(userWin, 6 * advanced));
   } else histClear();
   /* 数值发散检测 */
   if (checkDivergence()) {
@@ -5709,11 +5859,19 @@ function frame() {
         /* v36：worker 预算与主线程同一自适应控制器（帧慢 → worker 提前回巢，
          * MT 快进的绘帧间隔与单线程路径一致收紧） */
         budgetMs: Math.max(8, effectivePhysBudget() - (performance.now() - now)),
-        gwEvery: gwEveryMT
+        gwEvery: gwEveryMT,
+        /* v37：子帧采样参数（帧首模拟时 + 采样间隔；worker 同阈值逻辑采样并随帧回传） */
+        subT, startT: simTime
       }, (res) => {
-        if (!res) { __finishFrame(physicsAdvance(baseDt, steps)); return; }   // 池不可用兜底
+        if (!res) { __finishFrame(physicsAdvance(baseDt, steps, undefined, subT)); return; }   // 池不可用兜底
         advancedTotal += res.advanced;
         simTime += res.advanced;
+        /* v37：worker 子帧快照入环（transferable 缓冲直接采纳，零拷贝）；
+         * 帧尾采样仍由 __finishFrame 统一记录（并合后状态语义不变） */
+        if (res.samples && trailMode !== 'off') {
+          const sm = res.samples;
+          for (let si = 0; si < sm.t.length; si++) histPushSample(sm.t[si], sm.pos[si], sm.vel[si]);
+        }
         /* v35：worker 侧子步引力波采样拼接（修复 MT 开启后波形/观测失效）。
          * 采样值与主线程 computeGWStrainCore 完全同式（同一共享状态）；
          * 读数量（f_GW/并合倒计时）依赖 meta/massRadius → 由最终态计算一次。 */
@@ -5733,7 +5891,7 @@ function frame() {
     dispatchOnce();
     return;
   }
-  __finishFrame(physicsAdvance(baseDt, steps));
+  __finishFrame(physicsAdvance(baseDt, steps, undefined, subT));
 }
 /* ===== v34: 最大接触半径²（帧级并合预检辅助；与 physicsAdvance 内联块同式） ===== */
 function __computeContactR2() {
@@ -9388,6 +9546,7 @@ let composer = null, renderPass = null, bloomPass = null, outputPass = null, len
 let gaussTex = null, sphereGeo = null, sphereGeoHi = null, sphereGeoLo = null;
 let helperObj = null, helperGeo = null, hzMeshes = [];
 let skyRT = null, skyReady = false;
+let skyboxSrc = null;   /* v37：当前全景源 Image 留底（上下文恢复重建用） */
 let fovDeg = 66;
 const bodies = [];                       // 每天体: {mesh, shell, spin, def, sprite, starMat, planetMat, shellMat, rt1, rt2}
 let lineObj = null, ptsObj = null, lineGeo = null, ptsGeo = null, ptsMat = null;
@@ -10001,6 +10160,7 @@ function buildCubeFromPano(img, F, zup) {
 }
 function setSkyPano(img) {
   if (!renderer) throw new Error('renderer 未初始化');
+  skyboxSrc = img;   /* v37：源留底 */
   if (skyRT) { skyRT.dispose(); skyRT = null; skyReady = false; }
   const maxCube = renderer.capabilities.maxCubemapTextureSize || 4096;
   const F = Math.max(8, Math.min(Math.ceil(img.width / 4), maxCube));
@@ -10021,6 +10181,7 @@ function cubeFaceSizeFor(img) {
 function setBodyTextures(i, img1, img2) {
   if (i < 0 || i >= bodies.length) return;
   const rec = bodies[i];
+  rec._src1 = img1 || null; rec._src2 = img2 || null;   /* v37：源 Image 留底（上下文恢复重建用） */
   if (rec.rt1) { rec.rt1.dispose(); rec.rt1 = null; }
   if (rec.rt2) { rec.rt2.dispose(); rec.rt2 = null; }
   if (img1) rec.rt1 = buildCubeFromPano(img1, cubeFaceSizeFor(img1), true);
@@ -10608,8 +10769,40 @@ function init(canvasId, fov) {
      * 轮廓弦差 ≈ r·(1−cos(π/192)) ≈ 0.27px < 半像素；仅近距天体切换使用（见
      * renderFrame 的 hiRes 判定），常规视距仍用 48×28，顶点成本不增。 */
     sphereGeoHi = new THREE.SphereGeometry(1, 192, 144);
+    /* v37：WebGL 上下文丢失自愈 —— 显卡驱动重置/多 GPU 切换/显存耗尽时（预设切换
+     * 重建立方体贴图是显存压力峰值之一），上下文丢失后旧版所有 GL 资源失效：
+     * 天体贴图、天空盒、composer 全部黑屏，且无提示（用户感知 =「贴图和天空盒
+     * 丢了」）。处理：preventDefault 允许恢复；恢复后 three.js 自动重建内部状态，
+     * 自建 GPU 资源（天空盒 RT / 天体贴图 RT）必须重渲染 —— 源 Image（JS 侧）
+     * 仍在，直接重建即可；composer 每帧重绘自愈。 */
+    cv.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();   /* 允许后续 restored 事件 */
+      glLost = true;
+      console.warn('[v37] WebGL 上下文丢失，等待恢复…');
+      try { if (typeof window.showToast === 'function') window.showToast('显卡上下文丢失，正在自动恢复渲染…', 'error', 6000); } catch (err) { }
+    });
+    cv.addEventListener('webglcontextrestored', () => {
+      glLost = false;
+      console.info('[v37] WebGL 上下文已恢复，重建天空盒/天体贴图 GPU 资源');
+      try { restoreGL(); } catch (err) { console.warn('[v37] 恢复重建失败:', err); }
+      try { if (typeof window.showToast === 'function') window.showToast('渲染已恢复', 'success', 2600); } catch (err) { }
+    });
     return true;
   } catch (e) { console.error('three.js 渲染层初始化失败:', e); return false; }
+}
+/* v37：WebGL 上下文丢失标记与恢复重建（GPU 资源源自 JS 侧 Image，可直接重建） */
+let glLost = false;
+function restoreGL() {
+  if (!renderer || !scene) return;
+  if (skyboxSrc && skyboxSrc.width > 0) { try { setSkyPano(skyboxSrc); } catch (e) { console.warn('天空盒重建失败:', e); } }
+  for (let i = 0; i < bodies.length; i++) {
+    const rec = bodies[i];
+    const src1 = rec._src1, src2 = rec._src2;   /* setBodyTextures 记录的源 Image */
+    rec.rt1 = null; rec.rt2 = null;
+    if (src1) { try { rec.rt1 = buildCubeFromPano(src1, cubeFaceSizeFor(src1), true); } catch (e) { } }
+    if (src2) { try { rec.rt2 = buildCubeFromPano(src2, cubeFaceSizeFor(src2), true); } catch (e) { } }
+  }
+  if (composer && activeCam) composer.setSize(renderer.domElement.width, renderer.domElement.height);   // 强制重建 RT 链
 }
 /* v18：MSAA 自适应 —— composer 的两个 HalfFloat RT 均带 MSAA，4x 分辨率时
  * （如 1080p 窗口 → 7680×4320）仅两块 RT 就要 4 样本 ×8 B ×2 缓冲 ≈ 2 GB
@@ -10650,6 +10843,13 @@ function setSize(w, h, rf) {
 
 window.__TJS__ = {
   init, setSize, renderFrame, syncBodies,
+  /* v37：天空盒/GL 诊断 + 测试钩子（贴图 RT 状态、上下文丢失标记） */
+  skyState: () => ({ skyReady, hasRT: !!skyRT, hasSrc: !!(skyboxSrc && skyboxSrc.width > 0),
+    bgIsRT: !!(scene && skyRT && scene.background === skyRT.texture),
+    bgType: scene ? (scene.background && scene.background.isCubeTexture ? 'cube' : (scene.background && scene.background.isColor ? 'color' : String(scene.background))) : 'no-scene',
+    glLost }),
+  _bodiesForTest: () => bodies.map(r => ({ rt1: !!r.rt1, rt2: !!r.rt2, hasSrc1: !!r._src1 })),
+  restoreGL: () => restoreGL(),
   lensDbg: () => ({ enabled: lensPass.enabled, n: lensPass.uniforms.uLN.value,
     lbh: lensPass.uniforms.uLBH.value.slice(0, 2).map(v => v.toArray().map(x => +x.toPrecision(6))),
     par: lensPass.uniforms.uLPar.value.slice(0, 2).map(v => [v.x, v.y, v.z, v.w]),
