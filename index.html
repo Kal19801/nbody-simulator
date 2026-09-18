@@ -576,6 +576,25 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v38 轨迹参考系绑定修复（用户反馈「地月 6000s×1000 步：质心/地球参考系月球轨迹诡异、
+ *   绝对原点正常；绝对原点下地球轨迹如分形，步数越大曲线越多」；物理内核零改动，详见 deploy/README.md §十三 与 worklog）：
+ *      ① 动原点参考系下播放中轨迹辫状错位（根因修复）：v36 预测弧缓存存的是【预组合
+ *         到绘制系】的弧点（含 shv = 参考系原点当前位置），缓存验证 gen/ref/ta/tb 不含
+ *         组合时刻 —— 播放中原点持续漂移（地月质心 12 m/s、太阳系行星 ~30 km/s），帧龄
+ *         不同的弧各自携带旧 shv，相对当前折线逐段错位（每帧龄 6e6 s × 漂移速度，地月
+ *         实测最大 72,019 km/帧龄）→ 轨迹呈辫状交叉带；绝对原点系 shv≡0 恒定不受影响
+ *         （与用户报告「绝对原点正常、质心/地球诡异」逐字吻合）。修复：缓存改存未组合的
+ *         rel 弧（trailArcPredict 原始输出），组合（lerp(主星,τ) − lerp(原点,τ) + shv）
+ *         推迟到每次取用时按当前帧值现算 —— 端点与折线严格对齐，缓存条目帧无关。
+ *      ② 预设质心系初值：预设天体按开普勒根数相对母星生成且母星常静止（地月 Earth
+ *         vel=0），系统净动量 ≠ 0（地月 7.25e25 kg·m/s → 质心漂移 12 m/s）；地球摆动
+ *         速度恰等于漂移速度 → 绝对原点系下地球轨迹为「每月一个尖点」的临界摆线
+ *         （416 天窗 15 个尖点，快进增大最小窗口 → 尖点更多 = 用户报告的「分形/步数
+ *         越大曲线越多」）。修复：预设加载（applyPreset → setSystem(opts.barycentric)）
+ *         对解析完成的天体表整体做质心速度修正 v -= P/M（Galileo 变换，与 tests/
+ *         harness.mjs 场景构造同约定）：相对动力学/守恒差分量逐位不变，仅消除整体
+ *         平动；编辑器/导入/localStorage 保持字面语义。修正后地月绝对系：地球=质心旁
+ *         4670 km 小圆、月球=379,700 km 干净圆周。
  * v37 三问题修复（用户反馈；内核仅调度改动 → 数值位等价，详见 deploy/README.md §十二 与 worklog）：
  *      ① 多线程更卡顿（挤占渲染/过于激进）根因修复：
  *         a) C 内核 accumMT 派发者等待 = wait32 timeout 0 = 纯忙等自旋 —— 每次并行
@@ -2448,7 +2467,7 @@ function createBodyFromKeplerian(mass, primaryBodyName, semiMajorAxisStr, eccent
 }
 
 /* ---------------- 原始天体数组解析（导入/localStorage/预设共用） ---------------- */
-function resolveBodies(rawArray) {
+function resolveBodies(rawArray, opts) {
   const warnings = [];
   if (!Array.isArray(rawArray)) throw new Error('数据不是天体数组');
   const valid = rawArray.filter(b => b && typeof b.name === 'string' && b.name.trim() !== '' &&
@@ -2546,6 +2565,26 @@ function resolveBodies(rawArray) {
     q.item.vel = Array.isArray(b.vel) ? b.vel.map(Number) : [0, 0, 0];
     out.push(q.item);
     warnings.push(q.item.name + ': 开普勒根数无法解析，主天体缺失，使用已存坐标');
+  }
+  /* v38：预设质心系初值（opts.barycentric，仅预设路径启用）—— 预设天体按开普勒
+   * 根数相对母星生成且母星常静止（如地月 Earth vel=0），系统净动量 ≠ 0 → 绝对
+   * 原点系下整个系统以 v_cm 匀速漂移（地月 ≈12 m/s），地球的绝对轨迹变为
+   * 「摆动速度=漂移速度」的临界摆线（每月一个尖点，快进时用户报告的「分形」感），
+   * 轨迹参考系原点（质心/主星）也持续漂移。此处对解析完成的天体表整体做
+   * 质心速度修正 v -= P/M（与 tests/harness.mjs 场景构造同约定）：Galileo 变换，
+   * 相对动力学与全部守恒差分量不变，仅消除整体平动；编辑器/导入/localStorage
+   * 保持字面语义不受影响。必须在开普勒解析全部完成后执行（子天体速度含母星
+   * 速度分量，提前修正会被解析过程二次叠加）。 */
+  if (opts && opts.barycentric && out.length > 0) {
+    let Mt = 0, Px = 0, Py = 0, Pz = 0;
+    for (const b of out) {
+      const m = (typeof b.mass === 'number' && isFinite(b.mass)) ? b.mass : 0;
+      if (m > 0) { Mt += m; Px += m * b.vel[0]; Py += m * b.vel[1]; Pz += m * b.vel[2]; }
+    }
+    if (Mt > 0 && (Px !== 0 || Py !== 0 || Pz !== 0)) {
+      Px /= Mt; Py /= Mt; Pz /= Mt;
+      for (const b of out) { b.vel[0] -= Px; b.vel[1] -= Py; b.vel[2] -= Pz; }
+    }
   }
   return { bodies: out, warnings };
 }
@@ -2691,7 +2730,7 @@ function afterSystemReplaced() {
   if (matScanned && matItems.length) matAutoApply();   /* 材质库已就绪 → 新场景自动换同名贴图 */
   scheduleSceneMatScan();   /* v37：fallback 扫描环境为新场景补探（串行 + 防抖） */
 }
-function setSystem(rawList) {
+function setSystem(rawList, opts) {
   /* v36：系统替换时的编辑器状态隔离 —— 编辑模态若跨预设打开，editingIndex 会
    * 指向新系统的同索引天体；此时点保存会把旧表单值（质量/轨道/自转/贴图）
    * 写入新系统天体 = 全字段污染（用户报告「编辑过一个后切换预设仍残留污染」
@@ -2700,7 +2739,7 @@ function setSystem(rawList) {
    * 同类悬挂：__linkParent（联动母星速度写回标记）一并清零。 */
   if (ui.bodyFormModal && ui.bodyFormModal.classList.contains('show')) closeBodyForm();
   window.__linkParent = null;
-  const res = resolveBodies(rawList);
+  const res = resolveBodies(rawList, opts);
   for (const w of res.warnings) showToast(w, 'info', 4000);
   const sync = initState(res.bodies);
   /* v37：deferred（MT 在飞帧）时不在此跑后处理 —— 此时 meta 还是旧系统，
@@ -4942,8 +4981,8 @@ const trailPt = { f64: new Float64Array(0), n: 0 };       // 相机系细分点�
 const trailLineBuf = { f32: new Float32Array(0), n: 0 };  // 线模式顶点（7 float/顶点）
 const trailDotBuf = { f32: new Float32Array(0), n: 0 };   // 点迹顶点
 /* v36：预测弧缓存 —— key = bi*HIST_MAX+环形槽位，值 = {gen,ref,ta,tb,pts|null}
- * （null 负缓存：二体近似失效的段不再重算）。pts 为【绘制系】坐标
- * （已含主星/参考系原点插值修正与 sh 平移），播放中每帧仅最新段新增。 */
+ * （null 负缓存：二体近似失效的段不再重算）。v38 起 pts 为【未组合的 rel 弧】
+ * （trailArcPredict 原始输出，含 τ），组合在每次取用时按当前帧参考系现算。 */
 let trailArcGen = 0;
 const trailArcCache = new Map();
 const TRAIL_ARC_BUILD_BUDGET = 3000;    // 单次 buildTrails 新算弧数上限（换参考系/初次铺满时的限流）
@@ -5048,12 +5087,39 @@ function buildTrails(fr) {
    * 验证 gen/ref/ta/tb），每帧只为新出现的段新算（限流 TRAIL_ARC_BUILD_BUDGET）。
    * 参考系修正：X = rel弧点 + lerp(主星,τ) − lerp(参考系原点,τ) + sh，
    * 其中主星/原点线性插值沿段内时间分数 τ —— 参考系平动的一阶修正，
-   * 原点=主星自身时两者相消，弧即为精确相对二体轨迹。 */
+   * 原点=主星自身时两者相消，弧即为精确相对二体轨迹。
+   * v38 修复「质心/地球等动原点参考系下播放中轨迹辮状错位」：缓存改存【未组合的
+   * rel 弧】，组合（含 shv=参考系原点当前位置）推迟到每次取用时按当前帧值现算。
+   * 旧版把 shv 烧进缓存点，播放中原点持续漂移（地月质心 12 m/s、太阳系行星
+   * ~30 km/s），帧龄不同的弧各自携带旧 shv → 相对当前折线逐段错位（每帧龄
+   * 6e6 s × 漂移速度，地月实测最大 72,019 km/帧龄）→ 轨迹呈辮状交叉带；
+   * 绝对原点系 shv≡0 恒定不受影响 —— 与用户报告完全吻合。 */
   trailArcLast.hit = 0; trailArcLast.calc = 0; trailArcLast.ok = 0; trailArcLast.fail = 0;
   const arcRefKey = trailMode + '|' + ui.trailRefMode.value + '|' + (useRel ? tf : '') + '|N' + N;
   let arcNewBudget = TRAIL_ARC_BUILD_BUDGET;
   const hostCache = new Int32Array(N).fill(-2);   // -2 未算 / -1 无主星 / ≥0 主星索引
   const ringSlot = k => (histHead - histCount + k + HIST_MAX) % HIST_MAX;
+  /* v38：rel 弧 → 绘制系组合（每次取用按当前帧 refOff/shv 现算，端点与折线严格对齐；
+   * X = rel + lerp(主星,τ) − lerp(原点,τ) + shv，τ=0/1 端点与快照精确一致） */
+  const composeRelArc = (bi, A, rel, k0, k1, sA, sB) => {
+    const p0 = histPos[sA], p1 = histPos[sB];
+    if (!p0 || !p1 || p0.length < Math.max(bi, A) * 3 + 3 || p1.length < Math.max(bi, A) * 3 + 3) return null;
+    const AX0 = p0[A * 3], AY0 = p0[A * 3 + 1], AZ0 = p0[A * 3 + 2];
+    const AX1 = p1[A * 3], AY1 = p1[A * 3 + 1], AZ1 = p1[A * 3 + 2];
+    const OX0 = useRel ? refOff.off[k0 * 3] : 0, OY0 = useRel ? refOff.off[k0 * 3 + 1] : 0, OZ0 = useRel ? refOff.off[k0 * 3 + 2] : 0;
+    const OX1 = useRel ? refOff.off[k1 * 3] : OX0,
+      OY1 = useRel ? refOff.off[k1 * 3 + 1] : OY0,
+      OZ1 = useRel ? refOff.off[k1 * 3 + 2] : OZ0;
+    const pts = new Float64Array(rel.length);
+    for (let q = 0; q < rel.length; q += 4) {
+      const tau = rel[q + 3], g1 = tau, g0 = 1 - tau;
+      pts[q] = rel[q] + AX0 * g0 + AX1 * g1 - (OX0 * g0 + OX1 * g1) + shv[0];
+      pts[q + 1] = rel[q + 1] + AY0 * g0 + AY1 * g1 - (OY0 * g0 + OY1 * g1) + shv[1];
+      pts[q + 2] = rel[q + 2] + AZ0 * g0 + AZ1 * g1 - (OZ0 * g0 + OZ1 * g1) + shv[2];
+      pts[q + 3] = tau;
+    }
+    return pts;
+  };
   const arcOfFor = bi => j => {
     if (j < 0 || j + 1 >= histCount) return null;
     const k0 = trailSlotMap[j], k1 = trailSlotMap[j + 1];
@@ -5062,8 +5128,13 @@ function buildTrails(fr) {
     const key = bi * HIST_MAX + sA;
     const hit = trailArcCache.get(key);
     if (hit && hit.gen === trailArcGen && hit.ref === arcRefKey && hit.ta === histT[sA] && hit.tb === histT[sB]) {
-      trailArcLast.hit++; if (hit.pts) trailArcLast.ok++;
-      return hit.pts;
+      trailArcLast.hit++;
+      if (!hit.pts) return null;                      // 负缓存命中
+      const Ah = hostCache[bi] === -2 ? (hostCache[bi] = boundHostIdx(bi)) : hostCache[bi];
+      if (Ah < 0 || Ah === bi) return null;
+      const pts = composeRelArc(bi, Ah, hit.pts, k0, k1, sA, sB);
+      if (pts) trailArcLast.ok++;
+      return pts;
     }
     if (trailArcCache.size > 12000) trailArcCache.clear();
     if (!(arcNewBudget > 0) || N < 2 || N > 128 || !histVel[sA] || !histPos[sA] || !histPos[sB]) return null;   // 预算/门控未评估：不写缓存（后续帧再试）
@@ -5082,25 +5153,10 @@ function buildTrails(fr) {
           p1[bi * 3] - p1[A * 3], p1[bi * 3 + 1] - p1[A * 3 + 1], p1[bi * 3 + 2] - p1[A * 3 + 2],
           dt, mu);
         if (!rel) break trailArcNewCalc;
-        /* 相对弧 → 绘制系：主星/原点位置沿 τ 线性插值（快照端点精确） */
-        let pts = null;
-        const AX0 = p0[A * 3], AY0 = p0[A * 3 + 1], AZ0 = p0[A * 3 + 2];
-        const AX1 = p1[A * 3], AY1 = p1[A * 3 + 1], AZ1 = p1[A * 3 + 2];
-        const OX0 = useRel ? refOff.off[k0 * 3] : 0, OY0 = useRel ? refOff.off[k0 * 3 + 1] : 0, OZ0 = useRel ? refOff.off[k0 * 3 + 2] : 0;
-        const OX1 = useRel ? refOff.off[k1 * 3] : OX0,
-          OY1 = useRel ? refOff.off[k1 * 3 + 1] : OY0,
-          OZ1 = useRel ? refOff.off[k1 * 3 + 2] : OZ0;
-        pts = new Float64Array(rel.length);
-        for (let q = 0; q < rel.length; q += 4) {
-          const tau = rel[q + 3], g1 = tau, g0 = 1 - tau;
-          pts[q] = rel[q] + AX0 * g0 + AX1 * g1 - (OX0 * g0 + OX1 * g1) + shv[0];
-          pts[q + 1] = rel[q + 1] + AY0 * g0 + AY1 * g1 - (OY0 * g0 + OY1 * g1) + shv[1];
-          pts[q + 2] = rel[q + 2] + AZ0 * g0 + AZ1 * g1 - (OZ0 * g0 + OZ1 * g1) + shv[2];
-          pts[q + 3] = tau;
-        }
-        if (pts) trailArcLast.ok++; else trailArcLast.fail++;
-        trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts });
-        return pts;
+        trailArcLast.ok++;
+        /* v38：缓存只存未组合的 rel 弧（消除 shv 帧龄过期）；组合在返回前现算 */
+        trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts: rel });
+        return composeRelArc(bi, A, rel, k0, k1, sA, sB);
       }
       trailArcLast.fail++;
       trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts: null });   // 已评估且失败：负缓存
@@ -6120,7 +6176,7 @@ function applyPreset(name) {
   if (s.adaptive !== undefined) ui.adaptiveTimeStep.checked = s.adaptive;
   if (s.integrator) setIntegrator(s.integrator);
   updateStepControlLocks();   /* v31：预设可能切换积分器/自适应 → 重算灰锁 */
-  setSystem(p.make());
+  setSystem(p.make(), { barycentric: true });   /* v38：预设质心系初值（见 resolveBodies 尾注） */
   fitView();
   savePrefs();
   showToast('已加载预设 ' + p.label, 'success', 3200);
