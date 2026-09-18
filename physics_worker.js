@@ -126,13 +126,31 @@ globalThis.__ENGINE__ = {
 /* integrateFrame：physicsAdvance 的纯积分部分（UI/并合留在主线程）
  * v35：引力波采样随帧内子步在 worker 侧执行（computeGWStrainCore 仅依赖
  * 共享状态数组）—— 修复 v34「MT 开启后引力波波形/观测失效」。采样节奏与
- * 主线程 physicsAdvance 逐位同构（gwEvery = max(1, ⌊steps/48⌋)，k%gwEvery==0）。 */
+ * 主线程 physicsAdvance 逐位同构（gwEvery = max(1, ⌊steps/48⌋)，k%gwEvery==0）。
+ * v37：轨迹子帧采样 —— o.sub = { tInt, startT } 时按【累计推进时间】阈值采样
+ * 真实积分器状态快照（与主线程 physicsAdvance 同一阈值逻辑），随帧回传主线程
+ * 写入轨迹环形缓冲（transferable 所有权转移，零拷贝）。大步长快进时每帧仅 1 采样
+ * 的轨迹必折线化（月球 6h×1000 实测 9.15 圈/段，密切锥线终点偏差 3×10⁵ km，
+ * 预测弧无法还原多体摄动路径）—— 唯一诚实的修复是加密真实采样。 */
 function integrateFrame(baseDt, steps, targetTime, o) {
   const isIAS = R.integrator === 'ias15';
   const stepFn = isIAS ? Fn.stepIAS15 : Fn.stepYoshida4;
   const adaptiveOn = isIAS ? true : o.adaptive;
   const gwEvery = o.gwEvery || 0;
   const gwBuf = gwEvery ? [] : null;
+  const sub = o.sub || null;                      /* v37：{ tInt, startT } | null */
+  const sT = sub ? [] : null, sP = sub ? [] : null, sV = sub ? [] : null;
+  let nextSampleT = sub ? sub.tInt : 0;
+  const snap = () => {
+    /* 经 R.arrs() 取当前数组视图（Node eval 垫片下裸全局词法绑定不可见，双环境安全） */
+    const A = R.arrs();
+    const p = new Float32Array(R.N * 3), v = new Float32Array(R.N * 3);
+    for (let i = 0; i < R.N; i++) {
+      p[i * 3] = A.px[i]; p[i * 3 + 1] = A.py[i]; p[i * 3 + 2] = A.pz[i];
+      v[i * 3] = A.vx[i]; v[i * 3 + 1] = A.vy[i]; v[i * 3 + 2] = A.vz[i];
+    }
+    sT.push(sub.startT + advanced); sP.push(p); sV.push(v);
+  };
   let advanced = 0, mergeHit = false;
   const t0 = performance.now();
   let k = 0;
@@ -143,6 +161,7 @@ function integrateFrame(baseDt, steps, targetTime, o) {
       if (isIAS) dtk = Fn.stepIAS15Adaptive(baseDt);
       else dtk = Fn.advanceAdaptiveYoshida(baseDt);
       advanced += dtk;
+      if (sub && advanced >= nextSampleT) { snap(); nextSampleT += sub.tInt; }   /* v37 */
       if (gwBuf && k % gwEvery === 0) {
         const hw = Fn.computeGWStrainCore();   // 自适应路径每步均刷新 ax → 采样有效
         gwBuf.push(hw[0], hw[1]);
@@ -160,6 +179,7 @@ function integrateFrame(baseDt, steps, targetTime, o) {
       const gwK = gwEvery && k % gwEvery === 0;
       stepFn(baseDt, gwK || k === steps - 1 ? true : false);
       advanced += baseDt;
+      if (sub && advanced >= nextSampleT) { snap(); nextSampleT += sub.tInt; }   /* v37 */
       if (gwK) {
         const hw = Fn.computeGWStrainCore();
         gwBuf.push(hw[0], hw[1]);
@@ -168,13 +188,15 @@ function integrateFrame(baseDt, steps, targetTime, o) {
   }
   if (adaptiveOn && R.N > 1) { R.lastAdaptSteps = k; R.lastAdaptAdvanced = advanced; }
   else { R.lastAdaptSteps = 0; R.lastAdaptAdvanced = 0; }
-  return {
+  const res = {
     advanced, mergeHit, k: R.lastAdaptSteps, advancedAdapt: R.lastAdaptAdvanced,
     gw: gwBuf,
     stats: { minR2: R.minR2, maxAccMag: R.maxAccMag, minPairM: R.minPairM, minPairV2: R.minPairV2, tideHeatW: R.tideHeatW },
     ias: { iasDtNext: R.iasDtNext, iasRejectCount: R.iasRejectCount },
     capRev: -1, cap: W.cap
   };
+  if (sub && sT.length) res.samples = { t: sT, pos: sP, vel: sV };   /* v37：随帧回传（transferable） */
+  return res;
 }
 
 async function doInit(msg) {
@@ -247,14 +269,22 @@ self.onmessage = async (ev) => {
     if (msg.cap !== W.cap) { W.exp.setBlock(msg.base, msg.cap); W.base = msg.base; buildViews(msg.cap); }
     const res = integrateFrame(msg.baseDt, msg.steps, msg.targetTime, {
       adaptive: fl.adaptive, mergeOn: msg.mergeOn, contactR2: msg.contactR2, budgetMs: msg.budgetMs,
-      gwEvery: fl.gwEvery || 0
+      gwEvery: fl.gwEvery || 0,
+      /* v37：轨迹子帧采样参数（主线程按轨迹开关/帧推进计算；无轨迹时 null） */
+      sub: (msg.subT > 0 && R.N > 0) ? { tInt: msg.subT, startT: msg.startT || 0 } : null
     });
     res.seq = msg.seq;
     res.epoch = msg.epoch;   /* v35：状态纪元回传（不匹配 → 主线程整体作弃） */
     res.cap = msg.cap;
     /* v34b 修复：原实现恒发 capRev=0 → 主线程每帧重建全部视图；改为原样回传。 */
     res.capRev = msg.capRev;
-    self.postMessage({ t: 'frame', ...res });
+    /* v37：快照缓冲所有权转移（零拷贝）；无快照时保持空转移列表 */
+    const transfers = [];
+    if (res.samples) {
+      for (const b of res.samples.pos) transfers.push(b.buffer);
+      for (const b of res.samples.vel) transfers.push(b.buffer);
+    }
+    self.postMessage({ t: 'frame', ...res }, transfers);
     return;
   }
   if (msg.t === 'quit') {

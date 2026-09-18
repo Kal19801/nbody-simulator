@@ -201,16 +201,16 @@
   /* ---------- WASM 加载（3 次重试，失败静默回退） ---------- */
   async function loadWasm() {
     if (!E.wasmBytes) {
-      console.info('[v34] fetch wasm...');
+      console.info('fetch wasm...');
       const res = await fetch(WASM_URL);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       E.wasmBytes = await res.arrayBuffer();
-      console.info('[v34] wasm bytes:', E.wasmBytes.byteLength);
+      console.info('wasm bytes:', E.wasmBytes.byteLength);
     }
     E.memory = new WebAssembly.Memory({ initial: MEM_INIT_PAGES, maximum: MEM_MAX_PAGES, shared: true });
-    console.info('[v34] compiling...');
+    console.info('compiling...');
     const mod = await WebAssembly.compile(E.wasmBytes);
-    console.info('[v34] compiled, instantiating...');
+    console.info('compiled, instantiating...');
     const imports = WebAssembly.Module.imports(mod);
     const env = {};
     for (const im of imports) {
@@ -220,7 +220,7 @@
       else if (im.kind === 'table') env[im.name] = new WebAssembly.Table({ initial: 0, element: 'anyfunc' });
     }
     const inst = await new WebAssembly.Instance(mod, { env });
-    console.info('[v34] instantiated, version=', inst.exports.version());
+    console.info('instantiated, version=', inst.exports.version());
     return inst;
   }
   async function activate() {
@@ -230,18 +230,18 @@
     let inst = null, lastErr = null;
     for (let attempt = 1; attempt <= WASM_RETRIES; attempt++) {
       try { inst = await loadWasm(); break; }
-      catch (err) { lastErr = err; E.wasmBytes = null; console.info('[v34] 尝试 ' + attempt + ' 失败:', String(err && err.message || err)); await new Promise(r => setTimeout(r, 150 * attempt)); }
+      catch (err) { lastErr = err; E.wasmBytes = null; console.info('尝试 ' + attempt + ' 失败:', String(err && err.message || err)); await new Promise(r => setTimeout(r, 150 * attempt)); }
     }
     if (!inst) {
       /* 静默回退 JS（不弹窗不打断；面板显示状态，console 留痕） */
       E.state = 'fallback'; E.active = false; E.lastError = String(lastErr && lastErr.message || lastErr);
-      console.info('[v34] WASM 内核加载失败，已静默回退 JS 内核：', E.lastError);
+      console.info('WASM 内核加载失败，已回退 JS 内核：', E.lastError);
       updateStatus();
       return false;
     }
     E.wasm = inst;
     const v = inst.exports.version();
-    if (v !== 35) { E.state = 'fallback'; E.lastError = '内核版本不匹配: ' + v; return false; }
+    if (v !== 36) { E.state = 'fallback'; E.lastError = '内核版本不匹配: ' + v; return false; }
     inst.exports.init(R.G, R.C_SQ, R.C_5, R.GRAV_SOFTENING_SQ, R.PN_TIDE_R_MIN,
       R.TIDE_LAG_MAX, R.YOSHIDA_W1, R.YOSHIDA_W0, Math.max(R.CAP, 64));
     const snap = snapshotJS();           // 先带走当前状态（JS 数组或旧视图）
@@ -292,9 +292,12 @@
 
   async function startPool() {
     if (E.poolReady || !E.active) return;
-    if (!crossOriginIsolated()) { uncheckMT(); showToastSafe('多线程需要跨域隔离（coi-serviceworker）。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
+    if (!crossOriginIsolated()) { uncheckMT(); showToastSafe('多线程需要跨域隔离。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
     const hw = (navigator.hardwareConcurrency || 4);
-    const W = Math.max(2, Math.min(hw, 16));
+    /* v37：线程数留 1 核余量（hw-1）—— 旧 W = hw 时播放中 W 个计算线程全速运转，
+     * 主线程/合成器/rAF 与 OS 调度争核（用户报告「多线程更卡顿」的次要来源）。
+     * 行分割结果与 W 无关（确定性），只影响并行度不影响物理。下限 2 不变。 */
+    const W = Math.max(2, Math.min(hw - 1, 16));
     E.workers = [];
     try {
       await new Promise((resolve, reject) => {
@@ -312,7 +315,7 @@
           wk.onerror = (e) => {
             /* v35：池运行期错误 → 释放挂起帧（下一帧自动回退主线程），不再永久卡死渲染循环 */
             if (!failed) { failed = true; reject(new Error(e.message || 'worker error')); return; }
-            if (E.frameInFlight) { E.frameInFlight = false; E.pending = null; console.info('[v35] worker 错误，帧已作弃：', e.message); }
+            if (E.frameInFlight) { E.frameInFlight = false; E.pending = null; console.info('worker 错误，帧已作弃：', e.message); }
           };
           wk.postMessage({ t: 'init', w, wasm: E.wasmBytes, memory: E.memory,
             base: E.wasm.exports.getBlkBase(), cap: E.cap, useMT: true,
@@ -322,7 +325,7 @@
       });
       E.poolReady = true; E.nWorkers = W;
     } catch (err) {
-      console.info('[v34] 线程池创建失败，回退单线程 WASM：', err);
+      console.info('线程池创建失败，回退单线程 WASM：', err);
       stopPool();
       E.mtOn = false;
       uncheckMT();
@@ -395,7 +398,11 @@
         /* worker 已停写（帧结束）→ 现在重放 initState 的状态写入（干净） */
         initStateFull(pi);
         postPool({ t: 'reload' });   // worker 侧 IAS 状态机/统计复位
-        if (typeof window.uiAfterState === 'function') window.uiAfterState();
+        /* v37：重放路径补跑系统替换后处理（贴图记忆重附/材质库自动应用/场景重扫/）
+         * —— 旧版只调 uiAfterState，MT 在飞帧期间切换预设时 matAutoApply/贴图
+         * 重附被跳过 → 贴图丢失（直接路径 setSystem 有做，此处对齐） */
+        if (typeof window.afterSystemReplaced === 'function') window.afterSystemReplaced();
+        else if (typeof window.uiAfterState === 'function') window.uiAfterState();
       }
       return;
     }
@@ -424,7 +431,7 @@
       const threads = E.mtOn && E.poolReady ? (E.nWorkers + ' 线程') : '单线程';
       const bh = E.bhTheta ? ' · BH θ=' + E.bhTheta : '';
       /* v36：内核版本动态取自 wasm version()（内核 v35 不变）；应用层 v36 */
-      txt = 'WASM 内核 v' + E.wasm.exports.version() + '（应用 v36） · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
+      txt = 'WASM 内核 v' + E.wasm.exports.version() + '（应用 v37） · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
     } else if (E.state === 'loading') txt = 'WASM 加载中…';
     else if (E.state === 'fallback') txt = 'JS 内核（WASM 不可用，已静默回退）';
     else txt = 'JS 内核';
