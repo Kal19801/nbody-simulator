@@ -48,11 +48,12 @@ const core = globalThis.__NBODY_CORE__;
 const R = core.refs();
 const Fn = core.fns();
 
-let W = { inst: null, exp: null, cap: 0, base: 0, statsView: null, mpiView: null, scanView: null, myW: -1, useMT: false, bhTheta: null };
+let W = { inst: null, exp: null, cap: 0, base: 0, statsView: null, mpiView: null, scanView: null, myW: -1, useMT: false, bhTheta: null, lastN: -1 };
 
 function mask() {
   return (R.gr1pnOn ? 1 : 0) | (R.gr15spinOn ? 2 : 0) | (R.gr2pnOn ? 4 : 0) |
-    (R.gr25On ? 8 : 0) | (R.gr35On ? 16 : 0) | (R.tideOn ? 32 : 0);
+    (R.gr25On ? 8 : 0) | (R.gr35On ? 16 : 0) | (R.tideOn ? 32 : 0) |
+    (R.j2On ? 64 : 0) | (R.pwOn ? 128 : 0);   /* v35：J2/PW 独立位 */
 }
 function syncStatsFromView() {
   R.minR2 = W.statsView[0]; R.maxAccMag = W.statsView[1]; R.minPairM = W.statsView[2];
@@ -122,11 +123,16 @@ globalThis.__ENGINE__ = {
   }
 };
 
-/* integrateFrame：physicsAdvance 的纯积分部分（UI/并合/GW 采样留在主线程） */
+/* integrateFrame：physicsAdvance 的纯积分部分（UI/并合留在主线程）
+ * v35：引力波采样随帧内子步在 worker 侧执行（computeGWStrainCore 仅依赖
+ * 共享状态数组）—— 修复 v34「MT 开启后引力波波形/观测失效」。采样节奏与
+ * 主线程 physicsAdvance 逐位同构（gwEvery = max(1, ⌊steps/48⌋)，k%gwEvery==0）。 */
 function integrateFrame(baseDt, steps, targetTime, o) {
   const isIAS = R.integrator === 'ias15';
   const stepFn = isIAS ? Fn.stepIAS15 : Fn.stepYoshida4;
   const adaptiveOn = isIAS ? true : o.adaptive;
+  const gwEvery = o.gwEvery || 0;
+  const gwBuf = gwEvery ? [] : null;
   let advanced = 0, mergeHit = false;
   const t0 = performance.now();
   let k = 0;
@@ -137,18 +143,30 @@ function integrateFrame(baseDt, steps, targetTime, o) {
       if (isIAS) dtk = Fn.stepIAS15Adaptive(baseDt);
       else dtk = Fn.advanceAdaptiveYoshida(baseDt);
       advanced += dtk;
+      if (gwBuf && k % gwEvery === 0) {
+        const hw = Fn.computeGWStrainCore();   // 自适应路径每步均刷新 ax → 采样有效
+        gwBuf.push(hw[0], hw[1]);
+      }
       if (o.mergeOn && R.minR2 < o.contactR2) { mergeHit = true; k++; break; }   // v32 语义：接触即停，主线程并合
     }
   } else {
     for (; k < steps; k++) {
-      stepFn(baseDt, k === steps - 1 ? true : false);
+      /* v19f：自适应关且无 GW 波形时，步尾统计求值仅在需要处刷新（gw 采样步/末步）；
+       * v35：刷新条件与主线程 physicsAdvance 逐位一致（gwK || 末步） */
+      const gwK = gwEvery && k % gwEvery === 0;
+      stepFn(baseDt, gwK || k === steps - 1 ? true : false);
       advanced += baseDt;
+      if (gwK) {
+        const hw = Fn.computeGWStrainCore();
+        gwBuf.push(hw[0], hw[1]);
+      }
     }
   }
   if (adaptiveOn && R.N > 1) { R.lastAdaptSteps = k; R.lastAdaptAdvanced = advanced; }
   else { R.lastAdaptSteps = 0; R.lastAdaptAdvanced = 0; }
   return {
     advanced, mergeHit, k: R.lastAdaptSteps, advancedAdapt: R.lastAdaptAdvanced,
+    gw: gwBuf,
     stats: { minR2: R.minR2, maxAccMag: R.maxAccMag, minPairM: R.minPairM, minPairV2: R.minPairV2, tideHeatW: R.tideHeatW },
     ias: { iasDtNext: R.iasDtNext, iasRejectCount: R.iasRejectCount },
     capRev: -1, cap: W.cap
@@ -174,6 +192,10 @@ async function doInit(msg) {
   }
   W.exp.setBlock(msg.base, msg.cap);
   W.base = msg.base;
+  /* v35：worker 堆隔离 —— 编排 worker 的 bump 指针指向主线程预留的区域
+   * （旧版 heapPtr=0：MT+IAS15/BH 时 iasTry/树分配从地址 0 踩踏共享内存）
+   * 计算 worker（w≥1）不分配，无需设置。 */
+  if (msg.heapPtr && W.exp.setHeapPtr) W.exp.setHeapPtr(msg.heapPtr);
   W.useMT = !!msg.useMT;
   buildViews(msg.cap);
   R.iasReady = false; R.iasN3 = -1; R.iasLastDt = 0; R.iasDtNext = Infinity;
@@ -198,19 +220,33 @@ self.onmessage = async (ev) => {
     buildViews(msg.cap);
     return;
   }
+  if (msg.t === 'reload') {
+    R.iasReady = false; R.iasN3 = -1; R.iasLastDt = 0; R.iasDtNext = Infinity; R.iasRejectCount = 0;
+    W.lastN = -1;
+    return;
+  }
   if (msg.t === 'frame') {
     // 同步编排全局（主线程权威）
     R.N = msg.n;
     const fl = msg.flags;
     R.gr1pnOn = fl.gr1pnOn; R.gr25On = fl.gr25On; R.gr2pnOn = fl.gr2pnOn; R.gr35On = fl.gr35On;
     R.gr15spinOn = fl.gr15spinOn; R.tideOn = fl.tideOn; R.integrator = fl.integrator;
+    R.j2On = !!fl.j2On; R.pwOn = !!fl.pwOn;   /* v35 */
     R.iasEpsilon = fl.iasEpsilon;
     W.bhTheta = (fl.bhTheta === undefined || fl.bhTheta === null) ? null : fl.bhTheta;
+    /* v35：系统更换（N 变化）→ IAS15 预测器/步长控制器冷启动（与主线程 initState 同构；
+     * 旧版跨 initState 保留旧预测器 → 新系统首步用旧态外推 → 间歇性发散） */
+    if (W.lastN !== undefined && W.lastN !== R.N) {
+      R.iasReady = false; R.iasN3 = -1; R.iasLastDt = 0; R.iasDtNext = Infinity; R.iasRejectCount = 0;
+    }
+    W.lastN = R.N;
     if (msg.cap !== W.cap) { W.exp.setBlock(msg.base, msg.cap); W.base = msg.base; buildViews(msg.cap); }
     const res = integrateFrame(msg.baseDt, msg.steps, msg.targetTime, {
-      adaptive: fl.adaptive, mergeOn: msg.mergeOn, contactR2: msg.contactR2, budgetMs: msg.budgetMs
+      adaptive: fl.adaptive, mergeOn: msg.mergeOn, contactR2: msg.contactR2, budgetMs: msg.budgetMs,
+      gwEvery: fl.gwEvery || 0
     });
     res.seq = msg.seq;
+    res.epoch = msg.epoch;   /* v35：状态纪元回传（不匹配 → 主线程整体作弃） */
     res.cap = msg.cap;
     /* v34b 修复：原实现恒发 capRev=0 → 主线程每帧重建全部视图；改为原样回传。 */
     res.capRev = msg.capRev;

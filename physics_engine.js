@@ -71,7 +71,8 @@
 
   function mask() {
     return (R.gr1pnOn ? 1 : 0) | (R.gr15spinOn ? 2 : 0) | (R.gr2pnOn ? 4 : 0) |
-      (R.gr25On ? 8 : 0) | (R.gr35On ? 16 : 0) | (R.tideOn ? 32 : 0);
+      (R.gr25On ? 8 : 0) | (R.gr35On ? 16 : 0) | (R.tideOn ? 32 : 0) |
+      (R.j2On ? 64 : 0) | (R.pwOn ? 128 : 0);   /* v35：J2/PW 独立位 */
   }
 
   /* ---------- 视图构建：把核心全局绑定接到 wasm 内存 ---------- */
@@ -124,9 +125,14 @@
     R.bufVer = R.bufVer + 1;
   }
 
-  /* ---------- ensureCap 钩子路径 ---------- */
+  /* ---------- ensureCap 钩子路径 ----------
+   * v35 内存泄漏修复：旧实现无 n<=cap 短路 —— 每次 initState（ensureCap 被调两次）
+   * 都无条件 blkResize 且 newCap = max(n, cap*2) 强制翻倍 → 反复加载/切换预设时
+   * wasm 状态块与内存页指数增长（64→128→…，实测可达 GB 级）。现与 JS 内核
+   * ensureCap 同语义：容量足够时零操作。 */
   E.growCap = function (n) {
     if (!E.active) { F.ensureCap(n); return; }
+    if (n <= E.cap) return;   /* v35：容量足够 → 零操作（与 JS ensureCap 同语义） */
     // 计算新块所需字节并先扩展 wasm 内存
     const newCap = Math.max(n, E.cap ? E.cap * 2 : 64);
     const needBytes = FIX_BYTES + N_SEC * newCap * 8 + 16;
@@ -217,7 +223,6 @@
     console.info('[v34] instantiated, version=', inst.exports.version());
     return inst;
   }
-
   async function activate() {
     if (E.active) return true;
     if (E.state === 'loading') return false;
@@ -236,7 +241,7 @@
     }
     E.wasm = inst;
     const v = inst.exports.version();
-    if (v !== 34) { E.state = 'fallback'; E.lastError = '内核版本不匹配: ' + v; return false; }
+    if (v !== 35) { E.state = 'fallback'; E.lastError = '内核版本不匹配: ' + v; return false; }
     inst.exports.init(R.G, R.C_SQ, R.C_5, R.GRAV_SOFTENING_SQ, R.PN_TIDE_R_MIN,
       R.TIDE_LAG_MAX, R.YOSHIDA_W1, R.YOSHIDA_W0, Math.max(R.CAP, 64));
     const snap = snapshotJS();           // 先带走当前状态（JS 数组或旧视图）
@@ -276,6 +281,15 @@
     if (E.workers[0]) E.workers[0].postMessage(msg, transfer || []);
   }
 
+  /* v35：编排 worker 堆区预留（每次引擎激活预留一次，池重启复用；纯指针预留，
+   * 不预提交内存 —— worker 实际分配时才按需 memory.grow） */
+  function workerHeapBase() {
+    if (!E.workerHeapBase && E.wasm && E.wasm.exports.reserveHeap) {
+      E.workerHeapBase = E.wasm.exports.reserveHeap(536870912);   /* 512 MB 指针空间 */
+    }
+    return E.workerHeapBase || 0;
+  }
+
   async function startPool() {
     if (E.poolReady || !E.active) return;
     if (!crossOriginIsolated()) { uncheckMT(); showToastSafe('多线程需要跨域隔离（coi-serviceworker）。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
@@ -295,9 +309,14 @@
               onFrameResult(ev.data);
             }
           };
-          wk.onerror = (e) => { if (!failed) { failed = true; reject(new Error(e.message || 'worker error')); } };
+          wk.onerror = (e) => {
+            /* v35：池运行期错误 → 释放挂起帧（下一帧自动回退主线程），不再永久卡死渲染循环 */
+            if (!failed) { failed = true; reject(new Error(e.message || 'worker error')); return; }
+            if (E.frameInFlight) { E.frameInFlight = false; E.pending = null; console.info('[v35] worker 错误，帧已作弃：', e.message); }
+          };
           wk.postMessage({ t: 'init', w, wasm: E.wasmBytes, memory: E.memory,
-            base: E.wasm.exports.getBlkBase(), cap: E.cap, useMT: true });
+            base: E.wasm.exports.getBlkBase(), cap: E.cap, useMT: true,
+            heapPtr: w === 0 ? workerHeapBase() : 0 });   /* v35：w0 堆隔离 */
           E.workers.push(wk);
         }
       });
@@ -321,28 +340,65 @@
       E.workers.forEach(w => { try { w.terminate(); } catch (e) { } });
     }
     E.workers = []; E.poolReady = false; E.nWorkers = 0;
+    /* v35：池终止时释放挂起帧 —— 若在播放中关闭多线程，在飞帧永不回巢会卡死
+     * 渲染循环；done(null) 让调用方走主线程 physicsAdvance 兑底路径续帧 */
+    if (E.frameInFlight && E.pending) {
+      const done = E.pending;
+      E.frameInFlight = false; E.pending = null;
+      try { done(null); } catch (e) { }
+    }
+    E.frameInFlight = false; E.pending = null;
   }
 
-  /* ---------- MT 帧派发 ---------- */
+  /* ---------- MT 帧派发 ----------
+   * v35：状态纪元（stateEpoch）—— initState/并合改写共享状态期间，在飞帧的
+   * 结果一律作弃（根因修复「切换预设后偶发发散」：旧版 worker 边积分旧态、
+   * 主线程边写新态 → 竞态写坏 + worker IAS 状态机跨 initState 不复位）。 */
+  E.stateEpoch = 0;
+  E.frameInFlight = false;
+  E.pendingInit = null;
+  /* v35：initState 前调用 —— 在飞帧标记作弃；若有挂起的 initState 重写，
+   * 结果回巢后由 onFrameResult 统一重放（避免 worker 晚到写坏新状态）。 */
+  E.invalidateFrames = function () {
+    E.stateEpoch++;
+    if (E.frameInFlight) return true;   // 有在飞帧：调用方应改走 deferred 路径
+    postPool({ t: 'reload' });          // v35：无在飞帧也通知 worker 复位 IAS 状态机
+    return false;
+  };
   E.advanceAsync = function (baseDt, steps, targetTime, opts, done) {
     if (!E.poolReady) { done(null); return; }
     E.pending = done;
+    E.frameInFlight = true;
     E.dispatchSeq++;
     postPool({
-      t: 'frame', seq: E.dispatchSeq, baseDt, steps, targetTime,
+      t: 'frame', seq: E.dispatchSeq, epoch: E.stateEpoch, baseDt, steps, targetTime,
       base: E.wasm ? E.wasm.exports.getBlkBase() : 0,
       n: R.N, flags: {
         gr1pnOn: R.gr1pnOn, gr25On: R.gr25On, gr2pnOn: R.gr2pnOn, gr35On: R.gr35On,
-        gr15spinOn: R.gr15spinOn, tideOn: R.tideOn, integrator: R.integrator,
+        gr15spinOn: R.gr15spinOn, tideOn: R.tideOn, j2On: R.j2On, pwOn: R.pwOn,
+        integrator: R.integrator,
         iasEpsilon: R.iasEpsilon, adaptive: opts.adaptive,
-        bhTheta: E.bhTheta          /* v34b: BH 选择随帧传递（worker 侧同规则派发 accumBH） */
+        bhTheta: E.bhTheta,          /* v34b: BH 选择随帧传递（worker 侧同规则派发 accumBH） */
+        gwEvery: opts.gwEvery || 0   /* v35：MT 引力波采样节奏（与 physicsAdvance 同式） */
       },
       mergeOn: opts.mergeOn, contactR2: opts.contactR2, budgetMs: opts.budgetMs,
       cap: E.cap, capRev: E.capRev
     });
   };
   function onFrameResult(msg) {
-    if (msg.seq !== E.dispatchSeq) return;
+    E.frameInFlight = false;
+    /* v35：状态纪元不匹配 = initState 已改写系统 → 结果整体作弃（防竞态污染） */
+    if (msg.epoch !== undefined && msg.epoch !== E.stateEpoch) {
+      E.pending = null;
+      const pi = E.pendingInit; E.pendingInit = null;
+      if (pi && typeof window.initStateFull === 'function') {
+        /* worker 已停写（帧结束）→ 现在重放 initState 的状态写入（干净） */
+        initStateFull(pi);
+        postPool({ t: 'reload' });   // worker 侧 IAS 状态机/统计复位
+        if (typeof window.uiAfterState === 'function') window.uiAfterState();
+      }
+      return;
+    }
     const done = E.pending; E.pending = null;
     if (!done) return;
     /* v34b 修复：worker 原样回传 capRev；旧实现 worker 恒发 capRev=0，
@@ -367,7 +423,7 @@
     if (E.state === 'active') {
       const threads = E.mtOn && E.poolReady ? (E.nWorkers + ' 线程') : '单线程';
       const bh = E.bhTheta ? ' · BH θ=' + E.bhTheta : '';
-      txt = 'WASM 内核 v34 · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
+      txt = 'WASM 内核 v35 · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
     } else if (E.state === 'loading') txt = 'WASM 加载中…';
     else if (E.state === 'fallback') txt = 'JS 内核（WASM 不可用，已静默回退）';
     else txt = 'JS 内核';

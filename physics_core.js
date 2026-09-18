@@ -203,6 +203,19 @@ let axTL, ayTL, azTL;                                     // 潮汐滞后分加�
  * 缺省开启：k2 自动 0.3，时滞缺省 0（纯保守潮，能量严格守恒）；
  * 仅当天体设置 tide_lag > 0 时产生耗散（轨道圆化/收缩、自转同步）。 */
 let tideOn = true;
+/* v35：J2 扁率摄动独立开关（保守进动/章动；不再依附潮汐耗散总开关）。
+ * v35 关键修复：v34 及以前的 J2 力/力矩/势能符号全部相反（等效负 J2）——
+ * 经「薄环精确级数 + 均匀扁椭球 GL 求积」双重数值裁决确认（见 worklog 35-1），
+ * 本版全部翻转为标准方向（Vallado 8-57 / Murray & Dermott）：
+ *   a_j = +K[(5c²-1)n̂ - 2cŝ]，N_i = -3GmmJ2R²(ŝ·n̂)(ŝ×n̂)/r³，U_J2 = +GmmJ2R²P2(c)/r³ */
+let j2On = true;
+/* v35：强场 PW 伪牛顿势（Paczyński–Wiita 1980）——强场模式开关。
+ * 成对替换牛顿项：a = ∓Gm/(r-r_g)²n̂，r_g = 2G(m_i+m_j)/c²（成对 Schwarzschild 半径和
+ * = 两黑洞视界和；成对对称→动量守恒）。
+ * 精确再现 Schwarzschild ISCO（3r_g = 6GM/c²）、边缘束缚圆轨（2r_g = 4GM/c²）；
+ * 近心点进动 ≈ 4πGM/(c²a(1-e²))（PW 已知特性：偏高阶项，约 GR 的 2/3）。
+ * 开启 PW 时不应叠加 1PN（UI 有提示）。 */
+let pwOn = false;
 let tideHeatW = 0;                     // 潮汐耗散功率瞬时值（UI 读数，W）
 let spinRate, spinAcc;                 // 自转角速度 rad/s 与 dΩ/dt（潮汐力矩/转动惯量）
 let spinTx, spinTy, spinTz;            // v19e 自转力矩向量 N⃗（N·m）：垂直分量进动自转轴，平行分量改 |Ω|
@@ -513,8 +526,8 @@ if (globalThis.__ENGINE__ && __ENGINE__.active && P === _wP && V === _wV && A ==
   minR2 = Infinity; maxAccMag = 0; minPairM = 0; minPairV2 = 0;
   tideHeatW = 0;
   /* v19f：缓冲无消费者时不清零（读方均在 tideOn/gr15spin 分支内）；v21 起自旋进动也写 spinT */
-  if ((tideOn || gr15spinOn) && spinAcc) spinAcc.fill(0, 0, N);
-  if ((tideOn || gr15spinOn) && spinTx) { spinTx.fill(0, 0, N); spinTy.fill(0, 0, N); spinTz.fill(0, 0, N); }
+  if ((tideOn || gr15spinOn || j2On) && spinAcc) spinAcc.fill(0, 0, N);
+  if ((tideOn || gr15spinOn || j2On) && spinTx) { spinTx.fill(0, 0, N); spinTy.fill(0, 0, N); spinTz.fill(0, 0, N); }
   const soft = GRAV_SOFTENING_SQ;
   const pnMin2 = PN_TIDE_R_MIN * PN_TIDE_R_MIN;
   for (let i = 0; i < N; i++) { ax[i] = 0; ay[i] = 0; az[i] = 0; }
@@ -538,7 +551,18 @@ if (globalThis.__ENGINE__ && __ENGINE__.active && P === _wP && V === _wV && A ==
       const invR = 1 / Math.sqrt(r2raw);
       const v2 = dvx * dvx + dvy * dvy + dvz * dvz;
       const r2 = r2raw + soft, rS = Math.sqrt(r2), invR3v = 1 / (r2 * rS);
-      const fj = G * massA[j] * invR3v, fi = Gmi * invR3v;
+      let fj = G * massA[j] * invR3v, fi = Gmi * invR3v;
+      if (pwOn) {
+        /* v35：强场 PW 伪牛顿势（成对对称，动量守恒）。r_g = 2G(m_i+m_j)/c² =
+         * 成对 Schwarzschild 半径和（= 两视界和 → 并合接触距离恰为奇异点）。
+         * denom 下限 0.05r_g 防奇异（开启并合时接触半径 = r_g 先于该域触发并合）。 */
+        const rgPW = 2 * G * (mi + massA[j]) / C_SQ;
+        const dPW = Math.sqrt(r2raw + soft);
+        const denPW = Math.max(dPW - rgPW, 0.05 * rgPW);
+        const gPW = 1 / (denPW * denPW * dPW);   // ×dPW 使 fj·d⃗ = G mj/den² · n̂（fj = G mj·gPW）
+        fj = G * massA[j] * gPW;
+        fi = Gmi * gPW;
+      }
       axi += fj * dx; ayi += fj * dy; azi += fj * dz;
       ax[j] -= fi * dx; ay[j] -= fi * dy; az[j] -= fi * dz;
       if ((gr2pnOn || gr25On) && r2raw > pnMin2) {
@@ -669,8 +693,9 @@ if (globalThis.__ENGINE__ && __ENGINE__.active && P === _wP && V === _wV && A ==
           spinTx[j] += Om2y * SJz - Om2z * SJy; spinTy[j] += Om2z * SJx - Om2x * SJz; spinTz[j] += Om2x * SJy - Om2y * SJx;
         }
       }
-      if (tideOn && r2raw > pnMin2) {
-        /* 潮汐相互作用（平衡潮 CTL）——见函数头注释。
+      if ((tideOn || j2On) && r2raw > pnMin2) {
+        /* 潮汐相互作用（平衡潮 CTL）+ J2 旋转扁体 —— 见函数头注释。
+         * v35：J2 独立于潮汐开关（MASK_J2），保守进动/章动不依附耗散总开关。
          * v21 物理修正：平衡潮是「外部扰源势的多极展开」——伴星接触/穿入本体
          * （r < R_i+R_j）时前提失效，r⁻⁷ 点质量潮力在穿入段虚假爆涨（用户地月
          * 快合并场景实测：穿入段月潮对地球力 ~10² m/s² ≫ 引力，弹射伴星且
@@ -738,7 +763,7 @@ if (globalThis.__ENGINE__ && __ENGINE__.active && P === _wP && V === _wV && A ==
             spinAcc[i] += (Nxc * six + Nyc * siy + Nzc * siz) / bodyIA[i];
           }
         }
-        if (bodyTideA0[j] > 0) {
+        if (tideOn && bodyTideA0[j] > 0) {
           const RJ = bodyRadA[j], lagJ = bodyLagA[j], A0j = bodyTideA0[j];
           if (r2raw > RJ * RJ) {
             const Aj = A0j * mi * mi * invR7 * fTide;
@@ -770,35 +795,35 @@ if (globalThis.__ENGINE__ && __ENGINE__.active && P === _wP && V === _wV && A ==
           axTL[i] += -fLagX / mi; ayTL[i] += -fLagY / mi; azTL[i] += -fLagZ / mi;
           axTL[j] += fLagX / mj; ayTL[j] += fLagY / mj; azTL[j] += fLagZ / mj;
         }
-        /* ---- v22：J2 旋转扁体（自转轴进动+章动；跟随 tideOn 总开关）----
+        /* ---- v35：J2 旋转扁体（自转轴进动+章动；独立开关 j2On）----
          * 流体平衡扁率 J2 = (2/3)k2·q，q = Ω²R³/(Gm)（随自旋演化即时计算，自洽）。
-         * 力矩 N_i = 3G m_i m_j J2_i R_i² (ŝ·n̂)(ŝ×n̂)/r³：垂直分量转轴 → 进动+章动
-         * （地球 25772y 进动与 18.6y 章动的标准物理来源；|N⊥S| 幅值守恒）；
-         * 轨道四极力与力矩同源：a_j = −K[(5c²−1)n̂ − 2c ŝ]，K = 3Gm_iJ2R²/2r⁴，
-         * 反作用按质量分配 → 动量严格守恒；r×F = −N 闭合 → 总角动量 L_orb+S 守恒
-         * （v22 预验证 C1–C6：闭合 2.9e-16、太阳 J2 进动 10.07 vs 解析 10.06″/yr、
-         * 日+月 44.9″/yr、章动振荡 σ=0.25″、两体 RK4 1 年总角动量 6.9e-15）。
+         * v35 符号修正（薄环精确级数 + 椭球 GL 求积双重裁决，见 worklog 35-1）：
+         *   力矩 N_i = -3G m_i m_j J2_i R_i² (ŝ·n̂)(ŝ×n̂)/r³（负号 → 地球岁差 retrograde）；
+         *   轨道四极力 a_j = +K[(5c²-1)n̂ - 2c ŝ]，K = 3Gm_iJ2R²/2r⁴（Vallado 8-57：
+         *   赤道面额外吸引、极区减弱；Moon 升交点 regression 18.6y）。
+         * 动量守恒（反作用按质量分配）与 r×F = -N 角动量闭合在修正后严格成立；
+         * 章动（18.6y 等）由瞬时力矩 + Moon 节点后退自然涌现。
          * 潮汐锁定 ŝ∥n̂ → (ŝ×n̂)=0 力矩自然为零；黑洞 k2=0 → J2=0；r ≤ R 不适用。 */
-        if (bodyK2A[i] > 0 && omI > 0) {
+        if (j2On && bodyK2A[i] > 0 && omI > 0) {
           const RJ2i = bodyRadA[i];
           if (r2raw > RJ2i * RJ2i) {
             const J2i = 2 / 3 * bodyK2A[i] * omI * omI * RJ2i * RJ2i * RJ2i / Gmi;
             const invR3 = invR * invR * invR;   /* 真实 1/r³（不用软化——与潮汐同口径） */
             const cI = six * nx + siy * ny + siz * nz;
             const NtI = 3 * Gmi * mj * J2i * RJ2i * RJ2i * cI * invR3;
-            spinTx[i] += NtI * (siy * nz - siz * ny);
-            spinTy[i] += NtI * (siz * nx - six * nz);
-            spinTz[i] += NtI * (six * ny - siy * nx);
+            spinTx[i] -= NtI * (siy * nz - siz * ny);
+            spinTy[i] -= NtI * (siz * nx - six * nz);
+            spinTz[i] -= NtI * (six * ny - siy * nx);
             /* i 的 J2 → j 的加速度 + i 的反作用 */
             const fJ = 5 * cI * cI - 1, Kf = 1.5 * Gmi * J2i * RJ2i * RJ2i * invR3 * invR;
             const gx = Kf * (fJ * nx - 2 * cI * six), gy = Kf * (fJ * ny - 2 * cI * siy), gz = Kf * (fJ * nz - 2 * cI * siz);
-            ax[j] -= gx; ay[j] -= gy; az[j] -= gz;
-            axi += gx * (mj / mi); ayi += gy * (mj / mi); azi += gz * (mj / mi);
+            ax[j] += gx; ay[j] += gy; az[j] += gz;
+            axi -= gx * (mj / mi); ayi -= gy * (mj / mi); azi -= gz * (mj / mi);
           }
         }
         {
           const omJ2 = spinRate ? spinRate[j] : 0;
-          if (bodyK2A[j] > 0 && omJ2 > 0) {
+          if (j2On && bodyK2A[j] > 0 && omJ2 > 0) {
             const RJ2j = bodyRadA[j];
             if (r2raw > RJ2j * RJ2j) {
               const J2j = 2 / 3 * bodyK2A[j] * omJ2 * omJ2 * RJ2j * RJ2j * RJ2j / (G * mj);
@@ -806,14 +831,14 @@ if (globalThis.__ENGINE__ && __ENGINE__.active && P === _wP && V === _wV && A ==
               const sjx = spinAxX[j], sjy = spinAxY[j], sjz = spinAxZ[j];
               const cJ = sjx * nx + sjy * ny + sjz * nz;
               const NtJ = 3 * G * mj * mi * J2j * RJ2j * RJ2j * cJ * invR3;
-              spinTx[j] += NtJ * (sjy * nz - sjz * ny);
-              spinTy[j] += NtJ * (sjz * nx - sjx * nz);
-              spinTz[j] += NtJ * (sjx * ny - sjy * nx);
+              spinTx[j] -= NtJ * (sjy * nz - sjz * ny);
+              spinTy[j] -= NtJ * (sjz * nx - sjx * nz);
+              spinTz[j] -= NtJ * (sjx * ny - sjy * nx);
               /* j 的 J2 → i 的加速度 + j 的反作用（n̂ 换向的符号已并入推导） */
               const fJj = 5 * cJ * cJ - 1, Kfj = 1.5 * G * mj * J2j * RJ2j * RJ2j * invR3 * invR;
               const hx = Kfj * (fJj * nx - 2 * cJ * sjx), hy = Kfj * (fJj * ny - 2 * cJ * sjy), hz = Kfj * (fJj * nz - 2 * cJ * sjz);
-              axi += hx; ayi += hy; azi += hz;
-              ax[j] -= hx * (mi / mj); ay[j] -= hy * (mi / mj); az[j] -= hz * (mi / mj);
+              axi -= hx; ayi -= hy; azi -= hz;
+              ax[j] += hx * (mi / mj); ay[j] += hy * (mi / mj); az[j] += hz * (mi / mj);
             }
           }
         }
@@ -890,7 +915,7 @@ function kick(tau) {
   /* 自转相位同步积分（v19c）：Δφ = ∫Ωdt ≈ (Ω₀+ΔΩ/2)τ 梯形；Ω 恒定时退化为 Ωτ。
    * v21：1.5PN 自旋开启时力矩含进动项（spinT 缓冲），同样走 spinVecUpdate */
   if (spinPhase) {
-    if ((tideOn || gr15spinOn) && spinAcc && spinTx) {
+    if ((tideOn || gr15spinOn || j2On) && spinAcc && spinTx) {
       for (let i = 0; i < N; i++) {
         kahanAdd(spinPhase, cspinPhase, i, (spinRate[i] + 0.5 * spinAcc[i] * tau) * tau);
         spinVecUpdate(i, tau);          /* v19e：S⃗ = IΩs⃗ ← S⃗ + N⃗τ（轴随力矩演化） */
@@ -1018,7 +1043,7 @@ function stageMidpoint(tau) {
     kahanAdd(vz, cvz, i, mpAz[i] * tau);
     /* 自转相位同步积分（v19c，与 kick 同式）：Ω₀τ + ζτ²/2；v21 进动随 spinT 管线 */
     if (spinPhase) {
-      if ((tideOn || gr15spinOn) && spinAcc && spinTx) {
+      if ((tideOn || gr15spinOn || j2On) && spinAcc && spinTx) {
         const zeta = spinAcc[i];
         kahanAdd(spinPhase, cspinPhase, i, (spinRate[i] + 0.5 * zeta * tau) * tau);
         spinVecUpdate(i, tau);            /* v19e：自转向量演化（与 kick 同式） */
@@ -1161,8 +1186,8 @@ function iasStepTry(h, refreshStats, fixed) {
   const sR2 = minR2, sAM = maxAccMag, sPM = minPairM, sPV2 = minPairV2, sTH = tideHeatW;
   /* 账本/自旋累加器（预分配，零 GC） */
   let ledRR = 0, ledTL = 0, ledLRx = 0, ledLRy = 0, ledLRz = 0, ledPx = 0, ledPy = 0, ledPz = 0;
-  const spinIx = (tideOn || gr15spinOn) && spinTx ? iasSpinT : null;
-  const spinAxAcc = (tideOn || gr15spinOn) && spinAcc ? iasSpinZ : null;
+  const spinIx = (tideOn || gr15spinOn || j2On) && spinTx ? iasSpinT : null;
+  const spinAxAcc = (tideOn || gr15spinOn || j2On) && spinAcc ? iasSpinZ : null;
   let err = 1e300, errLast = 2, iters = 0;
   let adlMax = 0, trialA = 0;   /* v31：|Δb₆| 与末内部点 |a|（REBOUND at 归一） */
   while (true) {
@@ -1672,11 +1697,18 @@ function computeTotalEnergy() {
   for (let i = 0; i < N; i++) {
     const v2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
     KE += 0.5 * massA[i] * v2;
-    if (tideOn && spinRate) KE += 0.5 * bodyIA[i] * spinRate[i] * spinRate[i];
+    if ((tideOn || j2On) && spinRate) KE += 0.5 * bodyIA[i] * spinRate[i] * spinRate[i];
     for (let j = i + 1; j < N; j++) {
       const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
       const r = Math.sqrt(dx * dx + dy * dy + dz * dz + GRAV_SOFTENING_SQ);
-      PE -= G * massA[i] * massA[j] / r;
+      if (pwOn) {
+        /* v35：PW 伪牛顿势（与 accumulateAccel 的成对替换严格同式/同下限/r_g） */
+        const rgPW = 2 * G * (massA[i] + massA[j]) / C_SQ;
+        const denPW = Math.max(r - rgPW, 0.05 * rgPW);
+        PE -= G * massA[i] * massA[j] / denPW;
+      } else {
+        PE -= G * massA[i] * massA[j] / r;
+      }
       if (tideOn) {
         const invR6 = 1 / (r * r * r * r * r * r);
         if (bodyTideA0[i] > 0) PE -= bodyTideA0[i] * massA[j] * massA[j] * invR6;
@@ -1684,8 +1716,11 @@ function computeTotalEnergy() {
         /* v19e：八极潮势能 U₃ = −k₃Gm′²R⁷/r⁸（与 accumulateAccel 的 F₃ ∝ r⁻⁹ 配套） */
         if (bodyTideA03 && bodyTideA03[i] > 0) PE -= bodyTideA03[i] * massA[j] * massA[j] * invR6 / (r * r);
         if (bodyTideA03 && bodyTideA03[j] > 0) PE -= bodyTideA03[j] * massA[i] * massA[i] * invR6 / (r * r);
-        /* v22：J2 旋转扁体势能 U_J2 = −G m_i m_j J2 R²(3(ŝ·n̂)²−1)/(2r³)（i/j 两份；
-         * 与 accumulateAccel 的 J2 力/力矩同式——能量账本闭合，v22 预验证 C1/C3 同源） */
+      }
+      if (j2On) {
+        /* v35：J2 旋转扁体势能（符号修正 + 独立于 tideOn）：
+         * U_J2 = +G m_i m_j J2 R²(3(ŝ·n̂)²−1)/(2r³)（与修正后 accumulateAccel 的
+         * J2 力/力矩同源——能量账本闭合；v34 旧式符号相反，已翻转） */
         const invR3 = 1 / (r * r * r);
         const nxJ = dx / r, nyJ = dy / r, nzJ = dz / r;
         if (bodyK2A[i] > 0 && spinRate && spinRate[i] > 0) {
@@ -1693,7 +1728,7 @@ function computeTotalEnergy() {
           if (r * r > Ri2 * Ri2) {
             const J2i = 2 / 3 * bodyK2A[i] * spinRate[i] * spinRate[i] * Ri2 * Ri2 * Ri2 / (G * massA[i]);
             const cI2 = spinAxX[i] * nxJ + spinAxY[i] * nyJ + spinAxZ[i] * nzJ;
-            PE -= 0.5 * G * massA[i] * massA[j] * J2i * Ri2 * Ri2 * (3 * cI2 * cI2 - 1) * invR3;
+            PE += 0.5 * G * massA[i] * massA[j] * J2i * Ri2 * Ri2 * (3 * cI2 * cI2 - 1) * invR3;
           }
         }
         if (bodyK2A[j] > 0 && spinRate && spinRate[j] > 0) {
@@ -1701,7 +1736,7 @@ function computeTotalEnergy() {
           if (r * r > Rj2 * Rj2) {
             const J2j = 2 / 3 * bodyK2A[j] * spinRate[j] * spinRate[j] * Rj2 * Rj2 * Rj2 / (G * massA[j]);
             const cJ2 = spinAxX[j] * nxJ + spinAxY[j] * nyJ + spinAxZ[j] * nzJ;
-            PE -= 0.5 * G * massA[i] * massA[j] * J2j * Rj2 * Rj2 * (3 * cJ2 * cJ2 - 1) * invR3;
+            PE += 0.5 * G * massA[i] * massA[j] * J2j * Rj2 * Rj2 * (3 * cJ2 * cJ2 - 1) * invR3;
           }
         }
       }
@@ -1768,7 +1803,7 @@ function computeTotalAngular() {
     Lx += massA[i] * (py[i] * vz[i] - pz[i] * vy[i]);
     Lv += massA[i] * (pz[i] * vx[i] - px[i] * vz[i]);
     Lz += massA[i] * (px[i] * vy[i] - py[i] * vx[i]);
-    if (tideOn && spinRate && bodyIA) {
+    if ((tideOn || j2On) && spinRate && bodyIA) {
       Lx += bodyIA[i] * spinRate[i] * spinAxX[i];
       Lv += bodyIA[i] * spinRate[i] * spinAxY[i];
       Lz += bodyIA[i] * spinRate[i] * spinAxZ[i];
@@ -1780,6 +1815,31 @@ function computeTotalAngular() {
 
 /* ===== v34 补充声明（原 HTML L6758；随帧统计外置至此，主线程与 worker 共用绑定） ===== */
 let lastAdaptSteps = 0, lastAdaptAdvanced = 0;
+
+/* ===== v35：引力波应变核心采样（主线程与 physics-worker 共用） =====
+ * 质量四极矩二阶导由状态矢量解析求出（仅依赖状态数组/常量，worker 可用）：
+ *   Q̈_ij = Σ m( x_i a_j + x_j a_i + 2v_i v_j − (2/3)δ_ij (v² + x⃗·a⃗) )
+ * 观测者沿 +z（TT 规约）：h₊ = G(Q̈xx − Q̈yy)/(c⁴D)，h× = 2G·Q̈xy/(c⁴D)。
+ * 返回 [h₊, h×]。多线程模式下 worker 按与 physicsAdvance 相同的节奏采样本函数，
+ * 结果随帧消息回传主线程拼接波形（修复 v34「MT 开启后引力波绘制/观测失效」）。
+ * f_GW/并合倒计时等读数量依赖 meta/massRadius，仍由主线程 computeGWStrain 计算。 */
+function computeGWStrainCore() {
+  let Qxx = 0, Qyy = 0, Qxy = 0;
+  for (let i = 0; i < N; i++) {
+    const xi = px[i], yi = py[i], zi = pz[i];
+    const vxi = vx[i], vyi = vy[i], vzi = vz[i];
+    const axi = ax[i], ayi = ay[i], azi = az[i];
+    const v2 = vxi * vxi + vyi * vyi + vzi * vzi;
+    const v2xa = v2 + xi * axi + yi * ayi + zi * azi;
+    const mi = massA[i];
+    Qxx += mi * (2 * xi * axi + 2 * vxi * vxi - v2xa / 3);
+    Qyy += mi * (2 * yi * ayi + 2 * vyi * vyi - v2xa / 3);
+    Qxy += mi * (xi * ayi + yi * axi + 2 * vxi * vyi);
+  }
+  const D = GW_DIST_MPC * 3.0856775814913673e22;
+  const c4D = C_SQ * C_SQ * D;
+  return [G * (Qxx - Qyy) / c4D, 2 * G * Qxy / c4D];
+}
 
 
 /* ===== v34 导出桥（只读引用聚合；不改动上方任何物理代码） ===== */
@@ -1802,6 +1862,8 @@ globalThis.__NBODY_CORE__ = {
     get gr35On(){return gr35On;}, set gr35On(v){gr35On=v;},
     get gr15spinOn(){return gr15spinOn;}, set gr15spinOn(v){gr15spinOn=v;},
     get tideOn(){return tideOn;}, set tideOn(v){tideOn=v;},
+    get j2On(){return j2On;}, set j2On(v){j2On=v;},
+    get pwOn(){return pwOn;}, set pwOn(v){pwOn=v;},
     get iasEpsilon(){return iasEpsilon;}, set iasEpsilon(v){iasEpsilon=v;},
     get iasDtNext(){return iasDtNext;}, set iasDtNext(v){iasDtNext=v;},
     get iasRejectCount(){return iasRejectCount;}, set iasRejectCount(v){iasRejectCount=v;},
@@ -1867,7 +1929,7 @@ globalThis.__NBODY_CORE__ = {
     drift, kick, stageMidpoint, spinVecUpdate,
     iasEnsureBuffers, iasPredictNextStep, iasStepTry, stepIAS15, stepIAS15Adaptive,
     stepYoshida4, scanPairStats, calcAdaptiveDt, advanceAdaptiveYoshida,
-    refreshBodyTideCache, computeTotalEnergy,
+    refreshBodyTideCache, computeTotalEnergy, computeGWStrainCore,
     kahanAdd, iasSqrt7, massRadius, autoK2, autoTideLag, isBlackHolePhys
   })
 };
