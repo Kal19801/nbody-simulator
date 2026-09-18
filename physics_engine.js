@@ -292,7 +292,7 @@
 
   async function startPool() {
     if (E.poolReady || !E.active) return;
-    if (!crossOriginIsolated()) { uncheckMT(); showToastSafe('多线程需要跨域隔离。当前环境仅单线程 WASM。', 'info'); E.mtOn = false; updateStatus(); return; }
+    if (!crossOriginIsolated()) { uncheckMT(); showToastSafe('多线程需要跨域隔离。当前环境仅支持单线程 WASM', 'info'); E.mtOn = false; updateStatus(); return; }
     const hw = (navigator.hardwareConcurrency || 4);
     /* v37：线程数留 1 核余量（hw-1）—— 旧 W = hw 时播放中 W 个计算线程全速运转，
      * 主线程/合成器/rAF 与 OS 调度争核（用户报告「多线程更卡顿」的次要来源）。
@@ -439,7 +439,7 @@
     const mt = document.getElementById('mtToggle');
     if (mt) {
       mt.disabled = !(E.active && (crossOriginIsolated() || E.poolReady));
-      mt.parentElement.title = mt.disabled ? '需要跨域隔离（COOP/COEP，经 coi-serviceworker 注入）' : '行分割并行（SharedArrayBuffer + Atomics）';
+      mt.parentElement.title = mt.disabled ? '需要跨域隔离COOP/COEP' : 'SharedArrayBuffer + Atomics';
     }
   }
 
