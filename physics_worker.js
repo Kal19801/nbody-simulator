@@ -150,7 +150,11 @@ function integrateFrame(baseDt, steps, targetTime, o) {
       if (o.mergeOn && R.minR2 < o.contactR2) { mergeHit = true; k++; break; }   // v32 语义：接触即停，主线程并合
     }
   } else {
+    /* v36：固定步长路径接入墙钟预算（与主线程 physicsAdvance 同构 —— 旧版无预算，
+     * MT 快进时编排 worker 一帧占用数百 ms，主线程绘帧间隔同样被拉长）。
+     * 预算只截断每帧步数、下帧续派，步序列确定 → 轨迹逐位不变。 */
     for (; k < steps; k++) {
+      if ((k & 7) === 7 && performance.now() - t0 > o.budgetMs) break;
       /* v19f：自适应关且无 GW 波形时，步尾统计求值仅在需要处刷新（gw 采样步/末步）；
        * v35：刷新条件与主线程 physicsAdvance 逐位一致（gwK || 末步） */
       const gwK = gwEvery && k % gwEvery === 0;

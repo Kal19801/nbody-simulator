@@ -241,6 +241,7 @@ let skyApplyHook = null;               // v7：外部全景图注入钩子（材
 /* 轨迹环形缓冲 */
 const histT = new Float64Array(HIST_MAX);
 const histPos = new Array(HIST_MAX);
+const histVel = new Array(HIST_MAX);   /* v36：速度快照（轨迹开普勒预测弧用；仅渲染读取） */
 let histHead = 0, histCount = 0;
 /* 进动采样 */
 let grSamples = [];

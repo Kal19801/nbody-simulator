@@ -423,7 +423,8 @@
     if (E.state === 'active') {
       const threads = E.mtOn && E.poolReady ? (E.nWorkers + ' 线程') : '单线程';
       const bh = E.bhTheta ? ' · BH θ=' + E.bhTheta : '';
-      txt = 'WASM 内核 v35 · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
+      /* v36：内核版本动态取自 wasm version()（内核 v35 不变）；应用层 v36 */
+      txt = 'WASM 内核 v' + E.wasm.exports.version() + '（应用 v36） · ' + threads + bh + (E.lastError ? '（曾回退：' + E.lastError + '）' : '');
     } else if (E.state === 'loading') txt = 'WASM 加载中…';
     else if (E.state === 'fallback') txt = 'JS 内核（WASM 不可用，已静默回退）';
     else txt = 'JS 内核';
