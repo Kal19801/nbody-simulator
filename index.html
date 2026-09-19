@@ -234,7 +234,10 @@ body.free-touch .pad{display:grid}
       <button id="blankPresetBtn" class="btn" style="flex:none;margin-left:6px" title="清空全部天体，从零开始搭建">空白</button>
     </div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">时间步长</span><input type="text" class="txt" id="dt" value="300" placeholder="300 / 5m / 1d" style="flex:1"><span class="lbl" style="flex:none">秒</span></div>
-    <div class="row" id="speedRow"><span class="lbl" style="width:70px;flex:none">每帧步数</span><input type="range" id="speed" min="1" max="1000" value="200" title="每帧物理推进的目标步数（目标推进 = 时间步长 × 每帧步数）。自适应步长开启时由引擎自动补步，此滑条灰锁为 1（Universe Sandbox 语义：精度优先自动限速）"><span class="readout" id="speedVal" style="width:36px;text-align:right">200</span></div>
+    <div class="row" id="speedRow"><span class="lbl" style="width:70px;flex:none">每帧步数</span>
+      <button id="speedDec" class="btn" style="flex:none;width:34px;padding:2px 0" title="每帧步数 −1（v39：大上限下滑条微调困难，±1 精调）">−</button>
+      <input type="range" id="speed" min="1" max="10000" value="200" style="flex:1;margin:0 6px" title="每帧物理推进的目标步数（目标推进 = 时间步长 × 每帧步数；v39 上限扩至 10000，两侧 −/+ 按钮可 ±1 精调）。自适应步长开启时由引擎自动补步，此滑条灰锁为 1（Universe Sandbox 语义：精度优先自动限速）"><span class="readout" id="speedVal" style="width:44px;text-align:right">200</span>
+      <button id="speedInc" class="btn" style="flex:none;width:34px;padding:2px 0" title="每帧步数 +1（v39）">+</button></div>
     <div class="row"><span class="lbl" style="width:70px;flex:none">积分器</span>
       <div class="seg" id="integratorSeg">
         <button data-v="yoshida4" class="on">Yoshida 4阶</button>
@@ -576,6 +579,39 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v39 六项修复与功能（用户反馈；物理内核零改动，详见 deploy/README.md §十四 与 worklog）：
+ *      ① 快速时间步长轨迹毛刺/多边形（三重根因）：
+ *         a) 【MT 子帧采样静默失效】frame() 把 subT/startT 放进 opts，但
+ *            physics_engine.js advanceAsync 的帧消息漏发这两个字段 → worker
+ *            sub=null → MT 模式每帧仅 1 采样（v37 修复在 MT 路径被丢弃）；
+ *         b) 【采样率与动力学脱钩】固定「2h 目标 + kCap=128」：地月 6d×1000 时
+ *            46.9 天/采样 = 0.58 采样/月轨 → 改为按系统最快轨道周期（最近对
+ *            开普勒周期，物理核 minR2/minPairM 免费维护）自适应，目标
+ *            T_min/20 采样，按 N 分档限流；
+ *         c) 【预测弧组合项数学错误】旧弧 = host 相对锥线 + lerp(host,τ) −
+ *            lerp(原点,τ)：host 相对原点弯曲时（地月质心系 Earth 弧，
+ *            host=Moon 相对质心 37.8 万 km 圆）lerp 弦矢 ~3240 km vs Earth
+ *            轨迹半径 4723 km = 69% 花瓣状毛刺。改为【直接预测 body 相对轨迹
+ *            参考系原点】的锥线（mu 仍取 bound pair），端点自校验保留 ——
+ *            原点=host 与旧式同弧、原点=质心（二体系）精确、其余自校验兜底。
+ *      ② 编辑行星参数后卫星不跟随/轨道剧变：saveBodyForm 按根数重算行星
+ *         pos/vel（linkVel 还改母星速度）而卫星是绝对坐标 → 相对态破坏。
+ *         修复：对被编辑天体的全部后代（orbits_around 链）施加同一 Δp/Δv
+ *         （刚体跟随）；顺带修复重命名后子代 orbits_around/op 悬挂。
+ *      ③ MT 卡顿/不一致/泄漏：
+ *         a) MT 派发路径每帧无条件 __computeContactR2() O(N²)（主线程）——
+ *            碰撞合并关闭时纯属浪费，加 mergeOn 门控（与主线程路径对齐）；
+ *         b) worker 子帧快照单缓冲打包（t: f64 + data: f32 count×N×6，
+ *            整帧 2 个 transferable，主线程 subarray 零拷贝采纳）—— 消除
+ *            每帧数千对象/transferable 的 postMessage 开销；
+ *         c) 渲染层顶点预算按天体均摊（超限丢最老端），密采样下不再因单天体
+ *            占满 48 万顶点上限导致后排天体轨迹整条消失；
+ *         d) 泄漏审计：simulationLog/gwSamples/grSamples/trailArcCache/histPos
+ *            环形槽位均有界（V9 回归覆盖）；预测弧缓存加质量戳（并合后作废）。
+ *      ④ 每帧步数：滑条上限 1000 → 10000，两侧新增 −/+ 按钮（±1 精调），
+ *         灰锁态同步禁用；frame()/headless 两处 clamp 同步放宽。
+ *      ⑤ 同族 bug 排查：移除天体的级联删除改传递闭包（旧版只删直接孤儿，
+ *         孙代 orbits_around 悬挂 → 轨道绑定错乱）。
  * v38 轨迹参考系绑定修复（用户反馈「地月 6000s×1000 步：质心/地球参考系月球轨迹诡异、
  *   绝对原点正常；绝对原点下地球轨迹如分形，步数越大曲线越多」；物理内核零改动，详见 deploy/README.md §十三 与 worklog）：
  *      ① 动原点参考系下播放中轨迹辫状错位（根因修复）：v36 预测弧缓存存的是【预组合
@@ -2985,6 +3021,29 @@ function histTrim(durSec) {
 /* v36：histClear 同步失效轨迹预测弧缓存（环形槽位复用前旧弧必须作废） */
 function histClear() { histHead = 0; histCount = 0; trailArcGen++; trailArcCache.clear(); }
 
+/* v39：系统最快动力学时标估计（轨迹子帧采样率规划用）—— 最近天体对的
+ * 开普勒周期 T = 2π√(r³/G(m₁+m₂))。minR2/minPairM 由求力核每步免费维护
+ * （零额外 O(N²)）；无效时（首帧/刚初始化）小 N brute force 扫描兜底。
+ * 下限 3600 s：近距飞掠对不把采样率推到病态（kCap 分档限流兜底）。
+ * 语义：T_min 是全系统最快轨道时标 —— 以 T_min/20 采样可同时分辨所有轨道。 */
+function trailTimescaleEstimate() {
+  if (N < 2) return 86400;
+  let r2 = minR2, M = minPairM;
+  if (!(r2 > 0) || !(M > 0)) {
+    r2 = Infinity; M = 0;
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < r2) { r2 = d2; M = massA[i] + massA[j]; }
+      }
+    }
+  }
+  if (!(r2 > 0) || !(M > 0)) return 86400;
+  const T = 2 * Math.PI * Math.sqrt(r2 * Math.sqrt(r2) / (G * M));
+  return Math.min(Math.max(T, 3600), 3.15e13);
+}
+
 /* ---------------- 轨道根数 / 进动测量 ---------------- */
 function findPrimaryIdx(idx) {
   const name = meta[idx].orbits_around;
@@ -3493,7 +3552,7 @@ const SCALE_MIN = 1e-12, SCALE_MAX = 1e8;
 
 function collectUI() {
   ['panelToggle', 'playBtn', 'iconPlay', 'iconPause', 'resetBtn', 'timeDisplay', 'scaleDisplay', 'perfDisplay',
-   'zoomInBtn', 'zoomOutBtn', 'viewResetBtn', 'panel', 'panelClose', 'presetSelect', 'speed', 'speedVal', 'dt',
+   'zoomInBtn', 'zoomOutBtn', 'viewResetBtn', 'panel', 'panelClose', 'presetSelect', 'speed', 'speedVal', 'speedDec', 'speedInc', 'dt',
    'adaptiveTimeStep', 'integratorSeg', 'gr1pn', 'gr15spin', 'gr25', 'gr2pn', 'gr35', 'collisionMerge', 'grBodySelect', 'bodyGH', 'bodyPressure', 'bodyLinkVel', 'ghAuto',
    'totalEnergyDisplay', 'energyLedgerDisplay', 'sinkTideDisplay', 'sinkGWDisplay',
    'totalMomentumDisplay', 'momentumDeltaDisplay', 'totalAngularDisplay', 'sinkGWLDisplay', 'angularLedgerDisplay',
@@ -5097,26 +5156,43 @@ function buildTrails(fr) {
   trailArcLast.hit = 0; trailArcLast.calc = 0; trailArcLast.ok = 0; trailArcLast.fail = 0;
   const arcRefKey = trailMode + '|' + ui.trailRefMode.value + '|' + (useRel ? tf : '') + '|N' + N;
   let arcNewBudget = TRAIL_ARC_BUILD_BUDGET;
-  const hostCache = new Int32Array(N).fill(-2);   // -2 未算 / -1 无主星 / ≥0 主星索引
+  const hostCache = new Int32Array(N).fill(-2);   // -2 未算 / -1 无主星 / ≥0 主星索引（v39：仅提供 mu，不再参与组合）
   const ringSlot = k => (histHead - histCount + k + HIST_MAX) % HIST_MAX;
-  /* v38：rel 弧 → 绘制系组合（每次取用按当前帧 refOff/shv 现算，端点与折线严格对齐；
-   * X = rel + lerp(主星,τ) − lerp(原点,τ) + shv，τ=0/1 端点与快照精确一致） */
-  const composeRelArc = (bi, A, rel, k0, k1, sA, sB) => {
-    const p0 = histPos[sA], p1 = histPos[sB];
-    if (!p0 || !p1 || p0.length < Math.max(bi, A) * 3 + 3 || p1.length < Math.max(bi, A) * 3 + 3) return null;
-    const AX0 = p0[A * 3], AY0 = p0[A * 3 + 1], AZ0 = p0[A * 3 + 2];
-    const AX1 = p1[A * 3], AY1 = p1[A * 3 + 1], AZ1 = p1[A * 3 + 2];
-    const OX0 = useRel ? refOff.off[k0 * 3] : 0, OY0 = useRel ? refOff.off[k0 * 3 + 1] : 0, OZ0 = useRel ? refOff.off[k0 * 3 + 2] : 0;
-    const OX1 = useRel ? refOff.off[k1 * 3] : OX0,
-      OY1 = useRel ? refOff.off[k1 * 3 + 1] : OY0,
-      OZ1 = useRel ? refOff.off[k1 * 3 + 2] : OZ0;
+  /* v39：快照槽位处的【轨迹参考系原点】状态 [x,y,z,vx,vy,vz]。绝对系 → 全零；
+   * 质心系 → 当前质量加权平均（与 trailRefOffsets 的 O(t_k) 同口径）；
+   * 天体系 → 该天体 pos/vel。速度取 histVel 快照。 */
+  const ZERO6 = [0, 0, 0, 0, 0, 0];
+  const originStateAt = s => {
+    if (!useRel) return ZERO6;
+    const snap = histPos[s], vs = histVel[s];
+    if (!snap) return null;
+    if (tf === 'center_of_mass') {
+      let M = 0, X = 0, Y = 0, Z = 0, VX = 0, VY = 0, VZ = 0;
+      for (let k = 0; k < N && k * 3 + 2 < snap.length; k++) {
+        const m = massA[k]; M += m;
+        X += snap[k * 3] * m; Y += snap[k * 3 + 1] * m; Z += snap[k * 3 + 2] * m;
+        if (vs) { VX += vs[k * 3] * m; VY += vs[k * 3 + 1] * m; VZ += vs[k * 3 + 2] * m; }
+      }
+      if (!(M > 0)) return null;
+      return [X / M, Y / M, Z / M, VX / M, VY / M, VZ / M];
+    }
+    const oi = nameToIdx.get(tf);
+    if (oi === undefined || oi * 3 + 2 >= snap.length) return null;
+    if (!vs || oi * 3 + 2 >= vs.length) return null;
+    return [snap[oi * 3], snap[oi * 3 + 1], snap[oi * 3 + 2], vs[oi * 3], vs[oi * 3 + 1], vs[oi * 3 + 2]];
+  };
+  /* v39：rel 弧（origin 相对系）→ 绘制系组合 = rel + shv（纯平移）。
+   * 旧式「host rel 弧 + lerp(host,τ) − lerp(原点,τ)」组合在 host 相对原点弯曲时
+   * 偏差达弦矢级（地月质心系 Earth 弧：host=Moon 相对质心在 37.8 万 km 圆上
+   * 与月轨同步转动，lerp 直线弦矢 ~3240 km vs Earth 轨迹半径 4723 km = 69%
+   * 花瓣状毛刺）。现弧本身即 origin 相对系预测：端点 = 快照差值精确对齐，
+   * 中间点为真实 origin 相对锥线；原点=host 时与旧式同弧，原点=质心（二体系）
+   * 为精确解，其余场景由端点自校验兜底回退条样。 */
+  const composeRelArc = (bi, rel) => {
     const pts = new Float64Array(rel.length);
     for (let q = 0; q < rel.length; q += 4) {
-      const tau = rel[q + 3], g1 = tau, g0 = 1 - tau;
-      pts[q] = rel[q] + AX0 * g0 + AX1 * g1 - (OX0 * g0 + OX1 * g1) + shv[0];
-      pts[q + 1] = rel[q + 1] + AY0 * g0 + AY1 * g1 - (OY0 * g0 + OY1 * g1) + shv[1];
-      pts[q + 2] = rel[q + 2] + AZ0 * g0 + AZ1 * g1 - (OZ0 * g0 + OZ1 * g1) + shv[2];
-      pts[q + 3] = tau;
+      pts[q] = rel[q] + shv[0]; pts[q + 1] = rel[q + 1] + shv[1]; pts[q + 2] = rel[q + 2] + shv[2];
+      pts[q + 3] = rel[q + 3];
     }
     return pts;
   };
@@ -5127,12 +5203,11 @@ function buildTrails(fr) {
     const sA = ringSlot(k0), sB = ringSlot(k1);
     const key = bi * HIST_MAX + sA;
     const hit = trailArcCache.get(key);
-    if (hit && hit.gen === trailArcGen && hit.ref === arcRefKey && hit.ta === histT[sA] && hit.tb === histT[sB]) {
+    if (hit && hit.gen === trailArcGen && hit.ref === arcRefKey && hit.ta === histT[sA] && hit.tb === histT[sB] &&
+        hit.ms === massA[bi]) {
       trailArcLast.hit++;
       if (!hit.pts) return null;                      // 负缓存命中
-      const Ah = hostCache[bi] === -2 ? (hostCache[bi] = boundHostIdx(bi)) : hostCache[bi];
-      if (Ah < 0 || Ah === bi) return null;
-      const pts = composeRelArc(bi, Ah, hit.pts, k0, k1, sA, sB);
+      const pts = composeRelArc(bi, hit.pts);
       if (pts) trailArcLast.ok++;
       return pts;
     }
@@ -5140,26 +5215,33 @@ function buildTrails(fr) {
     if (!(arcNewBudget > 0) || N < 2 || N > 128 || !histVel[sA] || !histPos[sA] || !histPos[sB]) return null;   // 预算/门控未评估：不写缓存（后续帧再试）
     trailArcNewCalc: {
       arcNewBudget--; trailArcLast.calc++;
+      /* mu 仍取 bound pair（动力学时标 = 弧的周期尺度）；A 只供质量，不再参与状态/组合 */
       const A = hostCache[bi] === -2 ? (hostCache[bi] = boundHostIdx(bi)) : hostCache[bi];
       if (A < 0 || A === bi) break trailArcNewCalc;
         const mu = G * (massA[bi] + massA[A]);
         if (!(mu > 0)) break trailArcNewCalc;
         const p0 = histPos[sA], p1 = histPos[sB], v0 = histVel[sA];
         const dt = histT[sB] - histT[sA];
-        if (!(dt > 0) || p0.length < Math.max(bi, A) * 3 + 3 || p1.length < Math.max(bi, A) * 3 + 3) break trailArcNewCalc;
+        if (!(dt > 0) || p0.length < bi * 3 + 3 || p1.length < bi * 3 + 3 || !v0 || v0.length < bi * 3 + 3) break trailArcNewCalc;
+        /* v39：段起/终点相对【轨迹参考系原点】的状态（originStateAt） */
+        const o0 = originStateAt(sA), o1 = originStateAt(sB);
+        if (!o0 || !o1) break trailArcNewCalc;
         const rel = trailArcPredict(
-          p0[bi * 3] - p0[A * 3], p0[bi * 3 + 1] - p0[A * 3 + 1], p0[bi * 3 + 2] - p0[A * 3 + 2],
-          v0[bi * 3] - v0[A * 3], v0[bi * 3 + 1] - v0[A * 3 + 1], v0[bi * 3 + 2] - v0[A * 3 + 2],
-          p1[bi * 3] - p1[A * 3], p1[bi * 3 + 1] - p1[A * 3 + 1], p1[bi * 3 + 2] - p1[A * 3 + 2],
+          p0[bi * 3] - o0[0], p0[bi * 3 + 1] - o0[1], p0[bi * 3 + 2] - o0[2],
+          v0[bi * 3] - o0[3], v0[bi * 3 + 1] - o0[4], v0[bi * 3 + 2] - o0[5],
+          p1[bi * 3] - o1[0], p1[bi * 3 + 1] - o1[1], p1[bi * 3 + 2] - o1[2],
           dt, mu);
         if (!rel) break trailArcNewCalc;
         trailArcLast.ok++;
-        /* v38：缓存只存未组合的 rel 弧（消除 shv 帧龄过期）；组合在返回前现算 */
-        trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts: rel });
-        return composeRelArc(bi, A, rel, k0, k1, sA, sB);
+        /* v39：缓存存 origin 相对系 rel 弧（帧无关，组合 = +shv 平移）；
+         * ms = 天体质量快照（并合改变质量后旧弧作废） */
+        trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB],
+          ms: massA[bi], pts: rel });
+        return composeRelArc(bi, rel);
       }
       trailArcLast.fail++;
-      trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB], pts: null });   // 已评估且失败：负缓存
+      trailArcCache.set(key, { gen: trailArcGen, ref: arcRefKey, ta: histT[sA], tb: histT[sB],
+        ms: massA[bi], pts: null });   // 已评估且失败：负缓存
       return null;
   };
   const ends = [];
@@ -5206,10 +5288,17 @@ function buildTrails(fr) {
     /* 线模式：平滑细分后输出相机系坐标（NaN 分段），展开为 LineSegments 顶点对 */
     budget -= trailSmoothBody(trailWpBuf, cnt, fr.proj, eye, Math.max(0, budget), arcOfFor(bi));
     const P = trailPt.f64;
+    /* v39：顶点预算按天体均摊 —— 密采样后单天体 trailPt 可达数千点，旧版
+     * 顺序展开到 TRAIL_VERT_CAP 就 break：排在后面的天体轨迹整条消失。
+     * 现每体 share = CAP/N（下限 256），超限时丢弃【最老端】保留最新段。 */
+    const share = Math.max(256, Math.floor(TRAIL_VERT_CAP / N));
+    let emitted = 0;
+    const skipPts = trailPt.n > share ? trailPt.n - share : 0;
     let havePrev = false, px0 = 0, py0 = 0, pz0 = 0, pf0 = 0, endX = 0, endY = 0, endZ = 0;
     for (let k = 0; k < trailPt.n; k++) {
       const o = k * 4;
-      if (isNaN(P[o])) { havePrev = false; continue; }
+      if (isNaN(P[o])) { if (emitted >= skipPts) havePrev = false; continue; }
+      if (emitted < skipPts) { emitted++; continue; }   // 超限截断：跳过最老端
       endX = P[o]; endY = P[o + 1]; endZ = P[o + 2];
       if (trailLineBuf.n + 2 > TRAIL_VERT_CAP) break;
       if (havePrev) {
@@ -5227,6 +5316,7 @@ function buildTrails(fr) {
         px0 = P[o]; py0 = P[o + 1]; pz0 = P[o + 2]; pf0 = P[o + 3];
         havePrev = true;
       }
+      emitted++;
     }
     if (trailLineBuf.n > 0) ends.push(endX, endY, endZ);
   }
@@ -5484,6 +5574,7 @@ function updateStepControlLocks() {
     }
     if (!ui.speed.disabled) speedBeforeLock = ui.speed.value || '200';
     ui.speed.disabled = false;
+    if (ui.speedDec) ui.speedDec.disabled = false; if (ui.speedInc) ui.speedInc.disabled = false;   /* v39：±1 按钮随滑条解锁 */
     if (speedRow) speedRow.classList.remove('row-dim');
   } else {
     ui.adaptiveTimeStep.disabled = false;
@@ -5492,9 +5583,11 @@ function updateStepControlLocks() {
       if (!ui.speed.disabled && ui.speed.value !== '1') speedBeforeLock = ui.speed.value || '200';
       ui.speed.value = '1'; ui.speedVal.textContent = '1';
       ui.speed.disabled = true;
+      if (ui.speedDec) ui.speedDec.disabled = true; if (ui.speedInc) ui.speedInc.disabled = true;   /* v39：灰锁同步禁用 */
       if (speedRow) speedRow.classList.add('row-dim');
     } else {
       ui.speed.disabled = false;
+      if (ui.speedDec) ui.speedDec.disabled = false; if (ui.speedInc) ui.speedInc.disabled = false;   /* v39 */
       if (speedRow) speedRow.classList.remove('row-dim');
       if (ui.speed.value === '1' && parseInt(speedBeforeLock) > 1) {
         ui.speed.value = speedBeforeLock; ui.speedVal.textContent = speedBeforeLock;
@@ -5848,19 +5941,32 @@ function frame() {
   lastFrameT = now;
   const baseDt = readDt();
   lastDt = baseDt;
-  const steps = clampNum(parseInt(ui.speed.value) || 200, 1, 1000);
+  /* v39：每帧步数上限 1000 → 10000（用户要求扩宽；±1 精调按钮见 speedDec/speedInc） */
+  const steps = clampNum(parseInt(ui.speed.value) || 200, 1, 10000);
   lastSteps = steps;
-  /* v37：轨迹子帧采样规划 —— 帧目标推进越大（快进），每帧仅 1 采样的轨迹越折线化
-   * （月球 6h×1000 时相邻采样相隔 9.15 圈，预测弧诚实回退弦线 → 多边形外观）。
-   * 改为帧内按时间阈值采样【真实积分器状态】：目标间隔 ~2h，K 按天体数限流
-   * （大 N 快照成本高）。轨迹关闭/无头模式不采样（subT=0），物理行为零影响
-   * （只加快照读取，不改积分序列 → 守恒/等价性不受影响）。 */
+  /* v39：轨迹子帧采样规划改【动力学自适应】—— 旧版固定「目标间隔 2h + kCap=128」
+   * 与系统动力学时标脱钩：地月 6d×1000（帧推进 6000 天）时 46.9 天/采样 =
+   * 0.58 采样/月轨，密采样名存实亡（快进轨迹折线化/多边形化的直接原因之一）。
+   * 现按系统最快轨道周期（最近天体对的开普勒周期，物理核 minR2/minPairM
+   * 免费维护，零额外 O(N²)）自适应：目标 = T_min/20（最短轨道每圈 ≥20 采样，
+   * 弦差 ~1.2%·r），上限按 N 分档限流（内存/CPU 预算）并受环容量约束。
+   * 实际采样间隔仍以积分器步长为下限（快照只在步尾读真实状态）。
+   * v39b：IAS15/自适应步长收紧时【实际推进】远小于目标推进（地月 6d×1000 实测
+   * 0.7d/步 → 700d/帧 vs 目标 6000d）—— 旧版按目标规划使实际间隔膨胀为设计值
+   * 的 advTarget/advActual 倍（9.3 采样/月轨 vs 设计 20）。现改按上一帧实际推进
+   * 规划（一帧收敛到 T_min/20；剧烈变化（<1/16 或 ≥目标）时退回目标口径，
+   * 暂停恢复/参数大幅调整不产生采样风暴）。 */
   const advTarget = baseDt * steps;
-  const TRAIL_SUBSAMPLE_SEC = 7200;                       /* 目标采样间隔 ≈2h 模拟时 */
-  const kCap = N <= 64 ? 128 : N <= 512 ? 32 : 8;         /* 每帧采样数上限（按 N 限流） */
-  const subK = (trailMode !== 'off' && !headlessOn && N >= 1)
-    ? Math.min(kCap, Math.max(1, Math.ceil(advTarget / TRAIL_SUBSAMPLE_SEC))) : 0;
-  const subT = subK > 0 ? advTarget / subK : 0;
+  const advPlan = (lastAdvanced > advTarget / 16 && lastAdvanced < advTarget * 0.999) ? lastAdvanced : advTarget;
+  let subK = 0;
+  if (trailMode !== 'off' && !headlessOn && N >= 1 && advPlan > 0) {
+    const tMin = trailTimescaleEstimate();
+    const kNeed = Math.ceil(advPlan / (tMin / 20));
+    const kCap = Math.min(HIST_MAX >> 2,
+      N <= 16 ? 2048 : N <= 64 ? 1024 : N <= 512 ? 256 : N <= 2048 ? 64 : 32);
+    subK = Math.min(kCap, Math.max(1, kNeed));
+  }
+  const subT = subK > 0 ? advPlan / subK : 0;
   /* ===== v34: 帧体拆分 —— 计算完成后的统一后处理（原 frame() 后半段） ===== */
   const __finishFrame = (advanced) => {
     lastAdvanced = advanced;
@@ -5911,7 +6017,10 @@ function frame() {
     const dispatchOnce = () => {
       __ENGINE__.advanceAsync(baseDt, steps, targetTime - advancedTotal, {
         adaptive: ui.adaptiveTimeStep.checked, mergeOn: !!ui.collisionMerge.checked,
-        contactR2: __computeContactR2(),
+        /* v39：contactR2 加 mergeOn 门控 —— 旧版每帧无条件 O(N²) 全对扫描（主线程），
+         * 碰撞合并关闭时纯属浪费且与渲染争核（「MT 更卡顿」实锤之一；主线程
+         * physicsAdvance 路径本就有此门控，此处对齐） */
+        contactR2: ui.collisionMerge.checked ? __computeContactR2() : 0,
         /* v36：worker 预算与主线程同一自适应控制器（帧慢 → worker 提前回巢，
          * MT 快进的绘帧间隔与单线程路径一致收紧） */
         budgetMs: Math.max(8, effectivePhysBudget() - (performance.now() - now)),
@@ -5922,11 +6031,16 @@ function frame() {
         if (!res) { __finishFrame(physicsAdvance(baseDt, steps, undefined, subT)); return; }   // 池不可用兜底
         advancedTotal += res.advanced;
         simTime += res.advanced;
-        /* v37：worker 子帧快照入环（transferable 缓冲直接采纳，零拷贝）；
-         * 帧尾采样仍由 __finishFrame 统一记录（并合后状态语义不变） */
+        /* v37/v39：worker 子帧快照入环 —— v39 起为单缓冲打包格式
+         * （data: Float32Array(count×N×6)，每样本 [pos|vel] 连续），主线程
+         * subarray 零拷贝视图直接采纳进环形槽位（视图共享同批次底层缓冲，
+         * 各样本区间不相交，槽位覆写安全）；帧尾采样仍由 __finishFrame 统一记录 */
         if (res.samples && trailMode !== 'off') {
-          const sm = res.samples;
-          for (let si = 0; si < sm.t.length; si++) histPushSample(sm.t[si], sm.pos[si], sm.vel[si]);
+          const sm = res.samples, n3 = sm.n * 3;
+          for (let si = 0; si < sm.count; si++) {
+            const off = si * n3 * 2;
+            histPushSample(sm.t[si], sm.data.subarray(off, off + n3), sm.data.subarray(off + n3, off + n3 * 2));
+          }
         }
         /* v35：worker 侧子步引力波采样拼接（修复 MT 开启后波形/观测失效）。
          * 采样值与主线程 computeGWStrainCore 完全同式（同一共享状态）；
@@ -6075,7 +6189,7 @@ function headlessFrame() {
   const now = performance.now();
   const baseDt = readDt();
   lastDt = baseDt;
-  const steps = clampNum(parseInt(ui.speed.value) || 200, 1, 1000);
+  const steps = clampNum(parseInt(ui.speed.value) || 200, 1, 10000);   /* v39：上限 10000 */
   lastSteps = steps;
   headStepsTotal += steps;
   const advancedH = physicsAdvance(baseDt, steps);
@@ -6776,7 +6890,51 @@ function saveBodyForm(e) {
     if (pe) pe.vel = window.__linkParent.vel.slice();   /* v21：联动母星速度写回系统 */
     window.__linkParent = null;
   }
-  if (editingIndex >= 0) { list[editingIndex] = rawBody; showToast('天体 \'' + name + '\' 已更新', 'success'); }
+  if (editingIndex >= 0) {
+    /* v39：编辑保存的【后代刚体跟随】—— 开普勒保存按根数相对母星重算行星
+     * pos/vel（bodyLinkVel 还会联动改母星速度），而环绕它的卫星在 list 中是
+     * 【绝对坐标】：行星平移 Δp、变速 Δv 后卫星原地不动 → 行星-卫星相对态被
+     * 破坏（用户报告「编辑行星后卫星无法正常跟随甚至轨道参数严重问题」；
+     * 月球相对行星距离可偏离数十万 km，密切根数剧变/直接逃逸）。
+     * 修复：对被编辑天体的全部后代（orbits_around 链指向它的天体，含月球的
+     * 月球）施加同一 Δp/Δv —— 行星-卫星相对状态严格保持，卫星刚体跟随。
+     * 顺带修复同族问题：重命名天体后子代 orbits_around 悬挂（顶层级联旧名 →
+     * 新名，含 original_input_params.orbits_around —— 开普勒解析用 op 字段
+     * 查主天体，不更新会落入「主天体缺失」降级分支）。 */
+    const oldBody = list[editingIndex];
+    const oldName = oldBody.name;
+    const oldPos = oldBody.pos, oldVel = oldBody.vel;
+    const dp = [pos[0] - oldPos[0], pos[1] - oldPos[1], pos[2] - oldPos[2]];
+    const dv = [vel[0] - oldVel[0], vel[1] - oldVel[1], vel[2] - oldVel[2]];
+    const moved = dp.some(v => v !== 0) || dv.some(v => v !== 0);
+    const renamed = name !== oldName;
+    if (moved || renamed) {
+      const parentOf = new Map();
+      for (const b of list) parentOf.set(b.name, b.orbits_around || '');
+      const isDescendant = b => {
+        let cur = b.orbits_around || '', hops = 0;
+        while (cur && hops < 32) {                       // 链上限防环
+          if (cur === oldName) return true;
+          cur = parentOf.get(cur) || ''; hops++;
+        }
+        return false;
+      };
+      for (const b of list) {
+        if (b === oldBody) continue;
+        if (renamed && b.orbits_around === oldName) {
+          b.orbits_around = name;
+          if (b.original_input_params && b.original_input_params.orbits_around === oldName)
+            b.original_input_params.orbits_around = name;
+        }
+        if (moved && isDescendant(b)) {
+          b.pos = [b.pos[0] + dp[0], b.pos[1] + dp[1], b.pos[2] + dp[2]];
+          b.vel = [b.vel[0] + dv[0], b.vel[1] + dv[1], b.vel[2] + dv[2]];
+        }
+      }
+    }
+    list[editingIndex] = rawBody;
+    showToast('天体 \'' + name + '\' 已更新', 'success');
+  }
   else { list.push(rawBody); showToast('天体 \'' + name + '\' 已添加', 'success'); }
   setSystem(list);
   markCustom();
@@ -6788,12 +6946,24 @@ function removeSelectedBody() {
   if (!name) { showToast('请先选择要移除的天体', 'error'); return; }
   const list = exportBodiesRaw().filter(b => b.name !== name);
   if (list.length === N) { showToast('未找到天体: ' + name, 'error'); return; }
-  const orphans = list.filter(b => b.orbits_around === name);
-  const finalList = orphans.length ? list.filter(b => b.orbits_around !== name) : list;
+  /* v39：级联移除改【传递闭包】—— 旧版只移除直接孤儿（orbits_around === name），
+   * 孙代仍指向已删除的卫星（悬挂）→ findPrimaryIdx 落入最大质量兜底，
+   * 轨道绑定错乱（与编辑行星后代跟随同一族「绑定链维护」缺陷）。 */
+  const removed = new Set([name]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const b of list) {
+      if (removed.has(b.name)) continue;
+      if (removed.has(b.orbits_around || '')) { removed.add(b.name); grew = true; }
+    }
+  }
+  const finalList = list.filter(b => !removed.has(b.name));
+  const cascadeCount = N - 1 - finalList.length;
   if (playing) togglePlay();
   setSystem(finalList);
   markCustom();
-  showToast('已移除 ' + name + (orphans.length ? '，级联移除 ' + orphans.length + ' 个环绕天体' : ''), 'success', 4000);
+  showToast('已移除 ' + name + (cascadeCount > 0 ? '，级联移除 ' + cascadeCount + ' 个环绕天体' : ''), 'success', 4000);
 }
 
 /* ---------------- 导入 / 导出 / 日志 ---------------- */
@@ -8578,6 +8748,20 @@ function wireEvents() {
   });
   ui.speed.addEventListener('input', () => { ui.speedVal.textContent = ui.speed.value; });
   ui.speed.addEventListener('change', savePrefs);
+  /* v39：每帧步数 ±1 精调按钮 —— 上限扩至 10000 后滑条单步跨度过大（1px ≈ 10 步），
+   * ±1 按钮提供逐步精调；灰锁态（自适应步长锁定为 1）时按钮同步禁用。 */
+  const speedNudge = d => {
+    if (ui.speed.disabled) return;
+    const cur = clampNum(parseInt(ui.speed.value) || 200, 1, 10000);
+    const nx = clampNum(cur + d, 1, 10000);
+    if (nx === cur) return;
+    ui.speed.value = String(nx);
+    ui.speedVal.textContent = String(nx);
+    if (nx > 1 && parseInt(speedBeforeLock) > 1) speedBeforeLock = String(nx);   // 灰锁恢复值同步
+    savePrefs();
+  };
+  if (ui.speedDec) ui.speedDec.addEventListener('click', () => speedNudge(-1));
+  if (ui.speedInc) ui.speedInc.addEventListener('click', () => speedNudge(1));
   ui.dt.addEventListener('change', () => {
     const v = parseTimeToSec(ui.dt.value);
     if (!isFinite(v)) showToast('时间步长无效，示例 300 / 5m / 1d', 'error');
