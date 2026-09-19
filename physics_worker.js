@@ -131,7 +131,12 @@ globalThis.__ENGINE__ = {
  * 真实积分器状态快照（与主线程 physicsAdvance 同一阈值逻辑），随帧回传主线程
  * 写入轨迹环形缓冲（transferable 所有权转移，零拷贝）。大步长快进时每帧仅 1 采样
  * 的轨迹必折线化（月球 6h×1000 实测 9.15 圈/段，密切锥线终点偏差 3×10⁵ km，
- * 预测弧无法还原多体摄动路径）—— 唯一诚实的修复是加密真实采样。 */
+ * 预测弧无法还原多体摄动路径）—— 唯一诚实的修复是加密真实采样。
+ * v39：快照改【单缓冲打包】—— 旧实现每样本 2 个新 Float32Array + 每帧最多
+ * 数千个 transferable 的 postMessage 结构化克隆开销（v39 打通 MT 子帧采样后
+ * 每帧样本数可达 2048+，对象/传输开销放大成帧延迟）。现全部样本打包为
+ * t: Float64Array(count) + data: Float32Array(count×N×6)（每样本 [pos|vel] 连续
+ * 存储），整帧仅 2 个 transferable；主线程按 subarray 零拷贝采纳进环形槽位。 */
 function integrateFrame(baseDt, steps, targetTime, o) {
   const isIAS = R.integrator === 'ias15';
   const stepFn = isIAS ? Fn.stepIAS15 : Fn.stepYoshida4;
@@ -139,19 +144,27 @@ function integrateFrame(baseDt, steps, targetTime, o) {
   const gwEvery = o.gwEvery || 0;
   const gwBuf = gwEvery ? [] : null;
   const sub = o.sub || null;                      /* v37：{ tInt, startT } | null */
-  const sT = sub ? [] : null, sP = sub ? [] : null, sV = sub ? [] : null;
-  let nextSampleT = sub ? sub.tInt : 0;
+  /* v39：打包快照缓冲（倍增式增长；count×N×6 f32，每样本 [pos|vel] 连续） */
+  let sCap = 0, sN = 0, sT = null, sD = null;
   const snap = () => {
-    /* 经 R.arrs() 取当前数组视图（Node eval 垫片下裸全局词法绑定不可见，双环境安全） */
-    const A = R.arrs();
-    const p = new Float32Array(R.N * 3), v = new Float32Array(R.N * 3);
-    for (let i = 0; i < R.N; i++) {
-      p[i * 3] = A.px[i]; p[i * 3 + 1] = A.py[i]; p[i * 3 + 2] = A.pz[i];
-      v[i * 3] = A.vx[i]; v[i * 3 + 1] = A.vy[i]; v[i * 3 + 2] = A.vz[i];
+    if (sN === sCap) {
+      const nc = sCap ? sCap * 2 : 32;
+      const nt = new Float64Array(nc); if (sT) nt.set(sT);
+      const stride = R.N * 6;
+      const nd = new Float32Array(nc * stride);
+      if (sD) nd.set(sD.subarray(0, sN * stride));
+      sT = nt; sD = nd; sCap = nc;
     }
-    sT.push(sub.startT + advanced); sP.push(p); sV.push(v);
+    /* 经 R.arrs() 取当前数组视图（Node eval 垫片下裸全局词法绑定不可见，双环境安全） */
+    const A = R.arrs(), n3 = R.N * 3, so = sN * n3 * 2;
+    for (let i = 0; i < R.N; i++) {
+      sD[so + i * 3] = A.px[i]; sD[so + i * 3 + 1] = A.py[i]; sD[so + i * 3 + 2] = A.pz[i];
+      sD[so + n3 + i * 3] = A.vx[i]; sD[so + n3 + i * 3 + 1] = A.vy[i]; sD[so + n3 + i * 3 + 2] = A.vz[i];
+    }
+    sT[sN] = sub.startT + advanced; sN++;
   };
   let advanced = 0, mergeHit = false;
+  let nextSampleT = sub ? sub.tInt : 0;
   const t0 = performance.now();
   let k = 0;
   if (adaptiveOn && R.N > 1) {
@@ -195,7 +208,8 @@ function integrateFrame(baseDt, steps, targetTime, o) {
     ias: { iasDtNext: R.iasDtNext, iasRejectCount: R.iasRejectCount },
     capRev: -1, cap: W.cap
   };
-  if (sub && sT.length) res.samples = { t: sT, pos: sP, vel: sV };   /* v37：随帧回传（transferable） */
+  if (sub && sN) res.samples = { n: R.N, count: sN,
+    t: sT.subarray(0, sN), data: sD.subarray(0, sN * R.N * 6) };   /* v39：单缓冲打包回传 */
   return res;
 }
 
@@ -278,11 +292,10 @@ self.onmessage = async (ev) => {
     res.cap = msg.cap;
     /* v34b 修复：原实现恒发 capRev=0 → 主线程每帧重建全部视图；改为原样回传。 */
     res.capRev = msg.capRev;
-    /* v37：快照缓冲所有权转移（零拷贝）；无快照时保持空转移列表 */
+    /* v37/v39：快照缓冲所有权转移（零拷贝；单缓冲打包 → 整帧仅 2 个 transferable） */
     const transfers = [];
     if (res.samples) {
-      for (const b of res.samples.pos) transfers.push(b.buffer);
-      for (const b of res.samples.vel) transfers.push(b.buffer);
+      transfers.push(res.samples.t.buffer, res.samples.data.buffer);
     }
     self.postMessage({ t: 'frame', ...res }, transfers);
     return;

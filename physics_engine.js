@@ -385,6 +385,11 @@
         gwEvery: opts.gwEvery || 0   /* v35：MT 引力波采样节奏（与 physicsAdvance 同式） */
       },
       mergeOn: opts.mergeOn, contactR2: opts.contactR2, budgetMs: opts.budgetMs,
+      /* v39 修复：v37 子帧采样参数在 MT 派发路径被静默丢弃（本消息此前不含
+       * subT/startT → worker 侧 msg.subT=undefined → sub=null → MT 模式每帧
+       * 仅 1 个轨迹采样，快进轨迹折线化/多边形化，且与单线程路径渲染不一致）。
+       * 现原样转发（subT=0 时 worker 侧与旧行为一致：不采样）。 */
+      subT: opts.subT || 0, startT: opts.startT || 0,
       cap: E.cap, capRev: E.capRev
     });
   };
