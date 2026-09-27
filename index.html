@@ -244,7 +244,7 @@ body.free-touch .pad{display:grid}
         <button data-v="ias15">IAS 15阶</button>
       </div>
     </div>
-    <div class="row" id="adaptiveRow"><input type="checkbox" id="adaptiveTimeStep"><label for="adaptiveTimeStep" style="cursor:pointer" title="开启后每步实际步长由精度判据自动收紧（时间步长输入 = 最大步长上限）；步数不足时自动补步（墙钟预算内），补步旋钮已并入自动预算">自适应时间步长</label></div>
+    <div class="row" id="adaptiveRow"><input type="checkbox" id="adaptiveTimeStep" checked><label for="adaptiveTimeStep" style="cursor:pointer" title="开启后每步实际步长由精度判据自动收紧（时间步长输入 = 最大步长上限）；步数不足时自动补步（墙钟预算内），补步旋钮已并入自动预算">自适应时间步长</label></div>
     <!-- v31：步数预算旋钮已移除 —— 与每帧步数语义重复（Universe Sandbox 对照调研结论：
          用户只设速度目标，精度与补步全由引擎自动；详见 physicsAdvance 头注释） -->
   </section>
@@ -297,8 +297,9 @@ body.free-touch .pad{display:grid}
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="starRadToggle" checked><label for="starRadToggle" style="cursor:pointer">恒星辐射照明</label></span>
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="glareToggle" checked><label for="glareToggle" style="cursor:pointer">泛光辉光</label></span>
       <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="skyboxEnabled" checked><label for="skyboxEnabled" style="cursor:pointer">天空盒背景</label></span>
-      <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="hzToggle"><label for="hzToggle" style="cursor:pointer" title="宜居带：绿=液态水温区，向热端偏红、向冷端偏蓝，超过 ±100°C 消失；按地球温室强度补偿">宜居带显示</label></span>
-      <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="helperGridToggle"><label for="helperGridToggle" style="cursor:pointer" title="基准平面网格 + 自转轴 + 垂线 + 轨道投影 + RGB 坐标三脚架">辅助网格</label></span>
+      <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="atmoToggle" checked><label for="atmoToggle" style="cursor:pointer">大气散射</label></span>
+      <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="hzToggle"><label for="hzToggle" style="cursor:pointer">宜居带显示</label></span>
+      <span style="display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="helperGridToggle"><label for="helperGridToggle" style="cursor:pointer">辅助网格</label></span>
     </div>
   </section>
 
@@ -306,13 +307,13 @@ body.free-touch .pad{display:grid}
     <div class="kicker">Relativity</div>
     <h2>相对论</h2>
     <div class="row"><input type="checkbox" id="gr1pn" checked><label for="gr1pn" style="cursor:pointer">1PN 后牛顿修正</label></div>
-    <div class="row"><input type="checkbox" id="gr15spin" checked><label for="gr15spin" style="cursor:pointer" title="Kidder 1995 1.5PN 自旋-轨道 + 2PN 自旋-自旋耦合：轨道面进动、自转轴测地/自旋-自旋进动">1.5PN 自旋耦合</label></div>
+    <div class="row"><input type="checkbox" id="gr15spin" checked><label for="gr15spin" style="cursor:pointer">1.5PN 自旋耦合</label></div>
     <div class="row"><input type="checkbox" id="gr25"><label for="gr25" style="cursor:pointer">2.5PN 引力波辐射</label></div>
     <div class="row"><input type="checkbox" id="gr2pn" checked><label for="gr2pn" style="cursor:pointer">2PN 保守修正</label></div>
     <div class="row"><input type="checkbox" id="gr35"><label for="gr35" style="cursor:pointer">3.5PN 辐射反应</label></div>
     <div class="row"><input type="checkbox" id="tideToggle" checked><label for="tideToggle" style="cursor:pointer">潮汐相互作用</label></div>
-    <div class="row"><input type="checkbox" id="j2Toggle" checked><label for="j2Toggle" style="cursor:pointer" title="v35：旋转扁体（流体平衡扁率 J2 = (2/3)k2·q）的保守四极摄动 —— 轨道节点/近心点进动与自转轴进动+章动（地球 25772 年岁差、18.6 年章动主项）。v35 修复了 v34 及以前 J2 力/力矩/势能符号全部相反的问题（经薄环精确级数 + 椭球直接积分双重数值裁决），现与 Vallado 8-57 / Murray & Dermott 标准方向一致：月球升交点后退、地球岁差 retrograde">J2 扁率摄动（进动+章动）</label></div>
-    <div class="row"><input type="checkbox" id="pwToggle"><label for="pwToggle" style="cursor:pointer" title="v35：强场 Paczyński–Wiita 伪牛顿势（1980），成对替换牛顿项：a = ∓Gm/(r−r_g)²，r_g = G(m1+m2)/c²。精确再现 Schwarzschild ISCO（6GM/c²）、边缘束缚圆轨（4GM/c²）与近心点进动 6πGM/(c²a(1-e²))，强场 plunge 更物理。与 1PN 叠加会双重计入同类效应（建议二选一）">强场 PW 伪牛顿势</label></div>
+    <div class="row"><input type="checkbox" id="j2Toggle" checked><label for="j2Toggle" style="cursor:pointer">J2 扁率摄动（进动+章动）</label></div>
+    <div class="row"><input type="checkbox" id="pwToggle"><label for="pwToggle" style="cursor:pointer">强场 PW 伪牛顿势</label></div>
     <div class="kv">
       <span class="k">潮汐耗散功率</span><span id="tideHeat">—</span>
       <span class="k">自转角动量占比</span><span id="tideSpinFrac">—</span>
@@ -483,6 +484,30 @@ body.free-touch .pad{display:grid}
       </div>
       <div class="row"><span class="lbl" style="width:88px;flex:none">上层不透明度</span><input type="range" id="texOp2" min="0" max="1" step="0.01" value="1"><span class="lbl" id="texOp2Val" style="width:38px;flex:none;text-align:right;font-family:var(--mono)">100%</span></div>
       <div class="row"><input type="checkbox" id="texDark2"><label for="texDark2" style="cursor:pointer">暗部透明</label></div>
+      <h4>大气散射</h4>
+      <div class="row"><input type="checkbox" id="bodyAtmoOn"><label for="bodyAtmoOn" style="cursor:pointer">启用大气散射</label></div>
+      <div class="row"><span class="lbl" style="width:92px;flex:none">大气高度</span><input type="range" id="atmoScale" min="0.5" max="100" step="0.01" value="1.6"><input type="number" class="txt" id="atmoScaleVal" step="any" style="width:62px;flex:none" title="大气层顶离面实际高度 = 滑条百分比 × 星球半径；直接输入实际值精确控制"></div>
+      <div class="row"><span class="lbl" style="width:92px;flex:none">散射强度</span><input type="range" id="atmoStrength" min="0" max="200" step="0.1" value="10"><input type="number" class="txt" id="atmoStrengthVal" min="0" max="200" step="any" style="width:62px;flex:none" title="分子数密度比×10（10 = 地球标准大气 2.504e25 /m³）"></div>
+      <div class="row"><span class="lbl" style="width:92px;flex:none">密度衰减</span><input type="range" id="atmoFalloff" min="0.5" max="40" step="0.1" value="12"><input type="number" class="txt" id="atmoFalloffVal" min="0.5" max="40" step="any" style="width:62px;flex:none" title="壳厚内的 e 折叠数：标高 = 壳厚 / 衰减"></div>
+      <div class="row"><span class="lbl" style="width:92px;flex:none">吸收偏好</span><input type="range" id="atmoAbsorb" min="0" max="10" step="0.01" value="0"><input type="number" class="txt" id="atmoAbsorbVal" min="0" max="10" step="any" style="width:62px;flex:none" title="吸收峰值系数（×10⁻⁵/m，随瑞利密度路径，补色吸收）"></div>
+      <div class="row"><span class="lbl" style="width:92px;flex:none">米氏雾浊</span><input type="range" id="atmoMie" min="0" max="200" step="0.1" value="0"><input type="number" class="txt" id="atmoMieVal" min="0" max="200" step="any" style="width:62px;flex:none" title="米氏气溶胶系数（×10⁻⁴/m，地球 21 → 文章常数 0.0021/m）"></div>
+      <div class="row"><span class="lbl" style="width:92px;flex:none">米氏前向</span><input type="range" id="atmoMieG" min="0" max="0.95" step="0.01" value="0.76"><input type="number" class="txt" id="atmoMieGVal" min="0" max="0.95" step="any" style="width:62px;flex:none" title="Henyey-Greenstein 前向散射参数"></div>
+      <div class="row"><span class="lbl" style="width:62px;flex:none">散射色 R</span><input type="number" class="txt" id="atmoWLr" min="380" max="780" step="1" value="660" style="width:64px"><span class="lbl" style="width:16px;flex:none;text-align:center">G</span><input type="number" class="txt" id="atmoWLn" min="380" max="780" step="1" value="550" style="width:64px"><span class="lbl" style="width:16px;flex:none;text-align:center">B</span><input type="number" class="txt" id="atmoWLb" min="380" max="780" step="1" value="440" style="width:64px"></div>
+      <label>星环贴图</label>
+      <div class="row wrap" style="gap:6px;margin:8px 0">
+        <button type="button" id="texUploadBtnR" class="btn" style="flex:1">上传星环</button>
+        <button type="button" id="texClearBtnR" class="btn" style="flex:1">清除星环</button>
+      </div>
+      <input type="file" id="texFileInputR" accept="image/*" class="hidden">
+      <div class="row" style="margin:4px 0 10px;align-items:center;gap:10px">
+        <img id="texPreviewR" alt="" style="width:64px;height:32px;object-fit:cover;border:1px solid var(--line2);display:none">
+        <span id="texInfoR" class="lbl" style="flex:1">未设置星环</span>
+      </div>
+      <div class="row"><span class="lbl" style="width:88px;flex:none">星环不透明度</span><input type="range" id="texOpR" min="0" max="1" step="0.01" value="1"><span class="lbl" id="texOpRVal" style="width:38px;flex:none;text-align:right;font-family:var(--mono)">100%</span></div>
+      <div class="row"><span class="lbl" style="width:88px;flex:none">环倾角（°）</span><input type="number" class="txt" id="ringTilt" step="0.01" value="0.0"></div>
+      <div class="row"><span class="lbl" style="width:88px;flex:none">环方位角（°）</span><input type="number" class="txt" id="ringNode" step="0.01" value="0.0"></div>
+      <label for="ringSpin">环自转周期 · 留空随星自转</label>
+      <div class="input-wrapper"><input type="text" class="txt" id="ringSpin" placeholder="如 10h / 2d；留空 = 不独立转动"></div>
       <h4>自转与形变</h4>
       <label for="bodySpinTilt">自转倾角（°）</label>
       <div class="input-wrapper"><input type="number" class="txt" id="bodySpinTilt" step="0.01" value="0.0"><button type="button" class="reset-btn">清零</button></div>
@@ -579,6 +604,40 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v49 一项修复（用户反馈）：只保留曝光修复，回退 v48 全部渲染改动 ——
+ *      PLANET_FS/SHELL_FS/ATMO_FS 的【厚云甲多次散射填充】整支退役
+ *      （相关门控/合成辅助函数、ISO 常量与填充累加器全部删除），
+ *      渲染逐字节恢复 v47 观感（用户调校定版优先，视觉不再动）。
+ * v48 保留两项（均非渲染）：
+ *      ① ATMO_PRESETS 按用户定版逐字保留（Venus falloff 13 / mieHR 1.5，勿改）。
+ *      ② 「自动曝光很可疑，背景被压暗很多，金星被误判压太多」（纯计量侧修复，
+ *         渲染管线零改动）：
+ *         buildSceneFrame 主体点测光 BpN = Bp·normK，而 v43 起 normK = BP_REF/(Bp·Tatm)
+ *         已计入大气垂直透射 —— 计量实际取 BP_REF/Tatm，把厚大气天体当无消光亮面：
+ *         金星厚云甲 Tatm 钳 0.02 地板 → 主体被误判 50× 亮 → expTarget 6 → 0.18
+ *         （实测全景曝光 5.9 → 0.13，背景 P99.9 37.8 → 8.8，金星圆面压至纯黑）。
+ *         修复：BpN = Bp·Tatm·normK（= 渲染光源链净缩放后的真实观测圆面亮度，
+ *         恒等于设计基准 BP_REF；无大气分支逐位不变）。背景/金星不再被误压暗。
+ * v47 三项修复（用户反馈；物理内核/引擎/worker 零改动，详见 deploy/README.md §十七 与 worklog）：
+ *      ① 「金星开大气 boot 全黑，编辑保存一次才正常」+「按根数保存后天体位置跳变」：
+ *         createBodyFromKeplerian 的 vec3 助手把矩阵向量乘写成了 Mᵀ·v（逆旋转）——
+ *         所有按根数创建/保存的天体都被放到【镜像经度】（实测保存金星跳变 96.7°；
+ *         预设初始位置同样镜像 → 金星偏离 J2000 根数表经度 96.8°、默认视角恰为
+ *         下合（夜侧朝相机）→ 开大气圆面全黑）。修正为标准 M·v：根数往返恒等
+ *         （保存不再跳位），预设行星落到根数表真实经度（金星默认视角为昏半照）。
+ *      ② 「编辑火星瞬间变成木星样子、木星变成土星样子（错映）」：
+ *         resolveBodies 开普勒队列反向遍历 → 解析完成序 = 输入序镜像，每次
+ *         setSystem 顺序在两种排列间振荡；渲染层网格/贴图记录按位置索引持有，
+ *         异步贴图重载窗口内同索引易主天体短暂显示旧天体外观。修复：解析改
+ *         【前向多轮】（顺序 = 输入序，跨 setSystem 恒定）+ initStateFull 对
+ *         同索引易主天体立即清空渲染层贴图/星环（错映窗口彻底消除）。
+ *      ③ 「编辑保存后大气观感改变」：mieHR（米氏/瑞利标高比）为预设隐藏字段
+ *         （无 UI 控件），表单往返被静默重置为默认 0.144（实测金星 1.5 → 0.144，
+ *         米氏凝结层高度收缩 10×）。修复：表单态暂存 formAtmoMieHR 随往返保留。
+ *      ※ 关于「大气是否使用 WebGL」：大气散射全程为 WebGL —— ATMO_FS 全屏
+ *         pass（three.js ShaderMaterial/EffectComposer）+ PLANET_FS/SHELL_FS
+ *         表面/云层大气项均为 GLSL 着色器；2D canvas 仅用于 GW 波形图/天空
+ *         亮度计量/截图合成，不参与大气渲染，无需迁移。
  * v39 六项修复与功能（用户反馈；物理内核零改动，详见 deploy/README.md §十四 与 worklog）：
  *      ① 快速时间步长轨迹毛刺/多边形（三重根因）：
  *         a) 【MT 子帧采样静默失效】frame() 把 subT/startT 放进 opts，但
@@ -1124,6 +1183,12 @@ const EXPO_BIAS_MIN = -8, EXPO_BIAS_MAX = 16;
  * 曝光 ×(0.30/0.45) = 2/3，星球表面观感暗 1/3；恒星（uCap 饱和）与
  * 纯星空场景（顶 EXP_MAX）观感基本不变。 */
 const METER_STAR_W = 0.02, METER_BODY_W = 0.45;
+/* v42：主体曝光归一化基准 —— 默认预设火星的昼面辐射亮度
+ * Bp = albLum('#FF6B45')·(1/1.52371034²)/π = 0.0442（与计量/光源链同口径）。
+ * normK = BP_REF/Bp 按天体缩放光源链（uLC）与亚像素点源、计量同步缩放 →
+ * 八大行星（任意轨道辐照度）观感亮度一致，以「当前火星」为基准；
+ * 表面平衡温度/热辐射链不受影响（仍用未缩放 Ep，物理量保持真实）。 */
+const BP_REF = 0.0442;
 const DRAG_SENS = 0.005;                 // 拖拽旋转灵敏度上限 rad/px（v13 起按视场自适应收紧）
 const PAD_ROT_RATE = 1.7, PAD_MOVE_RATE = 340;   // 飞行按钮连续运动角速度 rad/s 与屏速 px/s
 const NAV_FAST_K = 5, NAV_SLOW_K = 0.2;  // Shift 加速 / Alt 减速倍率
@@ -1311,17 +1376,32 @@ function tideFluxState(mu, mp, R, rx, ry, rz, dvx, dvy, dvz, k2q) {
   const Pw = (63 / 4) * k2q * (G * mp * mp * R * R * R * R * R / (a * a * a * a * a * a)) * ecc * ecc * n;
   return Pw > 0 ? Pw / (4 * Math.PI * R * R) : 0;
 }
-/* 运行时包装：主星取实际束缚宿主（v33 boundHostIdx —— 配置母星未绑定时回退
- * 实际绕转对象，同步潮汐加热显示不再因母星设置指向另一星而恒为 0），k₂/Q 缺省 0.012 */
+/* v46：潮汐加热对称化 + 多体求和 —— 旧实现只算「束缚宿主 → 本天体」单对
+ *（boundHostIdx 恒指向被绕对象），卫星 B 绕 A 时仅 B 被加热，A 被近伴星掀潮
+ * 耗散的能量完全缺失（用户实测：A 不加热不发光），多体系统亦只计入单对。
+ * 物理口径：CTL 平衡潮为线性响应，各扰源潮汐势独立耗散、功率直接相加 ——
+ * 对每个其他天体 j 以 (i,j) 瞬时相对状态作二体归约求 a/e/n，潮在 i 上
+ *（被 j 掀起）的耗散功率 P_ij = 63/4·k₂Q·G·m_j²·R_i⁵/a⁶·e²·n（Hut 1981 弱
+ * 摩擦，tideFluxState 同式），P_i = Σ_j P_ij / (4πR_i²)。A/B 两侧各按自身
+ * R⁵ 与 k₂Q 计 → 对称（B 近距时 A 同步升温发光）；木星+太阳+土星等多扰源
+ * 场景逐对求和。d ≤ R_i（接触/穿入）的 pair 跳过 —— 点质量 r⁻⁶ 展开失效，
+ * 与动力核潮汐接触淡化同口径。k₂Q 沿用显示缺省 0.012（与旧版一致）。 */
 function bodyTidalFluxOf(i) {
-  const p = boundHostIdx(i);
-  if (!(p >= 0 && p !== i)) return 0;
-  const mp = massA[p], mi = massA[i];
-  if (!(mp > 0) || !(mi > 0)) return 0;
+  const mi = massA[i];
   const R = meta[i].radius > 0 ? meta[i].radius : massRadius(mi);
-  const rx = px[i] - px[p], ry = py[i] - py[p], rz = pz[i] - pz[p];
-  const dvx = vx[i] - vx[p], dvy = vy[i] - vy[p], dvz = vz[i] - vz[p];
-  return tideFluxState(G * (mp + mi), mp, R, rx, ry, rz, dvx, dvy, dvz, 0.012);
+  if (!(R > 0) || N < 2) return 0;
+  let q = 0;
+  for (let j = 0; j < N; j++) {
+    if (j === i) continue;
+    const mj = massA[j];
+    if (!(mj > 0)) continue;
+    const rx = px[i] - px[j], ry = py[i] - py[j], rz = pz[i] - pz[j];
+    const r2 = rx * rx + ry * ry + rz * rz;
+    if (!(r2 > R * R)) continue;                  /* 接触/穿入：展开失效，跳过 */
+    const dvx = vx[i] - vx[j], dvy = vy[i] - vy[j], dvz = vz[i] - vz[j];
+    q += tideFluxState(G * (mi + mj), mj, R, rx, ry, rz, dvx, dvy, dvz, 0.012);
+  }
+  return q;
 }
 /* v30c：天体表面温度（信息面板用）—— 纯函数核 surfTempPure 可静态自检：
  * 类地/卫星：T_glob⁴ = (T_eq·gh)⁴ + q_tide/σ（灰大气 + 潮汐热）；
@@ -1582,6 +1662,24 @@ function tjsPushTexture(i, e) {
       : '贴图处理失败：' + err.message, 'error', 6000);
   }
 }
+/* v40：星环贴图缓存装载（dataURL → Image → tjs.setBodyRing） */
+const bodyRing = { cache: new Map() };
+function bodyRingEnsure(i) {
+  const r = meta[i] && meta[i].ring;
+  const src = r && r.tex;
+  if (!src) {
+    if (bodyRing.cache.delete(i) && window.__TJS__) window.__TJS__.setBodyRing(i, null);
+    return;
+  }
+  let e = bodyRing.cache.get(i);
+  if (e && e.src === src) return;
+  e = { src, img: null };
+  bodyRing.cache.set(i, e);
+  const im = new Image();
+  im.onload = () => { e.img = im; if (window.__TJS__) window.__TJS__.setBodyRing(i, im); draw(); };
+  im.onerror = () => { console.warn('星环贴图解码失败:', meta[i] ? meta[i].name : i); };
+  im.src = src;
+}
 function bodyTexEnsure(i) {
   const t = meta[i] && meta[i].texture;
   const t2 = meta[i] && meta[i].texture2;
@@ -1628,6 +1726,8 @@ function bodyTexEnsure(i) {
 }
 function bodyTexApplyAll() {
   for (const [i, e] of bodyTex.cache) if (e.img || e.img2) tjsPushTexture(i, e);
+  /* v40：星环纹理重推（模块就绪后 / 上下文恢复） */
+  if (window.__TJS__) for (const [i, e] of bodyRing.cache) if (e.img) window.__TJS__.setBodyRing(i, e.img);
 }
 function bodyTexReloadAll() {
   bodyTex.cache.clear();     // 索引随天体增删变化，整体重建
@@ -1849,14 +1949,33 @@ function matSelectCell(k) {
   if (el) { el.style.borderColor = 'var(--acc,#6aa9ff)'; matSelPrevEl = el; } else matSelPrevEl = null;
   matShowBig();
 }
+/* ===== v40：用户显式清除贴图记忆（修复任务：编辑中去掉贴图后仍被立刻自动应用）=====
+ * matAutoApply 只在「用户未手动设置」时生效，但它无法区分「从未设置」与「设置后
+ * 又清除」—— 保存→setSystem→afterSystemReplaced→matAutoApply 链路会把刚清除的
+ * 贴图立刻重贴。此处按天体名记录显式清除的层，自动应用时跳过；用户重新上传
+ * 同层贴图时解除。 */
+const matCleared = new Map();   // name -> { l1: bool, l2: bool }
+function matMarkCleared(name, layer) {
+  const e = matCleared.get(name) || { l1: false, l2: false, l3: false };
+  if (layer === 2) e.l2 = true; else if (layer === 3) e.l3 = true; else e.l1 = true;
+  matCleared.set(name, e);
+  /* 同步删 v37 贴图记忆，防后续 setSystem 重附路径把清除的贴图带回来 */
+  const mem = bodyTexMemory.get(name);
+  if (mem) { if (layer === 2) mem.texture2 = null; else if (layer !== 3) mem.texture = null; }
+}
+function matUnmarkCleared(name, layer) {
+  const e = matCleared.get(name);
+  if (!e) return;
+  if (layer === 2) e.l2 = false; else if (layer === 3) e.l3 = false; else e.l1 = false;
+}
 function matAutoApply() {
   /* v19b 天体按名自动应用（仅在用户未手动设置对应层贴图时生效）：
    *   底层：文件名主干 = 天体别名 或 天体名主干（earth.jpg / 地球.png / Trappist1e.jpg）
    *   上层：文件名主干 = 「星球名 + 分隔符 + 任意后缀」（earth_clouds.jpg / venus-atmosphere.jpg）——
    *         用户规则：星球名_随意 一律作为该星球第二层；
    *   后缀含 cloud/云 等词才自动开启该层「暗部透明」（越黑越透明） */
-  let n1 = 0, n2 = 0, nCloud = 0;
-  const baseByStem = new Map(), secondByPrefix = new Map();
+  let n1 = 0, n2 = 0, nCloud = 0, nR = 0;
+  const baseByStem = new Map(), secondByPrefix = new Map(), ringByPrefix = new Map();
   for (const it of matItems) {
     const stem = matStem(it.name);
     if (!stem) continue;
@@ -1867,16 +1986,25 @@ function matAutoApply() {
     if (sp && !secondByPrefix.has(sp.key)) secondByPrefix.set(sp.key, it);
     const raw = matRawSplit(stem);             /* 任意前缀 → 原名索引（自建天体） */
     if (raw && !secondByPrefix.has(raw.prefix)) secondByPrefix.set(raw.prefix, it);
+    /* v40：星环后缀（任务⑤）：星球_ring / 星球_星环 → 星环贴图 */
+    {
+      const cand = sp || raw;
+      if (cand && !ringByPrefix.has(cand.key || cand.prefix)) {
+        const sfx = (cand.suffix || '').toLowerCase();
+        if (sfx === 'ring' || sfx === '星环' || sfx === '环' || sfx === 'rings') ringByPrefix.set(cand.key || cand.prefix, it);
+      }
+    }
   }
   for (let i = 0; i < N; i++) {
     const stem = matStem(meta[i].name);
     if (!stem) continue;
     const key = matFindMatch(stem) || stem;    // 别名键优先（含「天体名含别名」回退），其次本体名主干
-    if (!meta[i].texture) {
+    const clr = matCleared.get(meta[i].name);
+    if (!meta[i].texture && !(clr && clr.l1)) {
       const hit = baseByStem.get(key);
       if (hit) { meta[i].texture = hit.url; bodyTexEnsure(i); n1++; }
     }
-    if (!meta[i].texture2) {
+    if (!meta[i].texture2 && !(clr && clr.l2)) {
       const hit2 = secondByPrefix.get(key) || secondByPrefix.get(stem);
       if (hit2) {
         meta[i].texture2 = hit2.url;
@@ -1885,9 +2013,15 @@ function matAutoApply() {
         n2++;
       }
     }
+    /* v40：星环自动应用（_ring 后缀；用户显式清除过则跳过） */
+    if (!meta[i].ring && !(clr && clr.l3)) {
+      const hitR = ringByPrefix.get(key) || ringByPrefix.get(stem);
+      if (hitR) { meta[i].ring = { tex: hitR.url, op: 1 }; bodyRingEnsure(i); nR++; }
+    }
   }
-  if (n1 + n2 > 0) {
+  if (n1 + n2 + nR > 0) {
     showToast('材质库自动应用贴图：底层 ×' + n1 + (n2 ? ' · 上层 ×' + n2 : '') +
+      (nR ? ' · 星环 ×' + nR : '') +
       (nCloud ? '（云图已自动暗部透明）' : ''), 'success', 4200);
     saveLocalStorage();
     draw();
@@ -2187,7 +2321,7 @@ function matApplyBody() {
  * XYZ 经 sRGB 矩阵到线性 RGB。恒星色度略出 sRGB 色域（负分量）时向等能白
  * 混合收缩至恰好入域 —— 保持色相方向单调，禁止逐通道裁剪导致色相爆炸。 */
 const CIE_H = 6.62607015e-34, CIE_C = 2.99792458e8, CIE_K = 1.380649e-23;
-const CIE_LO = 360, CIE_HI = 830, CIE_STEP = 5;
+const CIE_LO = 360, CIE_HI = 830, CIE_STEP = 5;   /* 黑体→XYZ 光谱积分波长范围与步长（nm） */
 function cieLobe(x, mu, s1, s2) {
   const t = (x - mu) / (x < mu ? s1 : s2);
   return Math.exp(-0.5 * t * t);
@@ -2489,10 +2623,15 @@ function createBodyFromKeplerian(mass, primaryBodyName, semiMajorAxisStr, eccent
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) for (let k = 0; k < 3; k++) C[r][c] += A[r][k] * B[k][c];
     return C;
   };
+  /* v47 修复：旧实现 v[0]*M[0][0]+v[1]*M[1][0]+v[2]*M[2][0] 实为 Mᵀ·v（逆旋转）
+   * —— 每次按根数创建/保存都把天体放到【镜像经度】（实测金星保存跳变 96.7°，
+   * 预设初始位置同样被镜像 → 金星 J2000 落在错误经度、默认视角恰为下合夜侧
+   * = 用户报告「开大气 boot 全黑，保存一次才正常」）。改为标准 M·v 后：
+   * 根数往返恒等（保存不再跳位）、预设行星落到根数表真实经度。 */
   const vec3 = (v, M) => [
-    v[0] * M[0][0] + v[1] * M[1][0] + v[2] * M[2][0],
-    v[0] * M[0][1] + v[1] * M[1][1] + v[2] * M[2][1],
-    v[0] * M[0][2] + v[1] * M[1][2] + v[2] * M[2][2]
+    M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2],
+    M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+    M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2]
   ];
   const R = mat3(rO, mat3(rI, rW));
   const posRel = vec3(posPlane, R), velRel = vec3(velPlane, R);
@@ -2529,6 +2668,8 @@ function resolveBodies(rawArray, opts) {
       texture2Op: (typeof b.texture2Op === 'number' && isFinite(b.texture2Op)) ? Math.min(Math.max(b.texture2Op, 0), 1) : 1,
       textureMode1: (b.textureMode1 === 1 || b.textureMode1 === '1' || b.textureMode1 === true) ? 1 : 0,
       textureMode2: (b.textureMode2 === 1 || b.textureMode2 === '1' || b.textureMode2 === true) ? 1 : 0,
+      atmosphere: atmoSanitize(b.atmosphere),   /* v40：大气散射参数随导入/存档往返 */
+      ring: ringSanitize(b.ring),   /* v40：星环随导入/存档往返 */
       radius: Number(b.radius) > 0 ? Number(b.radius) : (Number(orig.radius_m) > 0 ? Number(orig.radius_m) : 0),
       original_input_params: b.original_input_params || {} };
     if (isKeplerian) keplerianQueue.push({ item, raw: b });
@@ -2559,13 +2700,19 @@ function resolveBodies(rawArray, opts) {
       out.push(item);
     }
   }
+  /* v47 修复：开普勒解析改为【前向多轮】—— 旧版反向遍历队列（k 从尾向头），
+   * 解析完成序 = 输入序的镜像，且每次 setSystem 在两种排列间振荡（输入顺序
+   * A → 输出 B，再以 B 为输入 → 输出 A）。渲染层网格/贴图记录按位置索引持有，
+   * 异步贴图重载窗口内新天体短暂显示旧天体外观 = 用户报告「编辑火星瞬间变成
+   * 木星样子、木星变成土星」（顺序翻转 + 同索引易主）。前向遍历 + splice 后
+   * 原位续扫：解析完成序 = 输入序（依赖链由多轮保证），顺序跨 setSystem 恒定。 */
   let resolved, iter = 0;
   do {
     resolved = 0;
-    for (let k = keplerianQueue.length - 1; k >= 0; k--) {
+    for (let k = 0; k < keplerianQueue.length;) {
       const q = keplerianQueue[k], orig = q.raw.original_input_params;
       const primary = out.find(b => b.name === orig.orbits_around);
-      if (!primary) continue;
+      if (!primary) { k++; continue; }
       try {
         const mass = typeof q.raw.mass === 'number' ? q.raw.mass : parseValueWithUnits(orig.mass ?? q.raw.mass, 'kg');
         const mM = parseFloat(orig.mean_anomaly_deg);
@@ -2589,8 +2736,8 @@ function resolveBodies(rawArray, opts) {
           q.item.pos = st.pos; q.item.vel = st.vel;
         }
         q.item.mass = mass; q.item.orbits_around = orig.orbits_around;
-        out.push(q.item); keplerianQueue.splice(k, 1); resolved++;
-      } catch (e) { /* 主天体可能尚未解析，下一轮再试 */ }
+        out.push(q.item); keplerianQueue.splice(k, 1); resolved++;   /* splice 后不 k++：下一项滑入当前位 */
+      } catch (e) { k++; /* 主天体可能尚未解析，下一轮再试 */ }
     }
     iter++;
   } while (resolved > 0 && keplerianQueue.length > 0 && iter < 10);
@@ -2665,6 +2812,11 @@ function bodyTexMemoryHarvest() {
 /* v35：initState 的实际状态写入部分（可被引擎在在飞帧结束后安全重放） */
 function initStateFull(list) {
   bodyTexMemoryHarvest();   /* v37：旧系统贴图收割（在 meta 重建前） */
+  /* v47：索引所有权快照 —— 重建后对「同索引易主」的天体立即清空渲染层
+   * 贴图/星环：渲染层 rec 按位置索引持有 GPU 资源，异步重载解码完成前
+   * 新天体会短暂显示旧天体外观（错映，用户报告「编辑火星瞬间变成木星」）。
+   * 所有权未变的索引保留现有资源 → 保存/重解析路径零闪烁。 */
+  const prevNames = meta ? meta.map(m => m.name) : null;
   meta = list.map(b => ({
     gh: (typeof b.gh === 'number' && isFinite(b.gh) && b.gh >= 1 && b.gh <= 6) ? b.gh : 0,
     pressure: (typeof b.pressure === 'number' && isFinite(b.pressure) && b.pressure > 0) ? b.pressure : 0,   /* v22：表面气压 bar */
@@ -2676,6 +2828,8 @@ function initStateFull(list) {
     texture2Op: (typeof b.texture2Op === 'number' && isFinite(b.texture2Op)) ? Math.min(Math.max(b.texture2Op, 0), 1) : 1,
     textureMode1: (b.textureMode1 === 1 || b.textureMode1 === '1' || b.textureMode1 === true) ? 1 : 0,
     textureMode2: (b.textureMode2 === 1 || b.textureMode2 === '1' || b.textureMode2 === true) ? 1 : 0,
+    atmosphere: atmoSanitize(b.atmosphere),   /* v40：大气散射参数 */
+    ring: ringSanitize(b.ring),   /* v40：星环 */
     orbits_around: b.orbits_around || '', original_input_params: b.original_input_params || {}
   }));
   /* v37：同名天体贴图重附（预设未显式给贴图字段时）—— 与刷新后 localStorage/
@@ -2684,12 +2838,29 @@ function initStateFull(list) {
     if (meta[i].texture || meta[i].texture2) continue;
     const mem = bodyTexMemory.get(meta[i].name);
     if (mem) {
-      meta[i].texture = mem.texture; meta[i].textureOp = mem.textureOp;
-      meta[i].texture2 = mem.texture2; meta[i].texture2Op = mem.texture2Op;
+      /* v40：显式清除的层不再重附（matCleared 与 matMarkCleared 同步删记忆） */
+      const clr = (typeof matCleared !== 'undefined') ? matCleared.get(meta[i].name) : null;
+      if (!meta[i].texture && mem.texture && !(clr && clr.l1)) {
+        meta[i].texture = mem.texture; meta[i].textureOp = mem.textureOp;
+      }
+      if (!meta[i].texture2 && mem.texture2 && !(clr && clr.l2)) {
+        meta[i].texture2 = mem.texture2; meta[i].texture2Op = mem.texture2Op;
+      }
       meta[i].textureMode1 = mem.textureMode1; meta[i].textureMode2 = mem.textureMode2;
     }
   }
   N = meta.length; ensureCap(N);
+  /* v47：同索引易主 → 立即清空该索引的渲染层贴图/星环（bodyTexReloadAll 随后
+   * 异步重建；bodyRingEnsure 由 afterSystemReplaced 按新 meta 重装）。同步执行
+   * 于任何新贴图推送之前，错映窗口彻底消除（非易主索引不受影响）。 */
+  if (prevNames && window.__TJS__) {
+    for (let i = 0; i < N; i++) {
+      if (i < prevNames.length && prevNames[i] === meta[i].name) continue;
+      try { window.__TJS__.setBodyTextures(i, null, null); } catch (e) {}
+      try { window.__TJS__.setBodyRing(i, null); } catch (e) {}
+      bodyRing.cache.delete(i);
+    }
+  }
   for (let i = 0; i < N; i++) {
     px[i] = list[i].pos[0]; py[i] = list[i].pos[1]; pz[i] = list[i].pos[2];
     vx[i] = list[i].vel[0]; vy[i] = list[i].vel[1]; vz[i] = list[i].vel[2];
@@ -2763,8 +2934,65 @@ function uiAfterState() {
  * matAutoApply 幂等（只填空贴图字段），重复调用安全。 */
 function afterSystemReplaced() {
   uiAfterState();
+  /* v40：星环贴图装载（meta.ring → 环网纹理；含系统替换/预设切换/存档导入） */
+  for (let i = 0; i < N; i++) if (meta[i] && meta[i].ring) bodyRingEnsure(i);
   if (matScanned && matItems.length) matAutoApply();   /* 材质库已就绪 → 新场景自动换同名贴图 */
   scheduleSceneMatScan();   /* v37：fallback 扫描环境为新场景补探（串行 + 防抖） */
+}
+/* ===== v43：大气散射参数（忠实移植《基于物理的大气渲染》一/二 · 数据模型） =====
+ * meta[i].atmosphere = { on, scale, strength, falloff, absorb, mie, mieG, wl:[r,g,b], mieHR } | null
+ * scale = 大气层顶高度（行星半径 %）；falloff = 壳厚内 e 折叠数（H_R = 壳厚/falloff，
+ * ρ(层顶) = exp(−falloff)）；strength = 分子数密度比×10（10 = 地球标准大气 2.504e25，
+ * β_R = 8π³(n²−1)²/(3Nλ⁴)）；wl(nm) = 散射偏好波长（文章地球 660/550/440）；
+ * absorb = 吸收偏好（β_A 峰值 absorb·1e-5/m，补色，吸收不重发射）；
+ * mie = 米氏气溶胶（β_M = mie·1e-4/m，地球 21 → 文章常数 0.0021/m）；
+ * mieG = 前向 g；mieHR = 米氏/瑞利标高比（文章地球 1200/8330 ≈ 0.144）。 */
+function atmoSanitize(a) {
+  if (!a || typeof a !== 'object' || !a.on) return null;
+  const num = (x, lo, hi, d) => { const v = typeof x === 'number' && isFinite(x) ? x : parseFloat(x); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+  const wl = c => Math.min(780, Math.max(380, num(c, 380, 780, 460)));
+  return {
+    on: 1,
+    scale: num(a.scale, 0.5, 100, 1.6),
+    strength: num(a.strength, 0, 200, 10),
+    falloff: num(a.falloff, 0.5, 40, 12),
+    absorb: num(a.absorb, 0, 10, 0),
+    mie: num(a.mie, 0, 200, 0),
+    mieG: num(a.mieG, 0, 0.95, 0.76),
+    mieHR: num(a.mieHR, 0.02, 2, 0.144),
+    wl: [wl(Array.isArray(a.wl) ? a.wl[0] : 660), wl(Array.isArray(a.wl) ? a.wl[1] : 550), wl(Array.isArray(a.wl) ? a.wl[2] : 440)]
+  };
+}
+/* v43：大气光学量统一计算（标定 normK / 渲染 uniforms / 计量三处共用同一实现）。
+ * 返回本系（行星半径=1）口径：层顶、瑞利/米氏标高、β_R/β_M/β_A（β·rP 无量纲）、
+ * 垂直柱光学深度与亮度加权垂直透射率 Tatm（文章一 exp(−h/H) 密度模型）。 */
+function atmoOpticsOf(a, radM) {
+  const topL = 1 + a.scale / 100;
+  const hrR = (topL - 1) / Math.max(a.falloff, 1e-3);
+  const hrM = hrR * (a.mieHR || 0.144);
+  const N_DENS = 2.504e25 * (a.strength / 10);
+  const N_AIR = 1.00029;
+  const bBase = N_DENS > 1 ? 8 * Math.pow(Math.PI, 3) * Math.pow(N_AIR * N_AIR - 1, 2) / (3 * N_DENS) : 0;
+  const cR = [a.wl[0] * 1e-9, a.wl[1] * 1e-9, a.wl[2] * 1e-9].map(l => bBase / (l * l * l * l) * radM);
+  const cM = a.mie * 1e-4 * radM;
+  const mx = Math.max(cR[0], cR[1], cR[2], 1e-9);
+  const cA = [a.absorb * (1 - cR[0] / mx) * 1e-5 * radM,
+              a.absorb * (1 - cR[1] / mx) * 1e-5 * radM,
+              a.absorb * (1 - cR[2] / mx) * 1e-5 * radM];
+  const odR = hrR * (1 - Math.exp(-(topL - 1) / hrR));
+  const odM = hrM * (1 - Math.exp(-(topL - 1) / hrM));
+  const T = [0, 1, 2].map(k => Math.exp(-((cR[k] + cA[k]) * odR + cM * odM)));
+  const Tatm = clampNum(0.2126 * T[0] + 0.7152 * T[1] + 0.0722 * T[2], 0.02, 1);
+  return { topL, hrR, hrM, cR, cM, cA, odR, odM, T, Tatm };
+}
+/* v40：星环参数（任务⑤：星球_任意.jpg 任意=ring 自动应用） */
+function ringSanitize(r) {
+  if (!r || typeof r !== 'object' || typeof r.tex !== 'string' || !r.tex.startsWith('data:image/')) return null;
+  const op = (typeof r.op === 'number' && isFinite(r.op)) ? Math.min(1, Math.max(0, r.op)) : 1;
+  const tilt = (typeof r.tilt === 'number' && isFinite(r.tilt)) ? r.tilt : (parseFloat(r.tilt) || 0);
+  const node = (typeof r.node === 'number' && isFinite(r.node)) ? r.node : (parseFloat(r.node) || 0);
+  const spin = (typeof r.spin === 'string') ? r.spin.trim() : '';
+  return { tex: r.tex, op, tilt, node, spin };
 }
 function setSystem(rawList, opts) {
   /* v36：系统替换时的编辑器状态隔离 —— 编辑模态若跨预设打开，editingIndex 会
@@ -2862,6 +3090,8 @@ function exportBodiesRaw() {
     if (meta[i].texture2Op !== undefined && meta[i].texture2Op !== 1) b.texture2Op = meta[i].texture2Op;
     if (meta[i].textureMode1) b.textureMode1 = 1;
     if (meta[i].textureMode2) b.textureMode2 = 1;
+    if (meta[i].atmosphere) b.atmosphere = meta[i].atmosphere;   /* v40：大气参数随导出/存档往返 */
+    if (meta[i].ring) b.ring = meta[i].ring;   /* v40：星环随导出/存档往返 */
     /* 动态自转回写：spinRate 为动力学变量（潮汐力矩演化），导出/重置时
      * 把当前自转周期写回 original_input_params，保证状态完整往返 */
     const op = b.original_input_params || (b.original_input_params = {});
@@ -3392,6 +3622,10 @@ function updateTideReadout() {
 
 /* ---------------- 预设系统 ---------------- */
 function circVel(M, r) { return Math.sqrt(G * M / r); }
+
+/* v40：土星主环径向条带贴图（saturn_ring.png 2048×125，base64 内嵌，预设开箱即用） */
+const SATURN_RING_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACAAAAAB9CAYAAAA29INIAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2lpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMDY3IDc5LjE1Nzc0NywgMjAxNS8wMy8zMC0yMzo0MDo0MiAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDpENTI1QTYxRUExQ0VFMjExQkVCOEQ0MTVFMUFFRTU0OSIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxQjY5NUQyMEQwREExMUU1ODNCNDkyMTIyNUZGMjJCNCIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoxQjY5NUQxRkQwREExMUU1ODNCNDkyMTIyNUZGMjJCNCIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ0MgKFdpbmRvd3MpIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6ZjFkYjllNDItMjA0OS0wYjRjLWFjNGUtZjYzNDZiMDFlM2EwIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkQ1MjVBNjFFQTFDRUUyMTFCRUI4RDQxNUUxQUVFNTQ5Ii8+IDwvcmRmOkRlc2Ny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';
+
 const PRESETS = {
   classic: {
     label: '默认',
@@ -3416,8 +3650,39 @@ const PRESETS = {
       for (const [name, aAU, ecc, inc, L, peri, node, mass, color, size, tilt, sper, Rkm, pBar] of rows) {
         const Mdeg = ((L - peri) % 360 + 360) % 360;
         const om = ((peri - node) % 360 + 360) % 360;
+        /* v40：大气散射参数（SebLague 移植预设值，按大气成分/观测填值）——
+         *   Earth  N₂/O₂ 瑞利蓝（λ 700/530/460，强度 21.2·衰减 4.3 = 参考实现地球资产原值）
+         *   Venus  浓 CO₂ 硫酸云：高米氏雾浊 + 较强吸收 → 均匀乳白/黄浊，晨昏明亮前向晕
+         *   Mars   稀薄含尘大气：低强度瑞利 + 尘吸收 → 干薄粉橙临边
+         *   气巨   H₂/He+CH₄：中等散射，天王/海王吸红（甲烷）呈青蓝 */
+        /* v43：按《基于物理的大气渲染》一物理常数 + 各行星真实大气重填。
+         * strength = 分子数密度比×10（地球 10 = 2.504e25 → β_R 文章常数）；
+         * falloff = 壳厚内 e 折叠数（H_R = 壳厚/falloff）；mie×1e-4/m = β_M
+         * （地球 21 = 文章 0.0021/m）；mieHR = 米氏/瑞利标高比。
+         * Earth  H_R≈8.5km 壳顶≈102km（卡门线量级），λ=660/550/440 → 文章常数；
+         * Venus  92bar CO₂（N≈6×地球）H_R≈16km，浓硫酸云 β_M≈1.2e-3/m；
+         *   v48：参数按用户定版逐字恢复（falloff 13 / mieHR 1.5，勿改）——
+         *   「开大气圆面发黑」根因不在预设，而在自动曝光计量把厚云甲 Tatm
+         *   钳底 0.02 当主体亮度虚高 50×（BpN=BP_REF/Tatm）→ 曝光被压 ~33×，
+         *   修复见 buildSceneFrame 计量口径（BpN=Bp·Tatm·normK）；
+         * Mars   6mbar（N≈0.006×地球）H_R≈11km，尘霭 β_M≈4e-5/m 贴地；
+         * 气巨    H₂/He 深厚大气（瑞利弱、高层霾），甲烷型吸收给天王星/海王星色。 */
+        const ATMO_PRESETS = {
+          Earth:   { on: 1, scale: 4.6,  strength: 30,   falloff: 13,  absorb: 0.2, mie: 0.2,    mieG: 0.57, wl: [660, 550, 440] },
+          Venus:   { on: 1, scale: 3.0,  strength: 50,   falloff: 13,  absorb: 0.3,  mie: 0.5,  mieG: 0.9,  wl: [660, 550, 440], mieHR: 1.5 },
+          Mars:    { on: 1, scale: 3.9,  strength: 50, falloff: 12,  absorb: 0.15, mie: 0.4,  mieG: 0.7, wl: [660, 550, 440], mieHR: 0.9 },
+          Jupiter: { on: 1, scale: 1.5,  strength: 60.0,  falloff: 14,  absorb: 0.12, mie: 0.07, mieG: 0.7, wl: [690, 565, 470], mieHR: 0.5 },
+          Saturn:  { on: 1, scale: 1.4,  strength: 60.0,  falloff: 14,  absorb: 0.1,  mie: 0.09, mieG: 0.7, wl: [700, 580, 480], mieHR: 0.5 },
+          Uranus:  { on: 1, scale: 1.4,  strength: 60,  falloff: 13,  absorb: 0.7,  mie: 0.17, mieG: 0.7,  wl: [620, 545, 450], mieHR: 0.5 },
+          Neptune: { on: 1, scale: 1.4,  strength: 60,  falloff: 13,  absorb: 0.8,  mie: 0.17, mieG: 0.7,  wl: [610, 540, 450], mieHR: 0.5 }
+        };
+        const RING_PRESETS = {
+          Saturn: { tex: SATURN_RING_PNG, op: 1, tilt: 0, node: 0, spin: '' }   /* v40：土星环开箱即用（v42：倾角/方位角/转速字段） */
+        };
         bodies.push({ name, mass, orbits_around: 'Sun', color, size, radius: Rkm * 1e3,
           ...(pBar > 0 ? { pressure: pBar } : {}),
+          ...(ATMO_PRESETS[name] ? { atmosphere: ATMO_PRESETS[name] } : {}),
+          ...(RING_PRESETS[name] ? { ring: RING_PRESETS[name] } : {}),
           original_input_params: {
             mass: mass.toExponential(4) + ' kg', radius: Rkm + ' km', radius_m: Rkm * 1e3,
             semimajor_axis: aAU + ' AU',
@@ -3560,7 +3825,7 @@ function collectUI() {
    'bodyOverlayToggle', 'bodyOverlay', 'bodyOvName', 'bodyOvClose', 'ovSpin', 'ovTilt', 'ovFlat', 'ovTemp', 'ovTempGH', 'ovAE', 'ovPI', 'ovRV',
    'expoDn', 'expoUp',
    'trailRefMode', 'skyboxEnabled', 'resSelect', 'perspToggle',
-   'hzToggle', 'helperGridToggle', 'blankPresetBtn',
+   'hzToggle', 'atmoToggle', 'helperGridToggle', 'blankPresetBtn',
    'physSizeToggle', 'starRadToggle', 'glareToggle', 'headlessToggle', 'snapshotInterval', 'snapCount',
    'headlessRate', 'downloadSnapBtn', 'showConservation', 'conservationInfo', 'totalEnergyDisplay',
    'totalMomentumDisplay', 'momentumDeltaDisplay', 'downloadLogBtn', 'bodySelect',
@@ -3575,6 +3840,9 @@ function collectUI() {
    'tideToggle', 'j2Toggle', 'pwToggle', 'tideHeat', 'tideSpinFrac', 'gwWaveToggle', 'gwWaveCanvas', 'gwF', 'gwH', 'gwT',
    'texUploadBtn', 'texClearBtn', 'texFileInput', 'texPreview', 'texInfo',
    'texUploadBtn2', 'texClearBtn2', 'texPreview2', 'texInfo2', 'texOp1', 'texOp2', 'texOp1Val', 'texOp2Val', 'texDark1', 'texDark2',
+   'bodyAtmoOn', 'atmoScale', 'atmoScaleVal', 'atmoStrength', 'atmoStrengthVal', 'atmoFalloff', 'atmoFalloffVal',
+   'atmoAbsorb', 'atmoAbsorbVal', 'atmoMie', 'atmoMieVal', 'atmoMieG', 'atmoMieGVal', 'atmoWLr', 'atmoWLn', 'atmoWLb',
+   'texUploadBtnR', 'texClearBtnR', 'texFileInputR', 'texPreviewR', 'texInfoR', 'texOpR', 'texOpRVal', 'ringTilt', 'ringNode', 'ringSpin',
    'matScanBtn', 'matGrid', 'matBodyBtn', 'matInfo', 'matBig', 'matBigInfo', 'matBigWrap', 'matTargetSel',
    'matPageRow', 'matPagePrev', 'matPageNext', 'matPageInfo',
    'cancelBodyFormBtn', 'cancelX', 'toast', 'backdrop', 'padMove', 'padRot'
@@ -4146,6 +4414,8 @@ function occlRadiusOf(i) {
 }
 function buildSceneFrame() {
   viewDiskCss = 0;   // 屏内最大已解析圆面（拖拽灵敏度自适应用），逐帧重计
+  /* v40：贴表钳制兑底（跟随切换/缩放事件竞态下高倍残留 → 逐帧收敛到表面外） */
+  scale = clampNum(scale, SCALE_MIN, maxScaleSurface());
   const fr = {
     W: viewW, H: viewH, proj: sceneProjector(viewW, viewH),
     stars: [], lights: [], bodies: [], trailLine: null, trailDot: null, trailEnds: null,
@@ -4235,6 +4505,8 @@ function buildSceneFrame() {
       texMode1: meta[i].textureMode1 | 0,
       texIdx2: meta[i].texture2 ? i : -1, texOp2: meta[i].texture2Op !== undefined ? meta[i].texture2Op : 1,
       texMode2: meta[i].textureMode2 | 0,
+      atmo: meta[i].atmosphere || null,   /* v40：大气散射参数 → 渲染层 AtmospherePass */
+      ring: meta[i].ring || null,   /* v40：星环 → 渲染层环网+环影 */
       wx: px[i], wy: py[i], wz: pz[i],
       phys: physSizeOn && radM > 0, radM,
       /* v33：渲染层改携完整实时自转轴单位向量（旧 spinTilt 标量只有「相对世界 Z 的
@@ -4244,7 +4516,7 @@ function buildSceneFrame() {
        * 时 setFromUnitVectors(ẑ, (0,−sin t, cos t)) = Rx(t) 逐位等价旧行为，零回归） */
       spinAxis: spinAxX ? [spinAxX[i], spinAxY[i], spinAxZ[i]] : [0, 0, 1],
       spinAng: 0,
-      defF: 0, tideDir: null, tideE: 0 };
+      defF: 0, tideDir: null, tideE: 0, normK: 1, ringAng: 0 };
     /* 自转相位（渲染层以网格四元数旋转；先 mod 2π 防长时浮点误差）。
      * v19c：spinPhase 为相位积分 φ=∫Ωdt（Kahan）。旧式 Ω·simTime 隐含 Ω 恒定，
      * 潮汐力矩下 Ω(t) 演化时相位错算（地月 1e7 强力矩下自转快慢失真）；
@@ -4253,6 +4525,15 @@ function buildSceneFrame() {
       let ang = spinPhase ? spinPhase[i] : (spinRate ? spinRate[i] : 0) * simTime;
       ang = ang - 2 * Math.PI * Math.floor(ang / (2 * Math.PI));
       b.spinAng = ang;
+    }
+    /* v42：环自转相位（环自转周期留空 = 随星体几何，无独立相位） */
+    {
+      const rper = meta[i].ring ? parseTimeToSec(meta[i].ring.spin || '') : NaN;
+      if (isFinite(rper) && rper > 0) {
+        let rang = 2 * Math.PI * simTime / rper;
+        rang -= 2 * Math.PI * Math.floor(rang / (2 * Math.PI));
+        b.ringAng = rang;
+      } else b.ringAng = 0;
     }
     /* 自转扁化 + 潮汐椭化（世界系形变参数，渲染层用非均匀缩放表达） */
     const Rdef = radM > 0 ? radM : massRadius(mass);
@@ -4363,12 +4644,33 @@ function buildSceneFrame() {
         b.lights.sort((a, c) => c.E - a.E);
         b.lights = b.lights.slice(0, 8);
       }
+      /* v42：主体归一化（以火星为基准的全行星观感亮度均衡）。
+       * Bp = albLum·Ep/π（圆面昼面辐射亮度，与计量同口径）；normK = BP_REF/Bp。
+       * 应用三处（同一缩放，无孤立实现）：① 光源链 li.c —— 表面/云层/星环/
+       * 大气散射全部继承；② 亚像素点源峰值；③ 曝光计量 BpMax。
+       * 平衡温度/热辐射仍用未缩放 Ep —— 物理量保持真实。 */
+      /* v43：Bp0 计入大气垂直透射（观测到的圆面昼面辐射亮度 = 表面 × T_atm）——
+       * 物理大气让观感变暗 2~3×，标定不含 T 会整体欠曝光（曝光钳内无法补偿）。
+       * 火星基准的「八大行星观感亮度相近」由此天然包含大气这一观测因素。 */
+      const atmoOpt = b.atmo ? atmoOpticsOf(b.atmo, radM) : null;
+      const Bp0 = albLum * Ep / Math.PI * (atmoOpt ? atmoOpt.Tatm : 1);
+      b.normK = (starRadOn && fr.stars.length && Bp0 > 1e-12) ? clampNum(BP_REF / Bp0, 1e-4, 1e4) : 1;
+      if (b.normK !== 1) for (const li of b.lights) { li.c[0] *= b.normK; li.c[1] *= b.normK; li.c[2] *= b.normK; }
       /* v20：平衡温度与高温黑体辐射发光（与恒星同一 σT⁴/π 物理链）。
        * 发光项在光照循环之后加性叠加，只取决于天体自身温度 ——
        * 不改变任何食阴影/照明计算（阴影系统零影响）。
        * 场景单位辐射亮度 = σT⁴/π/F_SUN_1AU；GLOW_T_MIN 以下可见光波段热辐射不可察，
-       * 按温度渐入避免突变。 */
-      const Teq = bodyTempOf(Ep, albLum);
+       * 按温度渐入避免突变。
+       * v41（任务⑨渲染侧）：潮汐加热 + 气巨内部热流并入温度 —— 与信息板
+       * bodySurfTempOf 同口径 T⁴ = (1−a)·S/(4σ) + q/σ。常温天体增量不可察
+       * （月球 5e-4 W/m² → +0.04K）；强潮汐（近距偏心）与气巨内热使 b.tempK
+       * 正确升高 → 高温黑体发光（GLOW_T_MIN 链）按同一温度出现。 */
+      let Teq = bodyTempOf(Ep, albLum);
+      if (physSizeOn && radM > 0) {
+        const qHeat = (tideOn ? bodyTidalFluxOf(i) : 0)
+          + (massA[i] >= P_GIANT_M ? giantInternalFlux(massA[i]) : 0);
+        if (qHeat > 0) Teq = Math.pow((Teq > 0 ? Teq * Teq * Teq * Teq : 0) + qHeat / SIGMA_SB, 0.25);
+      }
       b.tempK = Teq;
       if (physSizeOn && radM > 0 && Teq > GLOW_T_MIN) {
         const wGlow = clampNum((Teq - GLOW_T_MIN) / (GLOW_T_FULL - GLOW_T_MIN), 0, 1);
@@ -4382,17 +4684,26 @@ function buildSceneFrame() {
       } else b.emis = null;
       /* 食阴影（世界系）：每光源至多挑 1 个遮挡体（月影投地球 / 凌日 / 卫星互影）。
        * p = 遮挡体中心相对行星（行星半径单位），t0 = 遮挡体沿光源轴距；
-       * eclDrop = 被遮面积比连乘，作用于亚像素点源整体减光（凌日观测口径） */
+       * eclDrop = 被遮面积比连乘，作用于亚像素点源整体减光（凌日观测口径）
+       * v46：遮挡门放宽到「本天体渲染包络」—— 旧门按行星中心判定重叠
+       *（miss < r_j+rc），月影只在近乎完全对准时才建条目且一出现即盖住中心
+       * 大片区（用户实测：影只在正中突然出现）；物理上近侧临边表面点可比中心
+       * 近出整个行星半径，影带应自临边连续扫入（miss < r_j+rc+R_i），带环
+       * 天体的环外缘（2.27 R_i）同样受影 → 门放宽到 r_j+rc+包络半径。逐像素
+       * 软半影仍由着色器精确判定，门只负责存在性；eclDrop 仍按中心重叠计，
+       * 已建条目的数值不受门放宽影响。 */
       b.ecl = [];
       let eclDrop = 1;
       if (physSizeOn && radM > 0 && fr.stars.length) {
+        const envI = radM * (meta[i].ring ? 2.27 : 1);   /* 渲染包络半径（m）：实面球，带环时取环外缘 */
         for (const li of b.lights) {
           const spS = starPhysCache[li.si];
           const Rs = spS ? spS.R : 0;
           const wxx = px[li.si] - px[i], wyy = py[li.si] - py[i], wzz = pz[li.si] - pz[i];
           const dps = Math.hypot(wxx, wyy, wzz) || 1;
+          li.srcR = Rs / radM; li.dsrc = dps / radM;   /* v45：逐光源 stash 光源半径/距离比（本天体半径单位）—— 无食遮挡时 uLAux 回退真值，环行星自影半影与食影同口径 */
           const ux = wxx / dps, uy = wyy / dps, uz = wzz / dps;
-          let best = 0, bj = -1;
+          let best = 0, bj = -1, bestN = 0, bjN = -1;
           for (let j = 0; j < N; j++) {
             if (j === i || j === li.si) continue;
             const rj = occlRadiusOf(j);
@@ -4402,10 +4713,15 @@ function buildSceneFrame() {
             if (t <= 0 || t >= dps) continue;
             const mx = vx - t * ux, my = vy - t * uy, mz = vz - t * uz;
             const miss = Math.hypot(mx, my, mz);
-            if (miss >= rj + Rs * t / dps) continue;
+            if (miss >= rj + Rs * t / dps + envI) continue;   /* v46：包络内任一点可被遮即建条目 */
             const ov = circleOverlap(miss, rj, Rs * t / dps);
             if (ov > best) { best = ov; bj = j; }
+            else if (bj < 0) {                                /* 中心无重叠 → 近侧包络重叠兜底择优（影自临边进入） */
+              const ovN = circleOverlap(Math.max(miss - envI, 0), rj, Rs * t / dps);
+              if (ovN > bestN) { bestN = ovN; bjN = j; }
+            }
           }
+          if (bj < 0) bj = bjN;
           if (bj >= 0) {
             const vx = px[bj] - px[i], vy = py[bj] - py[i], vz = pz[bj] - pz[i];
             const t0v = vx * li.d[0] + vy * li.d[1] + vz * li.d[2];
@@ -4444,11 +4760,19 @@ function buildSceneFrame() {
         const cd2 = Math.max(cdx * cdx + cdy * cdy + cdz * cdz, 1);
         const Fcam = Ep * (radM * radM / cd2) * albLum;
         const Bp = albLum * Ep / Math.PI;                // 圆面中心辐射亮度（切换连续性基准）
-        b.psfPeak = base.map(v => v * psfBlend * Math.max(Math.min(Fcam * ph / omegaPsf, Bp), 0) * eclDrop);
+        b.psfPeak = base.map(v => v * psfBlend * Math.max(Math.min(Fcam * ph / omegaPsf, Bp), 0) * eclDrop * b.normK);
         b.diskW = 1 - psfBlend;
         /* v20：主体点测光 —— 圆面昼面辐射亮度 Bp 进入最大值池（与在屏大小无关，
-         * 旧式按立体角积分使特写反而变暗；Python 标定 scripts/exposure_test.py） */
-        if (inFov && Bp > fr.BpMax) fr.BpMax = Bp;
+         * 旧式按立体角积分使特写反而变暗；Python 标定 scripts/exposure_test.py）
+         * v42：Bp 乘主体归一化 normK —— 计量与渲染同口径，行星间观感一致
+         * v48：再乘 Tatm（大气垂直透射）—— 计量「观测」圆面亮度 = 表面 × T_atm，
+         * 与渲染光源链的净缩放（Tatm·normK，见 v43 normK 定义）严格同口径。
+         * 旧式 Bp·normK = BP_REF/Tatm 把厚大气天体当无消光亮面：金星厚云甲
+         * Tatm 钳 0.02 地板 → 主体被误判 50× 亮 → 曝光被压 ~33×（0.18 vs 6），
+         * 背景与金星圆面一并压黑（用户 v48 报告「背景被压暗/金星被误判压太多」
+         * 根因）。Tatm=1（无大气）分支逐位不变。 */
+        const BpN = Bp * (atmoOpt ? atmoOpt.Tatm : 1) * b.normK;
+        if (inFov && BpN > fr.BpMax) fr.BpMax = BpN;
       } else if (physSizeOn && radM > 0) {
         /* 亚像素行星：反射辐照度 = 恒星在行星处辐照度 × 截面比 × 几何反照率
          * × Φ(α) 相位函数（v18），同样与缩放无关；峰值封顶圆面中心亮度；
@@ -4460,7 +4784,7 @@ function buildSceneFrame() {
         const Bp = albLum * Ep / Math.PI;
         b.F = Fcam;
         b.mode = 0; b.aux = PSF_SIGMA;
-        b.peak = base.map(v => v * Math.max(Math.min(Fcam * ph / omegaPsf, Bp), PSF_VIS_FLOOR));
+        b.peak = base.map(v => v * Math.max(Math.min(Fcam * ph / omegaPsf, Bp), PSF_VIS_FLOOR) * b.normK);
       } else if (rRen >= DISK_FULL_PX) {
         b.mode = 1; b.aux = rCss;
         b.peak = base;
@@ -5460,6 +5784,7 @@ function draw() {
         exposure: ren.exposure, bloomOn: glareOn, useSky: fr.useSky,
         skyNorm: fr.useSky ? Math.min(1, SKY_NORM_LEVEL / Math.max(skybox.skyLum, 1e-5)) * skyComp : 1,
         starLit: starRadOn && fr.stars.length > 0,
+        atmoOn: !ui.atmoToggle || !!ui.atmoToggle.checked,   /* v42：大气渲染开关（默认开，旧偏好无字段时保持开启） */
         trailMode,
         lens: fr.lens, hz: fr.hz, helpers: fr.helpers
       });
@@ -5597,7 +5922,22 @@ function updateStepControlLocks() {
 }
 function markCustom() { ui.presetSelect.value = 'custom'; }
 
-function zoomIn() { scale = clampNum(scale * 1.1, SCALE_MIN, SCALE_MAX); draw(); }
+/* v40：跟随天体时的高倍缩放钳制（用户任务：高倍率放大不再进入星体内部，
+ * 而是真正的放大式贴近表面）—— 透视相机距锚点 D = f/scale；钳
+ * scale ≤ f/(1.03·R) 使 D ≥ 1.03·R（贴地余量 1%·R，且 ≥ near=0.02·D
+ * 保持深度精度）。非跟随（质心/绝对原点）与正交投影不钳制。 */
+function maxScaleSurface() {
+  if (projMode !== 'persp') return SCALE_MAX;
+  const name = ui.followSelect ? ui.followSelect.value : '';
+  if (!name || name === 'center_of_mass') return SCALE_MAX;
+  const k = meta.findIndex(m2 => m2.name === name);
+  if (k < 0) return SCALE_MAX;
+  const R = meta[k].radius > 0 ? meta[k].radius : massRadius(massA[k]);
+  if (!(R > 0)) return SCALE_MAX;
+  const f = 0.5 * viewH / Math.tan(VIEW_FOV / 2);
+  return clampNum(f / (R * 1.03), SCALE_MIN, SCALE_MAX);
+}
+function zoomIn() { scale = clampNum(scale * 1.1, SCALE_MIN, maxScaleSurface()); draw(); }
 function zoomOut() { scale = clampNum(scale / 1.1, SCALE_MIN, SCALE_MAX); draw(); }
 function resetView() {
   scale = 1 / AU * 400;
@@ -5739,12 +6079,18 @@ function logPush(dtUsed, pre) {
 /* ---------------- 播放控制与主循环 ---------------- */
 let rafId = 0, fpsEma = 0, lastFrameT = 0, lastPerfT = 0, lastAdvanced = 0;
 /* v34: lastAdaptSteps/lastAdaptAdvanced 已随物理核外置至 physics_core.js */
+let lastValidDt = 300;
 function readDt() {
   let baseDt = parseTimeToSec(ui.dt.value);
   if (!isFinite(baseDt) || baseDt <= 0) {
-    baseDt = 300; ui.dt.value = '300';
-    showToast('时间步长无效，已重置为 300 s', 'error');
-  }
+    /* v43b：输入未结束（输入框持有焦点）时沿用上次有效步长，不回填不弹窗 ——
+     * 旧版逐帧回写 '300' 会打断用户输入（删除到一半就被填回） */
+    baseDt = lastValidDt;
+    if (document.activeElement !== ui.dt) {
+      baseDt = 300; lastValidDt = 300; ui.dt.value = '300';
+      showToast('时间步长无效，已重置为 300 s', 'error');
+    }
+  } else lastValidDt = baseDt;
   return baseDt;
 }
 /* v31 帧级预算（Universe Sandbox 语义移植）：
@@ -6326,7 +6672,7 @@ function updateSpinPreview() {
 /* ---------------- 星球全景贴图表单状态 ----------------
  * 新增与编辑共用：上传后 formTex/formTex2 保存 data URL，保存时写入天体并随
  * 导出 JSON base64 嵌入；底层与表面颜色按不透明度混合，上层叠加（云层/夜光等）。 */
-let formTex = null, formTex2 = null;
+let formTex = null, formTex2 = null, formRing = null;   /* v40：formRing 星环表单态 */
 function texSizeStr(dataUrl) {
   if (!dataUrl) return '';
   const b64 = dataUrl.indexOf(',') >= 0 ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
@@ -6358,6 +6704,81 @@ function updateTexFormUI() {
     ? '已使用上层贴图（' + texSizeStr(formTex2) + '）· 按 不透明度 叠加在底层之上'
     : '未使用上层贴图';
 }
+/* ===== v40：大气参数表单（读/写/同步） =====
+ * v47：mieHR（米氏/瑞利标高比）为预设隐藏字段（无 UI 控件）—— 表单往返必须
+ * 原样保留，否则每次编辑保存都会把预设值静默重置为默认 0.144（实测金星
+ * mieHR 1.5 → 0.144，米氏凝结层高度收缩 10×，大气观感改变）。 */
+let formAtmoMieHR = null;
+function collectAtmoForm() {
+  if (!ui.bodyAtmoOn || !ui.bodyAtmoOn.checked) return null;
+  return atmoSanitize({
+    on: 1,
+    scale: parseFloat(ui.atmoScale.value),
+    strength: parseFloat(ui.atmoStrength.value),
+    falloff: parseFloat(ui.atmoFalloff.value),
+    absorb: parseFloat(ui.atmoAbsorb.value),
+    mie: parseFloat(ui.atmoMie.value),
+    mieG: parseFloat(ui.atmoMieG.value),
+    ...(formAtmoMieHR !== null ? { mieHR: formAtmoMieHR } : {}),   /* v47：隐藏字段随表单往返 */
+    wl: [parseFloat(ui.atmoWLr.value), parseFloat(ui.atmoWLn.value), parseFloat(ui.atmoWLb.value)]
+  });
+}
+function fillAtmoForm(a) {
+  const v = a || {};
+  formAtmoMieHR = (v.mieHR !== undefined && v.mieHR !== null && isFinite(parseFloat(v.mieHR))) ? parseFloat(v.mieHR) : null;   /* v47 */
+  if (ui.bodyAtmoOn) ui.bodyAtmoOn.checked = !!v.on;
+  if (ui.atmoScale) ui.atmoScale.value = v.scale !== undefined ? v.scale : 1.6;
+  if (ui.atmoStrength) ui.atmoStrength.value = v.strength !== undefined ? v.strength : 10;
+  if (ui.atmoFalloff) ui.atmoFalloff.value = v.falloff !== undefined ? v.falloff : 12;
+  if (ui.atmoAbsorb) ui.atmoAbsorb.value = v.absorb !== undefined ? v.absorb : 0;
+  if (ui.atmoMie) ui.atmoMie.value = v.mie !== undefined ? v.mie : 0;
+  if (ui.atmoMieG) ui.atmoMieG.value = v.mieG !== undefined ? v.mieG : 0.76;
+  const wl = Array.isArray(v.wl) ? v.wl : [700, 530, 460];
+  if (ui.atmoWLr) ui.atmoWLr.value = wl[0];
+  if (ui.atmoWLn) ui.atmoWLn.value = wl[1];
+  if (ui.atmoWLb) ui.atmoWLb.value = wl[2];
+  updateAtmoFormUI();
+}
+/* v43b：大气高度实际值换算所用星球半径（m）—— 优先表单半径（支持单位），
+ * 次选质量经验密度推算，再次取编辑中天体的现存半径；均无效返回 NaN */
+function atmoFormRadiusM() {
+  let R = NaN;
+  try { const v = parseValueWithUnits(ui.bodyRadius.value, 'm'); if (isFinite(v) && v > 0) R = v; } catch (e) { /* 输入中 */ }
+  if (!(R > 0)) {
+    try { const m = parseValueWithUnits(ui.bodyMass.value, 'kg'); if (isFinite(m) && m > 0) R = massRadius(m); } catch (e) { /* 输入中 */ }
+  }
+  if (!(R > 0) && editingIndex >= 0 && meta[editingIndex] && meta[editingIndex].radius > 0) R = meta[editingIndex].radius;
+  return R > 0 ? R : NaN;
+}
+function fmtAtmoKm(km) {
+  if (!(km >= 0)) return '0';
+  if (km >= 100) return String(Math.round(km));
+  if (km >= 10) return km.toFixed(1);
+  return km.toFixed(2);
+}
+function updateAtmoFormUI() {
+  /* v43b：读数由只读文本改为滑条右侧同步数字输入框（可直接输入精确值）；
+   * 大气高度从行星半径百分比改为实际值（km）显示/控制，内部数据仍存百分比
+   * （存档/导入 JSON 兼容），km ↔ % 经星球半径实时换算 */
+  const rM = atmoFormRadiusM();
+  if (ui.atmoScaleVal) ui.atmoScaleVal.value = rM > 0 ? fmtAtmoKm(+ui.atmoScale.value / 100 * rM / 1e3) : (+ui.atmoScale.value).toFixed(1);
+  if (ui.atmoStrengthVal) ui.atmoStrengthVal.value = (+ui.atmoStrength.value).toFixed(1);
+  if (ui.atmoFalloffVal) ui.atmoFalloffVal.value = (+ui.atmoFalloff.value).toFixed(1);
+  if (ui.atmoAbsorbVal) ui.atmoAbsorbVal.value = (+ui.atmoAbsorb.value).toFixed(2);
+  if (ui.atmoMieVal) ui.atmoMieVal.value = (+ui.atmoMie.value).toFixed(1);
+  if (ui.atmoMieGVal) ui.atmoMieGVal.value = (+ui.atmoMieG.value).toFixed(2);
+}
+/* v40：星环表单同步（预览 + 不透明度标签） */
+function updateRingFormUI() {
+  const hasR = !!formRing;
+  if (ui.texPreviewR) {
+    ui.texPreviewR.style.display = hasR ? '' : 'none';
+    if (hasR) ui.texPreviewR.src = formRing;
+  }
+  if (ui.texInfoR) ui.texInfoR.textContent = hasR ? '已设置星环（径向条带贴图）' : '未设置星环';
+  const op = ui.texOpR ? parseFloat(ui.texOpR.value) : 1;
+  if (ui.texOpRVal) ui.texOpRVal.textContent = Math.round(op * 100) + '%';
+}
 function importTexFile(e, layer) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
@@ -6368,8 +6789,8 @@ function importTexFile(e, layer) {
     const url = String(ev.target.result);
     const im = new Image();
     im.onload = () => {
-      if (layer === 2) formTex2 = url; else formTex = url;
-      updateTexFormUI();
+      if (layer === 2) formTex2 = url; else if (layer === 3) formRing = url; else formTex = url;
+      updateTexFormUI(); updateRingFormUI();
       showToast((layer === 2 ? '上层' : '底层') + '贴图已载入 ' + im.width + '×' + im.height + ' · 保存后生效', 'success', 3200);
     };
     im.onerror = () => showToast('贴图解码失败', 'error');
@@ -6491,6 +6912,7 @@ function libApplyToForm(it) {
   if (it.texture2 && it.texture2_op !== undefined && it.texture2_op !== '') ui.texOp2.value = String(Math.min(Math.max(parseFloat(it.texture2_op) || 1, 0), 1));
   if (ui.texDark1) ui.texDark1.checked = it.texture_mode === '1';
   if (ui.texDark2) ui.texDark2.checked = it.texture2_mode === '1';
+  fillAtmoForm(it.atmosphere);   /* v40：模板大气参数填入 */
   updateTexFormUI();
   updateRadiusPreview(); updateGhPreview(); updateSpinPreview();
   showToast('已填入「' + it.name + '」' + (it.builtin ? '（内置 · ' + it.preset + '）' : '') + '，请填写轨道与母星后保存', 'info', 4200);
@@ -6514,6 +6936,7 @@ function libSaveFromForm() {
   };
   if (formTex) { t.texture = formTex; if (parseFloat(ui.texOp1.value) !== 1) t.texture_op = String(parseFloat(ui.texOp1.value)); if (ui.texDark1 && ui.texDark1.checked) t.texture_mode = '1'; }
   if (formTex2) { t.texture2 = formTex2; if (parseFloat(ui.texOp2.value) !== 1) t.texture2_op = String(parseFloat(ui.texOp2.value)); if (ui.texDark2 && ui.texDark2.checked) t.texture2_mode = '1'; }
+  { const _at = collectAtmoForm(); if (_at) t.atmosphere = _at; }   /* v40：模板携带大气参数 */
   const i = starLib.findIndex(v => v.name === name);
   if (i >= 0) starLib[i] = t; else starLib.push(t);
   if (libStore()) { showToast('模板「' + name + '」已' + (i >= 0 ? '更新' : '保存') + (formTex ? '（含贴图，注意缓存空间）' : ''), 'success', 3200); libRenderSelect(); ui.libSelect.value = 'u:' + name; }
@@ -6539,6 +6962,7 @@ function libSanitize(v) {
   t.texture = T(v.texture); t.texture2 = T(v.texture2);
   t.texture_op = S(v.texture_op); t.texture2_op = S(v.texture2_op);
   t.texture_mode = S(v.texture_mode); t.texture2_mode = S(v.texture2_mode);
+  { const s = atmoSanitize(v.atmosphere); if (s) t.atmosphere = s; }   /* v40：模板大气参数 */
   return t;
 }
 function libExport() {
@@ -6591,6 +7015,13 @@ function openBodyForm(idx) {
     ui.texOp2.value = meta[editingIndex].texture2Op !== undefined ? meta[editingIndex].texture2Op : 1;
     if (ui.texDark1) ui.texDark1.checked = !!meta[editingIndex].textureMode1;
     if (ui.texDark2) ui.texDark2.checked = !!meta[editingIndex].textureMode2;
+    formRing = meta[editingIndex].ring ? meta[editingIndex].ring.tex : null;
+    if (ui.texOpR) ui.texOpR.value = meta[editingIndex].ring && meta[editingIndex].ring.op !== undefined ? meta[editingIndex].ring.op : 1;
+    if (ui.ringTilt) ui.ringTilt.value = meta[editingIndex].ring && meta[editingIndex].ring.tilt !== undefined ? meta[editingIndex].ring.tilt : 0;
+    if (ui.ringNode) ui.ringNode.value = meta[editingIndex].ring && meta[editingIndex].ring.node !== undefined ? meta[editingIndex].ring.node : 0;
+    if (ui.ringSpin) ui.ringSpin.value = meta[editingIndex].ring && meta[editingIndex].ring.spin ? meta[editingIndex].ring.spin : '';
+    updateRingFormUI();
+    fillAtmoForm(meta[editingIndex].atmosphere);   /* v40：大气参数回填 */
     populateBodyOrbitSelects(orig.orbits_around || meta[editingIndex].orbits_around || '');
     /* 轨道根数：以当前密切六根数为准（v33：相对实际束缚宿主，配置主星绑定即用）。
      * v36 修复：改用 currentOsculatingSixElements 回填全部六根数 —— 旧代码在
@@ -6650,10 +7081,16 @@ function openBodyForm(idx) {
     ui.bodyMass.value = '1 earth';
     ui.bodyRadius.value = '';
     ui.bodyColor.value = '#FFFFFF';
-    formTex = null; formTex2 = null;
+    formTex = null; formTex2 = null; formRing = null;
+    if (ui.texOpR) ui.texOpR.value = '1';
+    if (ui.ringTilt) ui.ringTilt.value = '0.0';
+    if (ui.ringNode) ui.ringNode.value = '0.0';
+    if (ui.ringSpin) ui.ringSpin.value = '';
+    updateRingFormUI();
     ui.texOp1.value = '1'; ui.texOp2.value = '1';
     if (ui.texDark1) ui.texDark1.checked = false;
     if (ui.texDark2) ui.texDark2.checked = false;
+    fillAtmoForm(null);   /* v40：添加模式大气默认关闭 */
     ui.bodyEccentricity.value = '0.0';
     ui.bodyInclination.value = '0.0';
     ui.bodyLongitudeOfAscendingNode.value = '0.0';
@@ -6809,7 +7246,7 @@ function saveBodyForm(e) {
   let pressVal = 0;
   if (ui.bodyPressure && ui.bodyPressure.value.trim() !== '') {
     pressVal = parseFloat(ui.bodyPressure.value.trim());
-    if (!isFinite(pressVal) || pressVal <= 0 || pressVal > 1e6) { showToast('表面气压无效：应为正数（bar），如 92（金星）/ 1（地球）', 'error', 4500); return; }
+    if (!isFinite(pressVal) || pressVal < 0 || pressVal > 1e6) { showToast('表面气压无效：应为正数（bar），如 92（金星）/ 1（地球）', 'error', 4500); return; }
   }
   /* 潮汐参数：k2 与时滞（时滞留空 = 无耗散，纯保守潮） */
   const tideK2Str = ui.bodyTideK2.value.trim();
@@ -6884,6 +7321,12 @@ function saveBodyForm(e) {
   if (pressVal > 0) rawBody.pressure = pressVal;   /* v22：表面气压 bar（灰大气温室拟合） */
   if (formTex) { rawBody.texture = formTex; rawBody.textureOp = parseFloat(ui.texOp1.value); rawBody.textureMode1 = ui.texDark1 && ui.texDark1.checked ? 1 : 0; }
   if (formTex2) { rawBody.texture2 = formTex2; rawBody.texture2Op = parseFloat(ui.texOp2.value); rawBody.textureMode2 = ui.texDark2 && ui.texDark2.checked ? 1 : 0; }
+  const _atmo = collectAtmoForm();   /* v40：大气参数随保存写入 */
+  if (_atmo) rawBody.atmosphere = _atmo;
+  if (formRing) rawBody.ring = { tex: formRing, op: ui.texOpR ? parseFloat(ui.texOpR.value) : 1,
+    tilt: ui.ringTilt ? (parseFloat(ui.ringTilt.value) || 0) : 0,
+    node: ui.ringNode ? (parseFloat(ui.ringNode.value) || 0) : 0,
+    spin: ui.ringSpin ? String(ui.ringSpin.value || '').trim() : '' };   /* v42：环倾角/方位角/自转周期随保存写入 */
   const list = exportBodiesRaw();
   if (window.__linkParent) {
     const pe = list.find(b2 => b2.name === window.__linkParent.name);
@@ -6933,6 +7376,17 @@ function saveBodyForm(e) {
       }
     }
     list[editingIndex] = rawBody;
+    /* v40：贴图清除记忆（旧有→新无 = 显式清除；旧无→新有 = 解除） */
+    const had1 = !!oldBody.texture, has1 = !!rawBody.texture;
+    if (had1 && !has1) matMarkCleared(name, 1);
+    if (!had1 && has1) matUnmarkCleared(name, 1);
+    const had2 = !!oldBody.texture2, has2 = !!rawBody.texture2;
+    if (had2 && !has2) matMarkCleared(name, 2);
+    if (!had2 && has2) matUnmarkCleared(name, 2);
+    /* v40：星环清除/重设记忆 */
+    if (oldBody.ring && !rawBody.ring) matMarkCleared(name, 3);
+    if ((!oldBody.ring || !oldBody.ring.tex) && rawBody.ring) matUnmarkCleared(name, 3);
+    if (rawBody.ring) bodyRingEnsure(editingIndex); else { bodyRing.cache.delete(editingIndex); if (window.__TJS__) window.__TJS__.setBodyRing(editingIndex, null); }
     showToast('天体 \'' + name + '\' 已更新', 'success');
   }
   else { list.push(rawBody); showToast('天体 \'' + name + '\' 已添加', 'success'); }
@@ -7032,6 +7486,9 @@ function loadSystemFromLocalStorage() {
 function savePrefs() {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
+      /* v43b：一次性迁移标志随存档保留 —— 旧版 v22mig 未落盘，savePrefs 整体覆盖后
+       * 标志丢失导致迁移每次开机重跑、用户显式改过的默认值被反复重置 */
+      v22mig: 1, v43mig: 1,
       /* v31：speed 灰锁时落盘解锁值（speedBeforeLock），恢复时不丢失用户步数 */
       speed: ui.speed.disabled ? speedBeforeLock : ui.speed.value, dt: ui.dt.value, adaptive: ui.adaptiveTimeStep.checked,
       integrator,
@@ -7045,7 +7502,7 @@ function savePrefs() {
       follow: ui.followSelect.value, selfRot: ui.selfRotateToggle.checked,
       frameRef: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked,
       bodyOv: ui.bodyOverlayToggle.checked,
-      hz: ui.hzToggle.checked, helpers: ui.helperGridToggle.checked,
+      hz: ui.hzToggle.checked, helpers: ui.helperGridToggle.checked, atmo: ui.atmoToggle ? ui.atmoToggle.checked : true,   /* v42：大气渲染开关偏好 */
       expoBias: expoBiasEv   /* v30：occlMode 不再落盘（物体式退役，叠层恒绝对） */
     }));
   } catch (e) { /* 存储不可用时静默 */ }
@@ -7058,6 +7515,11 @@ function loadPrefs() {
      * 若无迁移标志则强制改为 v22 默认（开），此后尊重用户显式设置 */
     const v22First = !p.v22mig;
     if (v22First) { p.v22mig = 1; try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (e) { /* 配额 */ } }
+    /* v43b 一次性迁移：自适应时间步长 v31 起默认应为开（Yoshida 下步数滑条灰锁、
+     * Universe Sandbox 语义）。旧存档从未显式设置过的以 false 落盘导致开局滑条
+     * 不灰锁、需切换一次积分器才生效 —— 首次升级到 v43b 统一置为开，此后尊重显式值 */
+    const v43First = !p.v43mig;
+    if (v43First) { p.v43mig = 1; p.adaptive = true; try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (e) { /* 配额 */ } }
     if (p.speed) ui.speed.value = p.speed;
     if (p.dt) ui.dt.value = p.dt;
     ui.adaptiveTimeStep.checked = !!p.adaptive;
@@ -7101,9 +7563,10 @@ function loadPrefs() {
     pendingView = ['top', 'side', 'front', 'free'].includes(p.view) ? p.view : 'free';
     /* v19b：天体叠加层偏好（天空对准已写死 60.2°，不再持久化） */
     if (p.bodyOv !== undefined) pendingBodyOverlay = !!p.bodyOv;
-    /* v20：宜居带 / 辅助网格开关偏好 */
+    /* v20：宜居带 / 辅助网格开关偏好；v42：大气渲染开关 */
     ui.hzToggle.checked = !!p.hz;
     ui.helperGridToggle.checked = !!p.helpers;
+    if (ui.atmoToggle && p.atmo !== undefined) ui.atmoToggle.checked = !!p.atmo;
     /* v30：旧存档遗留的 occlMode 字段直接忽略（物体式退役，叠层恒走绝对路径） */
     if (p.expoBias !== undefined) expoBiasEv = clampNum(+p.expoBias || 0, -8, 16);   /* v19f/v28：曝光基准偏置（暗档 -8 EV，亮档 +16 EV） */
     ui.speedVal.textContent = ui.speed.value;
@@ -8764,8 +9227,11 @@ function wireEvents() {
   if (ui.speedInc) ui.speedInc.addEventListener('click', () => speedNudge(1));
   ui.dt.addEventListener('change', () => {
     const v = parseTimeToSec(ui.dt.value);
-    if (!isFinite(v)) showToast('时间步长无效，示例 300 / 5m / 1d', 'error');
-    else savePrefs();
+    if (!isFinite(v)) {
+      /* v43b：编辑结束（失焦/回车）仍无效 → 立即归位 300（输入中不打断，见 readDt） */
+      ui.dt.value = '300'; lastValidDt = 300;
+      showToast('时间步长无效，已重置为 300 s', 'error');
+    } else savePrefs();
   });
   ui.adaptiveTimeStep.addEventListener('change', () => { updateStepControlLocks(); showToast('自适应时间步长 ' + (ui.adaptiveTimeStep.checked ? '开' : '关') + (integrator === 'ias15' ? '（IAS15 内置自动步长接管）' : ''), 'info'); savePrefs(); });
   /* v21：温室因子预览随质量/半径输入刷新 */
@@ -8858,6 +9324,7 @@ function wireEvents() {
   /* v20：宜居带显示 / 辅助网格开关（渲染层数据随开关重建） */
   ui.hzToggle.addEventListener('change', () => { draw(); savePrefs(); });
   ui.helperGridToggle.addEventListener('change', () => { draw(); savePrefs(); });
+  if (ui.atmoToggle) ui.atmoToggle.addEventListener('change', () => { draw(); savePrefs(); });   /* v42：大气渲染开关 */
   /* v20：空白预设（从零搭建，清空全部天体） */
   ui.blankPresetBtn.addEventListener('click', () => {
     if (playing) togglePlay();
@@ -8921,7 +9388,39 @@ function wireEvents() {
   ui.texFileInput.addEventListener('change', e => importTexFile(e, texFileLayer));
   ui.texOp1.addEventListener('input', updateTexFormUI);
   ui.texOp2.addEventListener('input', updateTexFormUI);
-  ui.matScanBtn.addEventListener('click', () => {
+  /* v40：大气参数滑杆标签实时同步；v43b：读数为数字输入框，与滑条双向同步 */
+  ['atmoScale', 'atmoStrength', 'atmoFalloff', 'atmoAbsorb', 'atmoMie', 'atmoMieG'].forEach(id => { if (ui[id]) ui[id].addEventListener('input', updateAtmoFormUI); });
+  /* v43b：数字输入框 → 滑条（change 时落值，输入中不回写打断）；大气高度以
+   * 实际高度 km 输入，经星球半径换算为内部百分比（滑条量程 0.5–100%，v44 上限
+   * 放宽：金星预设 strength=60 旧上限 40 溢出）后钳制 */
+  [['atmoStrengthVal', 'atmoStrength'], ['atmoFalloffVal', 'atmoFalloff'], ['atmoAbsorbVal', 'atmoAbsorb'], ['atmoMieVal', 'atmoMie'], ['atmoMieGVal', 'atmoMieG']].forEach(([box, sld]) => {
+    if (!ui[box] || !ui[sld]) return;
+    ui[box].addEventListener('change', () => {
+      const v = parseFloat(ui[box].value);
+      if (!isFinite(v)) { updateAtmoFormUI(); return; }
+      const lo = parseFloat(ui[sld].min), hi = parseFloat(ui[sld].max);
+      ui[sld].value = String(Math.min(hi, Math.max(lo, v)));
+      updateAtmoFormUI();
+    });
+  });
+  if (ui.atmoScaleVal) ui.atmoScaleVal.addEventListener('change', () => {
+    const v = parseFloat(ui.atmoScaleVal.value);
+    if (!isFinite(v)) { updateAtmoFormUI(); return; }
+    const rM = atmoFormRadiusM();
+    if (!(rM > 0)) { showToast('大气高度实际值换算需先填写星球质量或半径', 'info', 3200); updateAtmoFormUI(); return; }
+    const km = Math.max(0, v);
+    ui.atmoScale.value = String(Math.min(parseFloat(ui.atmoScale.max) || 100, Math.max(0.5, km * 1e3 / rM * 100)));
+    updateAtmoFormUI();
+  });
+  /* v43b：质量/半径输入完成（change）后，大气高度 km 读数随半径重算 */
+  ui.bodyMass.addEventListener('change', updateAtmoFormUI);
+  ui.bodyRadius.addEventListener('change', updateAtmoFormUI);
+    /* v40：星环表单（上传/清除/不透明度；文件名后缀 _ring 自动识别走材质库） */
+    ui.texUploadBtnR.addEventListener('click', () => { texFileLayer = 3; ui.texFileInputR.click(); });
+    ui.texFileInputR.addEventListener('change', e => importTexFile(e, texFileLayer));
+    ui.texClearBtnR.addEventListener('click', () => { formRing = null; updateTexFormUI(); });
+    ui.texOpR.addEventListener('input', updateTexFormUI);
+    ui.matScanBtn.addEventListener('click', () => {
     /* v20：手动重扫清空负缓存，全量重新探测 */
     matMissCache = {}; matMissDirty = true; matMissSave();
     matScan();
@@ -8988,7 +9487,7 @@ function wireEvents() {
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * Math.max(viewH, 2) : e.deltaY;
-    scale = clampNum(scale * Math.exp(-dy * 0.0015), SCALE_MIN, SCALE_MAX);
+    scale = clampNum(scale * Math.exp(-dy * 0.0015), SCALE_MIN, maxScaleSurface());
     draw();
   }, { passive: false });
 
@@ -9010,7 +9509,7 @@ function wireEvents() {
       draw();
     } else if (e.touches.length === 2 && pinchDist > 0) {
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      if (d > 0) { scale = clampNum(scale * d / pinchDist, SCALE_MIN, SCALE_MAX); pinchDist = d; draw(); }
+      if (d > 0) { scale = clampNum(scale * d / pinchDist, SCALE_MIN, maxScaleSurface()); pinchDist = d; draw(); }
     }
   }, { passive: false });
   canvas.addEventListener('touchend', e => {
@@ -9256,8 +9755,12 @@ const RADIANCE_CAP = 12000;          // 半浮点安全硬上限（×5 级泛光
  * 圆面/点源着色输出因此钳制在 K/曝光（ACES 在 ≥10 即饱和纯白 —— 视觉上
  * 与物理值不可区分），核心依旧全白，泛光能量回落到柔和星芒区间。 */
 const BLOOM_WHITE_K = 20;
-const CLOUD_SHELL = 1.015, CLOUD_DRIFT = 0.97;
-const AMBIENT_LIT = 0.015, AMBIENT_UNLIT = 0.55;
+/* CLOUD_SHELL：云层壳半径 = 行星半径倍数（独立半透明覆盖层，PLANET_FS 上方）。
+ * CLOUD_DRIFT：云层差速自转占比（壳层相对星体自转的漂移角速率比例）。 */
+const CLOUD_SHELL = 1.0015, CLOUD_DRIFT = 0.97;
+/* 环境光强度：有光照链行星 / 无光照链天体的基底亮度（AMBIENT_LIT v42 起
+ * 压低至 0.005，暗面不再被整体提亮；AMBIENT_UNLIT 给无恒星天体保底可辨） */
+const AMBIENT_LIT = 0.005, AMBIENT_UNLIT = 0.55;
 
 /* ---------------- v19：SoftBloomPass —— 各向同性多级高斯泛光 ----------------
  * 结构：亮部提取（半分辨率，阈值 = 1/曝光）→ 每级「居中 2×2 盒式降采样（线性
@@ -9588,12 +10091,14 @@ void main() {
  * 恒星亮部 —— v16 画家算法语义由 depth test 等价实现）。 */
 const BODY_VS = `
 varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+varying vec2 vNdc;   /* v44：像素 NDC（透视校正插值后 = 片元精确屏幕方向，供大气射线重建） */
 void main() {
   vNO = normal;
   vNW = normalize(mat3(modelMatrix) * normal);
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vWP = wp.xyz;
   gl_Position = projectionMatrix * viewMatrix * wp;
+  vNdc = gl_Position.xy / gl_Position.w;
 }`;
 /* 恒星圆面：临边昏暗 I(μ)=I₀(1−u(1−μ))，u=0.62；
  * uRad = rgbLin·B（表面辐射亮度，HDR）——辉光交给 UnrealBloomPass。 */
@@ -9607,8 +10112,126 @@ void main() {
   float ld = 1.0 - 0.62 * (1.0 - mu);
   gl_FragColor = vec4(min(uRad * ld, vec3(uCap)), 1.0);
 }`;
+/* 行星面上环影：沿太阳射线与环平面（法线 = 自转轴 uRingAx，过天体中心 uWC）
+ * 求交，交点半径落在 [R_IN, R_OUT]·uWR 内按贴图 alpha 削光。uRingOn=0 零开销。 */
+const RING_SHADOW_GLSL = `
+uniform float uRingOn, uRingOp, uWR;
+uniform vec3 uWC, uRingAx;
+uniform sampler2D uRingTex;
+/* 环内/外半径（行星半径倍数）：与 RING_FS 的 R_IN/R_OUT 同值（环影径向区间） */
+const float RS_IN = 1.11, RS_OUT = 2.27;
+float ringShadow(vec3 P, vec3 L) {
+  if (uRingOn < 0.5) return 1.0;
+  float dl = dot(L, uRingAx);
+  if (abs(dl) < 1e-5) return 1.0;
+  float t = dot(uWC - P, uRingAx) / dl;        /* 与环平面的交点参数 */
+  if (t <= 0.0) return 1.0;                    /* 交点在背阳侧：无环影 */
+  float d = length(P + L * t - uWC) / uWR;
+  float frac = (d - RS_IN) / (RS_OUT - RS_IN);
+  if (frac <= 0.0 || frac >= 1.0) return 1.0;
+  float a = texture2D(uRingTex, vec2(frac, 0.5)).a;
+  return 1.0 - a * uRingOp;
+}`;
+/* 云层壳层：1.015× 外壳独立差速自转，自身为半透明覆盖层参与光照；
+ * 暗部透明（uTm2）：亮度作 alpha，越黑越透明（云图模式）。 */
+/* ================= v43：大气核心 GLSL（忠实移植《基于物理的大气渲染》一/二） =================
+ * 文章一（a525322344.github.io/cg/2025/04/29/）单次散射双层数值积分：
+ *   ρ(h) = exp(−h/H)（ParticleDensity）；β(λ,0) = 8π³(n²−1)²/(3Nλ⁴)（海平面）；
+ *   视线 [A,B] 均分中点采样，逐样本沿光源方向 lightSampling 累计 D(CP)，
+ *   视线方向累计 D(PA)；T(CPA) = exp(−β_R(D_R,CP+D_R,PA) − β_M(D_M,CP+D_M,PA))；
+ *   Σ += T·ρ·ds·shadow（光线入行星 → shadow=0，夜侧散射严格截止）；
+ *   I = (β_R·P_R(μ)·ΣR + β_M·P_M(μ)·ΣM)·I_sun·lightColor；
+ *   Rayleigh 相位 3/(16π)(1+cos²θ)；Mie 相位 Cornette-Shanks（文章一 MiePhase）。
+ * 文章二（cg/2025/05/13/）：rayIntersect NaN 根修 sqrt(max(R²−CT²,0))；
+ *   交点在射线后方剔除（BO<0）；壳内起点 tA=0；视线前方命中行星 → tB=pA；
+ *   大气雾 I_A = R_B·T_extinction + I_inscatter（表面/地形 aerial perspective）。
+ * 机制集成（文章之外的既有链路，非文章内容）：①β/标高按 rP 折算到本系
+ *   （行星半径=1，共形壳层与潮汐椭化/自转扁化网格严格同形）；②光源颜色 =
+ *   渲染层辐照度链 uLC（E·rgbLin/π，替代文章 _SunIntensity=14.8，多恒星/光谱/
+ *   曝光全链一致）；③lightSampling 的行星自遮挡（h<0）之外，多天体食影
+ *   （b.ecl 弓形公式软半影）乘进逐样本 shadow；④光源循环 ≤4（多恒星）；
+ *   ⑤确定性中点采样（文章语义，无抖动 —— 直接 march 本身无 LUT 量化条纹）。 */
+const ATMO_VIEW_PTS = 16;    /* 文章一 _ViewSamples（demo=64；交互取 16+抖动） */
+const ATMO_LIGHT_PTS = 8;    /* 文章一 lightSampling 采样段数（demo 同 _ViewSamples；v43b：
+                              * 逐段已改解析积分，8 段闭式和已连续且比旧 16 中点更贴近
+                              * 文章连续积分，编译体积/每帧成本同步减半 —— SwiftShader
+                              * 贴表面场景编译驻留过长会被系统杀进程，实测对照） */
+const ATMO_CORE_GLSL = `
+/* rayIntersect（文章一/二逐式；含文章二 NaN 根修与后方交点剔除） */
+bool atmoRayIntersect(vec3 O, vec3 D, vec3 C, float R, out float AO, out float BO) {
+  vec3 L = C - O;
+  float DT = dot(L, D);
+  float R2 = R * R;
+  float CT2 = dot(L, L) - DT * DT;
+  if (CT2 > R2) return false;
+  float AT = sqrt(max(R2 - CT2, 0.0));   /* 文章二 Debug：sqrt(负数) → NaN 爆闪根修 */
+  AO = DT - AT;
+  BO = DT + AT;
+  if (BO < 0.0) return false;            /* 文章二：交点在射线后方 */
+  return true;
+}
+/* 密度比（文章一 ParticleDensity）：ρ(h) = exp(−h/H)，h/H 均为本系折算单位 */
+float atmoDensity(float h, float hr) { return exp(-h / hr); }
+/* v43b：段光学深度解析积分 —— ∫₀^ds exp(−(h₀+s·c)/H) ds 的闭式（c = 射线方向
+ * 的径向分量，段内直线近似为二阶小量；h₀/h₁ 为段两端离面高度，触地部分按 0 计）。
+ * 旧「中点密度×ds」在 ds≫H 的掠射段对样本高度指数敏感：几何的微小连续变化被
+ * 放大成光学深度的量级跳变 —— 表面/云层/大气三处同心条纹的同源根因；
+ * 解析式对几何连续，Δ→0 极限退化为 ρ(h₀)·ds（数值稳定）。 */
+float atmoSegOd1(float h0, float h1, float ds, float hr) {
+  float dlt = (h1 - h0) / hr;                       /* Δ = c·ds/H（下降为负） */
+  if (abs(dlt) < 0.5)                               /* 级数：(1−e^(−Δ))/Δ，Δ→0 极限 1 */
+    return exp(-h0 / hr) * (1.0 + dlt * (-0.5 + dlt * (0.16666667 - dlt * 0.041666667))) * ds;
+  if (dlt < 0.0)                                    /* 锚定段末端（无溢出） */
+    return exp(-h0 / hr - dlt) * (exp(dlt) - 1.0) / dlt * ds;
+  return exp(-h0 / hr) * (1.0 - exp(-dlt)) / dlt * ds;
+}
+/* 同段瑞利+米氏一次算出（共享端点几何；避免两份完整调用体膨胀编译体积） */
+vec2 atmoSegOd2(vec3 Q0, vec3 D, float ds, float hrA, float hrB) {
+  float h0 = max(length(Q0) - 1.0, 0.0);
+  float h1 = max(length(Q0 + D * ds) - 1.0, 0.0);
+  return vec2(atmoSegOd1(h0, h1, ds, hrA), atmoSegOd1(h0, h1, ds, hrB));
+}
+/* Rayleigh 相位（文章一 RayleighPhase）：3/(16π)·(1+cos²θ) */
+float atmoPhaseR(float c) { return 0.059683103 * (1.0 + c * c); }
+/* Mie 相位（文章一 MiePhase，Cornette-Shanks 逐式） */
+float atmoPhaseM(float g, float c) {
+  float g2 = g * g;
+  float a = 1.0 + g2 - 2.0 * g * c;
+  return 3.0 * (1.0 - g2) * (1.0 + c * c) / (25.13274123 * (2.0 + g2) * a * sqrt(a));
+}
+/* lightSampling（文章一逐式）：P 沿光源方向 march 到大气层顶，分 ${ATMO_LIGHT_PTS}
+ * 段累计瑞利/米氏光学深度；光线扎入行星 → false
+ * （文章一 overground=false → shadowFactor=0）。
+ * v43b：行星遮挡由逐中点 h<0 采样判定改为精确射线-单位球判定 —— 逐中点判定
+ * 在掠射段随采样相位跳变（晨昏带锯齿/条纹根因之一），且会在样本间隙漏光；
+ * 逐段光学深度用 atmoSegOd2 解析积分，消除 ds≫H 时的指数敏感。 */
+bool atmoLightSampling(vec3 P, vec3 S, float top, float hrR, float hrM, out float odR, out float odM) {
+  float tA0, tC;
+  odR = 0.0; odM = 0.0;
+  if (length(P) >= top) return true;              /* 层顶之上无大气可积（文章密度模型自然为 0） */
+  if (!atmoRayIntersect(P, S, vec3(0.0), top, tA0, tC)) return true;
+  float b = dot(P, S);
+  float disc = b * b - (dot(P, P) - 1.0);
+  if (disc > 0.0) {
+    float tHit = -b - sqrt(disc);
+    if (tHit > 0.0 && tHit <= tC) return false;
+  }
+  float ds = tC / float(${ATMO_LIGHT_PTS});
+  float t = 0.0;
+  for (int i = 0; i < ${ATMO_LIGHT_PTS}; i++) {
+    vec2 od2 = atmoSegOd2(P + S * t, S, ds, hrR, hrM);
+    odR += od2.x; odM += od2.y;
+    t += ds;
+  }
+  return true;
+}
+`;
 /* 行星圆面：贴图立方体方向采样（无接缝无极区伪影）+ 多星朗伯 N·L
- * （每星辐照度×黑体颜色/π）+ 食阴影（弓形公式，世界系）+ 环境光。 */
+ * （每星辐照度×黑体颜色/π）+ 食阴影（弓形公式，本系一致口径）+ 环境光。
+ * v43：表面着色接文章一/二 —— T_sun（表面点→恒星 lightSampling 光学深度
+ * 透射，瑞利让晨昏带物理红化）× T_view（相机→表面视线段全程透射）+
+ * in-scatter（文章二大气雾 I_A = R_B·T + I_inscatter），与大气 pass 共用
+ * 同一积分器/同一 uniforms —— 晨昏线与临边过渡天然无缝。 */
 const PLANET_FS = `
 precision highp float;
 uniform samplerCube uTex;
@@ -9620,21 +10243,39 @@ uniform vec3 uLD[8];
 uniform vec3 uLC[8];
 uniform vec4 uEcl[8];
 uniform vec3 uLAux[8];
+uniform float uARad;                /* 渲染半径 m（uWC 由 RING_SHADOW_GLSL 声明） */
+uniform float uAOn, uATop;          /* v43：大气开关 / 大气层顶（本系，行星半径=1） */
+uniform float uAHR, uAHM;           /* v43：瑞利/米氏标高（本系 = H_m / rP，文章一 exp(−h/H)） */
+uniform vec3 uAExtR;                /* v43：β_R·rP（文章一公式逐通道） */
+uniform vec3 uAExtA;                /* v43：β_A·rP（吸收，随瑞利密度路径，削光不重发射） */
+uniform float uAExtM, uAMieG;       /* v43：β_M·rP 与米氏前向 g */
+uniform mat3 uAInv;                 /* 世界 m → 本系（行星半径=1，含形变） */
+uniform vec3 uCamR, uCamU, uCamF;   /* v44：相机基（与大气 pass 同源，NDC 射线重建用） */
+uniform float uTanH, uAspect, uOrtho;   /* v44：视场半角正切 / 宽高比 / 正交开关 */
+uniform vec2 uOrthoHalf;                /* v44：正交半宽/半高（世界 m） */
 varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+varying vec2 vNdc;                      /* v44：像素 NDC */
+
+` + RING_SHADOW_GLSL + ATMO_CORE_GLSL + `
 vec4 cubeSample(vec3 d, samplerCube t) {
   vec3 c = max(textureCube(t, d).rgb, vec3(0.0));
   return vec4(c, dot(c, vec3(0.2126, 0.7152, 0.0722)));
 }
 /* 食阴影：表面点沿光源方向看遮挡盘与光源盘的角重叠比（弓形公式，
- * 与 CPU circleOverlap 同一几何）。ec.xyz=遮挡体中心（世界系，行星半径单位），
- * la=(遮挡体沿轴距, 光源半径比, 光源距离比)（行星半径单位）。 */
-float eclipseOcc(vec3 N, vec3 lD, vec4 ec, vec3 la) {
-  float tpN = dot(N, lD);
-  float t = la.x - tpN;
+ * 与 CPU circleOverlap 同一几何）。P=表面点（本系行星半径单位，含形变）。 */
+/* v43 食阴影（本系一致口径根修）：uEcl 数据原为世界轴·半径单位，与本系
+ * P（含自转/形变）混算仅在 spin=identity 时碰巧成立 —— 现将遮挡体中心经
+ * uAInv 变换到本系，沿本系光源方向求视线锥遮挡比（弓形公式，与 CPU
+ * circleOverlap / 大气 pass eclipseShadow 同一几何）。无大气天体 uAInv=单位阵
+ * → 自然回退世界轴口径。la=(占位, 光源半径比, 光源距离比)。 */
+float eclipseOcc(vec3 P, vec3 ldirL, vec4 ec, vec3 la) {
+  if (ec.w <= 0.0) return 1.0;
+  vec3 ecL = uAInv * (ec.xyz * uARad);
+  vec3 dv = ecL - P;
+  float t = dot(dv, ldirL);
   if (t <= 0.0) return 1.0;
-  vec3 dv = (ec.xyz - la.x * lD) - (N - tpN * lD);
-  float dd = sqrt(dot(dv, dv));
-  float rc = la.y * t / la.z;
+  float dd = length(dv - t * ldirL);
+  float rc = la.y * t / max(la.z, 1e-6);
   float rr = ec.w;
   float ov = 0.0;
   if (dd < rr + rc) {
@@ -9648,6 +10289,11 @@ float eclipseOcc(vec3 N, vec3 lD, vec4 ec, vec3 la) {
     }
   }
   return 1.0 - clamp(ov, 0.0, 1.0);
+}
+/* v43：单光源 in-scatter 组合（文章一 I = β·P(μ)·Σ 逐式；μ = dot(光源, 视线)） */
+vec3 atmoInscatter(vec3 ldirW, vec3 lcol, vec3 tR, vec3 tM) {
+  float mu = dot(ldirW, normalize(vWP - cameraPosition));
+  return lcol * (uAExtR * (atmoPhaseR(mu) * tR) + vec3(uAExtM * atmoPhaseM(uAMieG, mu)) * tM);
 }
 void main() {
   vec3 N = normalize(vNW);
@@ -9658,19 +10304,196 @@ void main() {
     float a1 = uTm1 > 0.5 ? s1.a * uOp1 : uOp1;
     alb = mix(uAlb, s1.rgb, clamp(a1, 0.0, 1.0));
   }
+  /* v43 文章一/二：视线段相机→表面点的双循环积分（与大气 pass 同一积分器）。
+   * Tview = T(相机..表面) 全程逐通道透射；aerial = 段内 in-scatter。 */
+  vec3 Tview = vec3(1.0);
+  vec3 aerial = vec3(0.0);
+  vec3 Ploc = vec3(0.0, 0.0, 1.0);
+  if (uAOn > 0.5) {
+    Ploc = uAInv * (vWP - uWC);
+    /* v44 绝对无条纹等价实现：视线段几何改由「相机射线 × 理想单位球」解析求交，
+     * 不再以网格插值点 Ploc 为路径端点 —— 球面网格顶点间弦凹陷（192 段约
+     * 1.3e-4 行星半径，地球 ≈830 m ≈ 0.1×H_R）会被 exp(−h/H) 密度指数放大，
+     * 在第一层贴图上形成网格空间频率的亮度条纹（实测 ±5 LSB，凹陷越粗越强，
+     * 64 段粗网 ≈3×）。解析端点 h≡0 对像素几何连续；新旧端点差 = 网格凹陷
+     * （< 三角形内插误差），积分器与口径逐式不变 —— 数学等价，条纹结构性消失。 */
+    vec3 roW = uOrtho > 0.5 ? (uCamR * (vNdc.x * uOrthoHalf.x) + uCamU * (vNdc.y * uOrthoHalf.y))
+                             : vec3(0.0);
+    vec3 rdW = uOrtho > 0.5 ? uCamF
+                             : normalize(uCamR * (vNdc.x * uAspect * uTanH) + uCamU * (vNdc.y * uTanH) + uCamF);
+    vec3 camL = uAInv * (roW - uWC);
+    vec3 rdLt = uAInv * rdW;
+    float rdLen = max(length(rdLt), 1e-9);
+    vec3 rdL = rdLt / rdLen;
+    float tA, tB;
+    if (atmoRayIntersect(camL, rdL, vec3(0.0), uATop, tA, tB)) {
+      if (tA < 0.0) tA = 0.0;                        /* 文章二：壳内自相机起算 */
+      float tS0, tS1;
+      bool hitS = atmoRayIntersect(camL, rdL, vec3(0.0), 1.0, tS0, tS1);
+      float tS = (hitS && tS0 > 0.0) ? tS0 : (hitS ? tS1 : 1e30);  /* 表面命中 = 理想球近交点 */
+      Ploc = camL + rdL * min(tS, tB);               /* 光照/食影查询点同取解析点 */
+      float through = min(tB, tS) - tA;              /* B = 表面点（视线终点） */
+      if (through > 1e-6) {
+        float ds = through / float(${ATMO_VIEW_PTS});
+        float odPAR = 0.0, odPAM = 0.0;              /* 文章 D(PA) 前缀累计 */
+        vec3 tR0 = vec3(0.0), tR1 = vec3(0.0), tR2 = vec3(0.0), tR3 = vec3(0.0);
+        vec3 tM0 = vec3(0.0), tM1 = vec3(0.0), tM2 = vec3(0.0), tM3 = vec3(0.0);
+        float t = tA;                                 /* 文章确定性中点采样（抖动只用于日路查询点） */
+        for (int k = 0; k < ${ATMO_VIEW_PTS}; k++) {
+          /* v43b：逐段光学深度 = atmoSegOd2 解析积分（旧「中点密度×ds」在 ds≫H
+           * 掠射段对样本高度指数敏感，是表面条纹的同源根因）；光源查询点仍取中点 */
+          vec3 p0 = camL + rdL * t;
+          vec2 odRM = atmoSegOd2(p0, rdL, ds, uAHR, uAHM);
+          float dR = odRM.x, dM = odRM.y;
+          odPAR += dR; odPAM += dM;
+          vec3 p = p0 + rdL * (ds * 0.5);
+          float h = length(p) - 1.0;
+          if (h >= 0.0) {
+            for (int i = 0; i < 4; i++) {            /* 与大气 pass 同一 4 光源口径 */
+              if (i >= uNL) break;
+              vec3 ldirL = normalize(uAInv * uLD[i]);
+              /* v46：食影先判（纯几何，廉价）—— 全影样本（eclS=0）贡献恒零，
+               * 免去 8 段 lightSampling 积分；部分影/无影样本与旧式逐位同值 */
+              float eclS = eclipseOcc(p, ldirL, uEcl[i], uLAux[i]);
+              if (eclS > 0.0) {
+                float odCR, odCM;
+                bool over = atmoLightSampling(p, ldirL, uATop, uAHR, uAHM, odCR, odCM);
+                if (over) {
+                  vec3 T = exp(-(uAExtR + uAExtA) * (odCR + odPAR) - vec3(uAExtM * (odCM + odPAM)));
+                  if (i == 0) { tR0 += T * (dR * eclS); tM0 += T * (dM * eclS); }
+                  else if (i == 1) { tR1 += T * (dR * eclS); tM1 += T * (dM * eclS); }
+                  else if (i == 2) { tR2 += T * (dR * eclS); tM2 += T * (dM * eclS); }
+                  else { tR3 += T * (dR * eclS); tM3 += T * (dM * eclS); }
+                }
+              }
+            }
+          }
+          t += ds;
+        }
+        Tview = exp(-(uAExtR + uAExtA) * odPAR - vec3(uAExtM * odPAM));
+        if (uNL > 0) aerial = atmoInscatter(uLD[0], uLC[0], tR0, tM0);
+        if (uNL > 1) aerial += atmoInscatter(uLD[1], uLC[1], tR1, tM1);
+        if (uNL > 2) aerial += atmoInscatter(uLD[2], uLC[2], tR2, tM2);
+        if (uNL > 3) aerial += atmoInscatter(uLD[3], uLC[3], tR3, tM3);
+      }
+    }
+  }
   vec3 lit = uAmb * alb * (0.55 + 0.45 * clamp(dot(N, V), 0.0, 1.0));
   for (int i = 0; i < 8; i++) {
     if (i >= uNL) break;
     float ndl = dot(N, uLD[i]);
-    float dif = smoothstep(-0.015, 0.05, ndl);
-    float occ = dif > 0.0 ? eclipseOcc(N, uLD[i], uEcl[i], uLAux[i]) : 1.0;
-    lit += alb * uLC[i] * dif * occ;
+    /* 大气存在时晨昏线由 T_sun 光学深度给出（与大气 pass 严格同线），
+     * 仅保留极窄 smoothstep 抗锯齿；无大气维持原口径 */
+    float dif = uAOn > 0.5 ? smoothstep(-0.008, 0.02, ndl) : smoothstep(-0.015, 0.05, ndl);
+    float occ = 1.0;
+    if (dif > 0.0) {
+      vec3 P = uAOn > 0.5 ? Ploc : (vWP - uWC) / max(uARad, 1e-6);
+      vec3 ldirL = normalize(uAInv * uLD[i]);
+      occ = eclipseOcc(P, ldirL, uEcl[i], uLAux[i]);
+      occ *= ringShadow(vWP, uLD[i]);   /* v40：环影（uRingOn=0 时恒 1 零开销） */
+      if (uAOn > 0.5) {
+        /* v43 文章一 T(CP)：表面点→恒星 lightSampling 光学深度透射（瑞利晨昏红化）
+         * v46：occ=0（全食）样本贡献恒零，免 lightSampling（与旧式逐位同值） */
+        vec3 Tsun = vec3(0.0);
+        if (occ > 0.0) {
+          float odCR, odCM;
+          bool over = atmoLightSampling(Ploc, ldirL, uATop, uAHR, uAHM, odCR, odCM);
+          Tsun = over ? exp(-(uAExtR + uAExtA) * odCR - vec3(uAExtM * odCM)) : vec3(0.0);
+        }
+        lit += alb * uLC[i] * dif * occ * Tsun;
+      } else lit += alb * uLC[i] * dif * occ;
+    }
   }
   lit += uEmis;   /* v20：自身黑体热辐射（σT⁴/π 链），光照循环后加性叠加，食阴影零影响 */
-  gl_FragColor = vec4(min(lit, vec3(uCap)), 1.0);
+  lit = lit * Tview + aerial;   /* v43 文章二大气雾：I_A = R_B·T_extinction + I_inscatter */
+  /* ±0.5/255 IGN 输出抖动：平滑 aerial 渐变的 8-bit 轮廓化掩蔽（不改物理量值） */
+  float dithOut = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5;
+  /* v44：抖动幅度按 1/曝光 缩放（uCap = 20/曝光）—— 线性 HDR 抖动会被输出曝光等比放大，
+   * 大气开启压暗场景 → 曝光升高 → 抖动呈 ±2.5 LSB 织纹（用户可见条纹残端）；缩放后
+   * 最终输出恒 ≈±0.5 LSB，去带目的一致且不随大气开关/曝光变化 */
+  gl_FragColor = vec4(max(min(lit, vec3(uCap)), vec3(0.0)) + dithOut * (min(uCap, 20.0) * 0.05) / 255.0, 1.0);
 }`;
-/* 云层壳层：1.015× 外壳独立差速自转，自身为半透明覆盖层参与光照；
- * 暗部透明（uTm2）：亮度作 alpha，越黑越透明（云图模式）。 */
+/* ================= v40：星环（任务⑤：星球_任意.jpg 任意=ring 自动应用） =================
+ * 径向条带贴图（如 saturn_ring.png 2048×125，水平轴 = 半径）→ 环形网格
+ * 双面半透明渲染；环上行星投影（世界系球体遮挡解析式）；行星面上环影
+ * （PLANET_FS 内沿太阳射线与环平面求交，径向查贴图 alpha）。无角向变化
+ * 的径向条带天然无接缝；双面渲染 + depthWrite 关闭保证背面透视正确。 */
+const RING_VS = `
+varying vec3 vNW; varying vec3 vNO; varying vec3 vWP; varying vec3 vLP;
+void main() {
+  vNO = normal;
+  vNW = normalize(mat3(modelMatrix) * normal);
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWP = wp.xyz;
+  vLP = position;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const RING_FS = `
+precision highp float;
+uniform sampler2D uTex; uniform float uOp, uCap, uWR, uAmb;
+uniform vec3 uWC;
+uniform int uNL;
+uniform vec3 uLD[8];
+uniform vec3 uLC[8];
+uniform vec4 uEcl[8];
+uniform vec3 uLAux[8];
+varying vec3 vNW; varying vec3 vNO; varying vec3 vWP; varying vec3 vLP;
+/* 环内/外半径（行星半径倍数）：土星 C 环内缘 ~1.11Rs → A 环外缘 ~2.27Rs */
+const float R_IN = 1.11, R_OUT = 2.27;
+/* 两圆重叠面积比（占 r1 盘）—— 行星自影/食影与 CPU/表面/大气同一弓形公式 */
+float circleOverlap(float d, float r1, float r2) {
+  if (d >= r1 + r2) return 0.0;
+  if (d <= abs(r1 - r2)) return r1 <= r2 ? 1.0 : min(r2 * r2 / (r1 * r1), 1.0);
+  float d2 = d * d, a = r1 * r1, b = r2 * r2;
+  float ar = a * acos(clamp((d2 + a - b) / (2.0 * d * r1), -1.0, 1.0))
+           + b * acos(clamp((d2 + b - a) / (2.0 * d * r2), -1.0, 1.0))
+           - 0.5 * sqrt(max(0.0, (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)));
+  return clamp(ar / (3.14159265 * a), 0.0, 1.0);
+}
+/* 逐光源盘状遮挡比（软半影）：环点 P 沿 L 前方 t>0 处的遮挡球（中心 occC、
+ * 半径 occR，世界 m）挡住光源盘的比例。光源角半径 = la.y/la.z（uLAux，与
+ * 表面/大气食影同源；无食天体回退真值，见 copyLights/ecl 循环 stash）；
+ * 0.02·occR 下限防恒星角半径过小（半影 << 像素）的阴影边缘锯齿。 */
+float discShadow(vec3 P, vec3 L, vec3 occC, float occR, vec3 la) {
+  vec3 dv = occC - P;
+  float t = dot(dv, L);
+  if (t <= 0.0) return 1.0;                      /* 遮挡球在环点背光侧：不遮 */
+  float rc = max(la.y * t / max(la.z, 1e-6), occR * 0.02);
+  float miss = length(dv - t * L);
+  return 1.0 - circleOverlap(miss, rc, occR);
+}
+void main() {
+  float r = length(vLP.xy);                       /* 环几何位于本地面 XY（法线 = 本地 Z = 自转轴） */
+  if (r < R_IN || r > R_OUT) discard;
+  float u = (r - R_IN) / (R_OUT - R_IN);          /* 径向条带横轴 = 半径 */
+  vec4 tex = texture2D(uTex, vec2(u, 0.5));
+  float a = tex.a * uOp;
+  if (a < 0.004) discard;
+  vec3 N = normalize(vNW);
+  /* v46 统一口径（用户：背光透射支删除，背光与正面同款）：
+   * 无论视/照同侧异侧，一律朗伯薄板反射 I = tex·uLC·|muL|·sh —— 颜色与
+   * 条带结构完全来自贴图原值（v41 反照率归一退役，见 setBodyRing），亮度只
+   * 随太阳高度角，无相位函数重分配、无 Beer-Lambert 直透（v45 透射支整支
+   * 退役：背光看环 = 看到环背面的同款受照外观，不再有剪影/透光差异）。
+   * 输出预乘 alpha（材质 One/1−srcAlpha，见 makeRingMat）：(C = a·I, α = a)
+   * 合成 out = I·a + bg·(1−a)，与标准混合逐位同口径；多光源按覆盖率并集
+   * 合成。逐光源阴影 = 行星自影 × 其他天体食影（同一软半影口径，uEcl 为本
+   * 天体半径单位 → 世界 m 乘 uWR），多恒星各自独立判定。 */
+  vec3 C = vec3(0.0);                             /* 预乘辐射（已含覆盖率） */
+  float cov = 0.0;                                /* 合成覆盖率（多光源并集） */
+  for (int i = 0; i < 8; i++) {
+    if (i >= uNL) break;
+    vec3 L = normalize(uLD[i]);
+    float sh = discShadow(vWP, L, uWC, uWR, uLAux[i]);                    /* 行星自影 */
+    if (uEcl[i].w > 0.0)                                                  /* 其他天体食影 */
+      sh *= discShadow(vWP, L, uWC + uEcl[i].xyz * uWR, uEcl[i].w * uWR, uLAux[i]);
+    C += tex.rgb * uLC[i] * (abs(dot(N, L)) * sh) * a;                    /* 朗伯反射：预乘 a·I */
+    cov += (1.0 - cov) * a;
+  }
+  if (uNL == 0) { C = tex.rgb * (uAmb * 0.9) * a; cov = a; }   /* 无光照链 → 环境光外观（与行星一致） */
+  gl_FragColor = vec4(min(C, vec3(uCap)), clamp(cov, 0.0, 1.0));
+}
+`;
 const SHELL_FS = `
 precision highp float;
 uniform samplerCube uTex;
@@ -9680,18 +10503,38 @@ uniform vec3 uLD[8];
 uniform vec3 uLC[8];
 uniform vec4 uEcl[8];
 uniform vec3 uLAux[8];
+uniform vec3 uWC;
+uniform float uARad;
+uniform float uAOn, uATop;          /* v43：大气开关 / 大气层顶（本系，行星半径=1） */
+uniform float uAHR, uAHM;           /* v43：瑞利/米氏标高（本系 = H_m / rP） */
+uniform vec3 uAExtR;                /* v43：β_R·rP（文章一公式逐通道） */
+uniform vec3 uAExtA;                /* v43：β_A·rP（吸收，随瑞利密度路径） */
+uniform float uAExtM, uAMieG;       /* v43：β_M·rP 与米氏前向 g */
+uniform mat3 uAInv;
+uniform vec3 uCamR, uCamU, uCamF;   /* v44：相机基（与大气 pass 同源） */
+uniform float uTanH, uAspect, uOrtho;
+uniform vec2 uOrthoHalf;
 varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
+varying vec2 vNdc;                      /* v44：像素 NDC */
+const float CLOUD_R = ${CLOUD_SHELL};   /* 云壳本系半径 = 渲染层 shell.scale 系数（行星半径=1） */
+` + ATMO_CORE_GLSL + `
 vec4 cubeSample(vec3 d, samplerCube t) {
   vec3 c = max(textureCube(t, d).rgb, vec3(0.0));
   return vec4(c, dot(c, vec3(0.2126, 0.7152, 0.0722)));
 }
-float eclipseOcc(vec3 N, vec3 lD, vec4 ec, vec3 la) {
-  float tpN = dot(N, lD);
-  float t = la.x - tpN;
+/* v43 食阴影（本系一致口径根修）：uEcl 数据原为世界轴·半径单位，与本系
+ * P（含自转/形变）混算仅在 spin=identity 时碰巧成立 —— 现将遮挡体中心经
+ * uAInv 变换到本系，沿本系光源方向求视线锥遮挡比（弓形公式，与 CPU
+ * circleOverlap / 大气 pass eclipseShadow 同一几何）。无大气天体 uAInv=单位阵
+ * → 自然回退世界轴口径。la=(占位, 光源半径比, 光源距离比)。 */
+float eclipseOcc(vec3 P, vec3 ldirL, vec4 ec, vec3 la) {
+  if (ec.w <= 0.0) return 1.0;
+  vec3 ecL = uAInv * (ec.xyz * uARad);
+  vec3 dv = ecL - P;
+  float t = dot(dv, ldirL);
   if (t <= 0.0) return 1.0;
-  vec3 dv = (ec.xyz - la.x * lD) - (N - tpN * lD);
-  float dd = sqrt(dot(dv, dv));
-  float rc = la.y * t / la.z;
+  float dd = length(dv - t * ldirL);
+  float rc = la.y * t / max(la.z, 1e-6);
   float rr = ec.w;
   float ov = 0.0;
   if (dd < rr + rc) {
@@ -9706,20 +10549,111 @@ float eclipseOcc(vec3 N, vec3 lD, vec4 ec, vec3 la) {
   }
   return 1.0 - clamp(ov, 0.0, 1.0);
 }
+/* v43：单光源 in-scatter 组合（文章一 I = β·P(μ)·Σ 逐式） */
+vec3 atmoInscatter(vec3 ldirW, vec3 lcol, vec3 tR, vec3 tM) {
+  float mu = dot(ldirW, normalize(vWP - cameraPosition));
+  return lcol * (uAExtR * (atmoPhaseR(mu) * tR) + vec3(uAExtM * atmoPhaseM(uAMieG, mu)) * tM);
+}
 void main() {
   vec3 N = normalize(vNW);
   vec3 V = normalize(cameraPosition - vWP);
   vec4 s2 = cubeSample(normalize(vNO), uTex);
   float a2 = uTm2 > 0.5 ? s2.a * uOp2 : uOp2;
+  /* v43 文章一/二：云层位于 CLOUD_R（1.0015×）处即「地形点 B」，与 PLANET_FS 同一
+   * 积分器（T_sun + T_view + in-scatter），与大气 pass 严格同口径 */
+  vec3 Tview = vec3(1.0);
+  vec3 aerial = vec3(0.0);
+  vec3 Ploc = vec3(0.0, 0.0, 1.0);
+  if (uAOn > 0.5) {
+    Ploc = uAInv * (vWP - uWC);
+    /* v44 绝对无条纹等价实现：与 PLANET_FS 同一根修 —— 视线段端点改由
+     * 「相机射线 × 理想云壳球（半径 CLOUD_R）」解析求交，网格弦凹陷不再被
+     * exp(−h/H) 指数放大为条纹；端点差 = 凹陷（< 内插误差），积分器不变。 */
+    vec3 roW = uOrtho > 0.5 ? (uCamR * (vNdc.x * uOrthoHalf.x) + uCamU * (vNdc.y * uOrthoHalf.y))
+                             : vec3(0.0);
+    vec3 rdW = uOrtho > 0.5 ? uCamF
+                             : normalize(uCamR * (vNdc.x * uAspect * uTanH) + uCamU * (vNdc.y * uTanH) + uCamF);
+    vec3 camL = uAInv * (roW - uWC);
+    vec3 rdLt = uAInv * rdW;
+    float rdLen = max(length(rdLt), 1e-9);
+    vec3 rdL = rdLt / rdLen;
+    float tA, tB;
+    if (atmoRayIntersect(camL, rdL, vec3(0.0), uATop, tA, tB)) {
+      if (tA < 0.0) tA = 0.0;                        /* 文章二：壳内自相机起算 */
+      float tS0, tS1;
+      bool hitS = atmoRayIntersect(camL, rdL, vec3(0.0), CLOUD_R, tS0, tS1);
+      float tS = (hitS && tS0 > 0.0) ? tS0 : (hitS ? tS1 : 1e30);  /* 云壳命中 */
+      Ploc = camL + rdL * min(tS, tB);               /* 光照/食影查询点同取解析点 */
+      float through = min(tB, tS) - tA;
+      if (through > 1e-6) {
+        float ds = through / float(${ATMO_VIEW_PTS});
+        float odPAR = 0.0, odPAM = 0.0;
+        vec3 tR0 = vec3(0.0), tR1 = vec3(0.0), tR2 = vec3(0.0), tR3 = vec3(0.0);
+        vec3 tM0 = vec3(0.0), tM1 = vec3(0.0), tM2 = vec3(0.0), tM3 = vec3(0.0);
+        float t = tA;
+        for (int k = 0; k < ${ATMO_VIEW_PTS}; k++) {
+          /* v43b：逐段光学深度 = atmoSegOd2 解析积分（云层与表面/大气 pass 同源消条纹） */
+          vec3 p0 = camL + rdL * t;
+          vec2 odRM = atmoSegOd2(p0, rdL, ds, uAHR, uAHM);
+          float dR = odRM.x, dM = odRM.y;
+          odPAR += dR; odPAM += dM;
+          vec3 p = p0 + rdL * (ds * 0.5);
+          float h = length(p) - 1.0;
+          if (h >= 0.0) {
+            for (int i = 0; i < 4; i++) {
+              if (i >= uNL) break;
+              vec3 ldirL = normalize(uAInv * uLD[i]);
+              /* v46：食影先判（纯几何，廉价）—— 全影样本（eclS=0）贡献恒零，
+               * 免去 8 段 lightSampling 积分；部分影/无影样本与旧式逐位同值 */
+              float eclS = eclipseOcc(p, ldirL, uEcl[i], uLAux[i]);
+              if (eclS > 0.0) {
+                float odCR, odCM;
+                bool over = atmoLightSampling(p, ldirL, uATop, uAHR, uAHM, odCR, odCM);
+                if (over) {
+                  vec3 T = exp(-(uAExtR + uAExtA) * (odCR + odPAR) - vec3(uAExtM * (odCM + odPAM)));
+                  if (i == 0) { tR0 += T * (dR * eclS); tM0 += T * (dM * eclS); }
+                  else if (i == 1) { tR1 += T * (dR * eclS); tM1 += T * (dM * eclS); }
+                  else if (i == 2) { tR2 += T * (dR * eclS); tM2 += T * (dM * eclS); }
+                  else { tR3 += T * (dR * eclS); tM3 += T * (dM * eclS); }
+                }
+              }
+            }
+          }
+          t += ds;
+        }
+        Tview = exp(-(uAExtR + uAExtA) * odPAR - vec3(uAExtM * odPAM));
+        if (uNL > 0) aerial = atmoInscatter(uLD[0], uLC[0], tR0, tM0);
+        if (uNL > 1) aerial += atmoInscatter(uLD[1], uLC[1], tR1, tM1);
+        if (uNL > 2) aerial += atmoInscatter(uLD[2], uLC[2], tR2, tM2);
+        if (uNL > 3) aerial += atmoInscatter(uLD[3], uLC[3], tR3, tM3);
+      }
+    }
+  }
   vec3 lit = uAmb * s2.rgb * (0.55 + 0.45 * clamp(dot(N, V), 0.0, 1.0));
   for (int i = 0; i < 8; i++) {
     if (i >= uNL) break;
     float ndl = dot(N, uLD[i]);
-    float dif = smoothstep(-0.015, 0.05, ndl);
-    float occ = dif > 0.0 ? eclipseOcc(N, uLD[i], uEcl[i], uLAux[i]) : 1.0;
-    lit += s2.rgb * uLC[i] * dif * occ;
+    float dif = uAOn > 0.5 ? smoothstep(-0.008, 0.02, ndl) : smoothstep(-0.015, 0.05, ndl);
+    float occ = 1.0;
+    if (dif > 0.0) {
+      vec3 P = uAOn > 0.5 ? Ploc : (vWP - uWC) / max(uARad * 1.015, 1e-6);
+      vec3 ldirL = normalize(uAInv * uLD[i]);
+      occ = eclipseOcc(P, ldirL, uEcl[i], uLAux[i]);
+      if (uAOn > 0.5) {
+        /* v46：occ=0（全食）样本贡献恒零，免 lightSampling（与旧式逐位同值） */
+        vec3 Tsun = vec3(0.0);
+        if (occ > 0.0) {
+          float odCR, odCM;
+          bool over = atmoLightSampling(Ploc, ldirL, uATop, uAHR, uAHM, odCR, odCM);
+          Tsun = over ? exp(-(uAExtR + uAExtA) * odCR - vec3(uAExtM * odCM)) : vec3(0.0);
+        }
+        lit += s2.rgb * uLC[i] * dif * occ * Tsun;
+      } else lit += s2.rgb * uLC[i] * dif * occ;
+    }
   }
-  gl_FragColor = vec4(min(lit, vec3(uCap)), clamp(a2, 0.0, 1.0));
+  lit = lit * Tview + aerial;   /* v43 文章二大气雾：I_A = R_B·T_extinction + I_inscatter */
+  float dithOut = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5;
+  gl_FragColor = vec4(max(min(lit, vec3(uCap)), vec3(0.0)) + dithOut * (min(uCap, 20.0) * 0.05) / 255.0, clamp(a2, 0.0, 1.0));
 }`;
 /* 轨迹：LineSegments（顶点对展开支持分段断开）/ Points，相机系顶点。 */
 /* v24：叠层深度遮挡 —— 轨迹/辅助线按主场景深度逐像素遮挡（用户：宜居带、
@@ -9783,7 +10717,9 @@ let renderer = null, scene = null, overlayScene = null, cameraP = null, cameraO 
  * 物体式退役删除 —— 叠加层恒挂 overlayScene（OutputPass 之后 LDR 叠加层，
  * v20/v24/v28b 路径），遮挡由 OVERLAY_OCCL_FS 纹理比较完成。 */
 let composer = null, renderPass = null, bloomPass = null, outputPass = null, lensPass = null, overlayPass = null;
+let atmoPass = null;   /* v40：大气散射 pass（SebLague 移植） */
 let gaussTex = null, sphereGeo = null, sphereGeoHi = null, sphereGeoLo = null;
+let ringGeo = null;   /* v40：星环几何（行星半径单位，XY 面，法线 = 本地 Z） */
 let helperObj = null, helperGeo = null, hzMeshes = [];
 let skyRT = null, skyReady = false;
 let skyboxSrc = null;   /* v37：当前全景源 Image 留底（上下文恢复重建用） */
@@ -9792,6 +10728,7 @@ const bodies = [];                       // 每天体: {mesh, shell, spin, def, 
 let lineObj = null, ptsObj = null, lineGeo = null, ptsGeo = null, ptsMat = null;
 const _m4 = new THREE.Matrix4();
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+const _qR1 = new THREE.Quaternion(), _qR2 = new THREE.Quaternion(), _qR3 = new THREE.Quaternion();   /* v42：星环姿态 */
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
 const X_AXIS = new THREE.Vector3(1, 0, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
 
@@ -10151,6 +11088,617 @@ class GravLensPass extends Pass {
  * warpPoint）必须驻留经典块（buildSceneFrame/buildTrails/buildHelperOverlay
  * 同块引用），经典块顶层 function 声明进全局 → 本块（module）反向可见。
  * 首版误放本块 → buildSceneFrame 引用 WARP_BMAX 抛 ReferenceError（回归捕获）。 */
+/* ================= v43：大气散射 pass（忠实移植《基于物理的大气渲染》一/二） =================
+ * 移植来源（a525322344.github.io，替换 v40-v42 的 SebLague LUT 方案）：
+ *   文章一：单次散射双层数值积分（rayIntersect / ParticleDensity /
+ *     lightSampling / 渲染方程 I_PA = I_C·S·T(CP)·T(PA) / 数值积分求和），
+ *     ρ(h)=exp(−h/H)；β(λ,0)=8π³(n²−1)²/(3Nλ⁴)，地球 (5.86,12.14,29.64)e-6/m；
+ *     β_M 地球=0.0021/m；Rayleigh 相位 3/(16π)(1+μ²)；Mie 相位 Cornette-Shanks。
+ *   文章二：sqrt(max(R²−CT²,0)) NaN 根修；BO<0 后方剔除；壳内 tA=0；
+ *     视线前方命中行星 → tB=pA；大气雾 I_A = R_B·T + I_inscatter。
+ * 与 v40-v42 LUT 方案的关键差异（用户视觉缺陷根修）：
+ *   - 金星同心条纹/边缘斑点 = 烘焙 LUT（256² half-float 双线性）量化 +
+ *     odViewBaked2 两向差分 —— 直接连 march 积分无任何 LUT 查询；
+ *   - 晨昏线后夜侧亮带 = LUT 掠射区间不可靠 —— lightSampling 逐样本
+ *     h<0 判定（文章一语义）夜侧严格截止；
+ *   - 挡星背面不自然 = reflectedLightStrength hack（SebLague 特有，文章无）
+ *     —— 移除；背景场景按文章二大气雾式 I = bg·T + in-scatter 合成。
+ * 机制集成（既有链路不变）：共形壳层 uAInv；辐照度光源链 uLC（多恒星 ≤4）；
+ *   b.ecl 食影软半影逐样本融合；前景天体解析遮挡；曝光链 / 大气总开关不变。 */
+const ATMO_MAX = 8;                 // 最多同时渲染大气的天体数
+const ATMO_LIGHTS = 4;              // 大气计入的恒星数（与表面光源链前 4 一致）
+
+const ATMO_FS = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D tDiffuse;
+uniform vec2 uOrthoHalf;
+uniform float uOrtho, uTanH, uAspect;
+uniform vec3 uCamR, uCamU, uCamF;
+uniform int uAN;
+uniform vec4 uABody[${ATMO_MAX}];   /* xyz 天体中心（视点系 m），w 行星半径 m */
+uniform vec4 uAPar[${ATMO_MAX}];    /* 大气层顶（本系 r=1 单位）, H_R（本系）, H_M（本系）, 米氏 g */
+uniform vec4 uACoef[${ATMO_MAX}];   /* β_R rgb（β[m^-1]·rP）, β_M（β[m^-1]·rP）—— 文章一海平面系数 */
+uniform vec3 uAAbs[${ATMO_MAX}];    /* β_A rgb（随瑞利密度路径，削光不重发射） */
+uniform mat3 uAInv[${ATMO_MAX}];    /* 世界 m → 天体本系（行星半径=1；含潮汐椭化+自转扁化） */
+uniform float uDithK;               /* v44：抖动曝光缩放系数（= min(1, 1/曝光)） */
+uniform float uALN[${ATMO_MAX}];    /* 恒星数（≤${ATMO_LIGHTS}） */
+uniform vec3 uALD0[${ATMO_MAX}], uALD1[${ATMO_MAX}], uALD2[${ATMO_MAX}], uALD3[${ATMO_MAX}];   /* 恒星方向（世界系，与表面 uLD 同源） */
+uniform vec3 uALC0[${ATMO_MAX}], uALC1[${ATMO_MAX}], uALC2[${ATMO_MAX}], uALC3[${ATMO_MAX}];   /* 辐照度×颜色/π（与表面照明同一光源链） */
+uniform vec4 uAES0[${ATMO_MAX}], uAES1[${ATMO_MAX}], uAES2[${ATMO_MAX}], uAES3[${ATMO_MAX}];   /* 食影遮挡体（本系）: xyz 中心, w 半径（≤0 无；与表面 uEcl 同源） */
+uniform vec3 uAEP0[${ATMO_MAX}], uAEP1[${ATMO_MAX}], uAEP2[${ATMO_MAX}], uAEP3[${ATMO_MAX}];   /* 食影几何: (光源半径比, 光源距离比, 0) */
+uniform vec4 uAOC0[${ATMO_MAX}], uAOC1[${ATMO_MAX}], uAOC2[${ATMO_MAX}], uAOC3[${ATMO_MAX}];
+              /* 前景遮挡天体（本系）: xyz 中心, w 半径（≤0 无）—— 解析遮挡
+               *（深度缓冲在行星距离全量化失效，为 v41 定论的既有机制） */
+` + ATMO_CORE_GLSL + `
+/* raySphere（遮挡/表面命中判定用；文章 rayIntersect 已含后方剔除，此处
+ * 保留旧式（命中体在相机后方时返回 t0=0 语义）供 sceneD 粗取最小值） */
+vec2 raySphere(vec3 centre, float radius, vec3 ro, vec3 rd) {
+  vec3 off = ro - centre;
+  float b = 2.0 * dot(off, rd);
+  float c = dot(off, off) - radius * radius;
+  float d = b * b - 4.0 * c;
+  if (d > 0.0) {
+    float s = sqrt(d);
+    float t0 = max(0.0, (-b - s) / 2.0);
+    float t1 = (-b + s) / 2.0;
+    if (t1 >= 0.0) return vec2(t0, t1 - t0);
+  }
+  return vec2(1.0e30, 0.0);
+}
+/* 两圆重叠面积比（占 r1 盘；与 CPU circleOverlap / 表面 eclipseOcc 同一弓形公式） */
+float circleOverlap(float d, float r1, float r2) {
+  if (d >= r1 + r2) return 0.0;
+  if (d <= abs(r1 - r2)) return r1 <= r2 ? 1.0 : min(r2 * r2 / (r1 * r1), 1.0);
+  float d2 = d * d, a = r1 * r1, b = r2 * r2;
+  float ar = a * acos(clamp((d2 + a - b) / (2.0 * d * r1), -1.0, 1.0))
+           + b * acos(clamp((d2 + b - a) / (2.0 * d * r2), -1.0, 1.0))
+           - 0.5 * sqrt(max(0.0, (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)));
+  return clamp(ar / (3.14159265 * a), 0.0, 1.0);
+}
+/* 食影（本系）：采样点沿恒星方向看遮挡体与恒星盘的角重叠比 ——
+ * 与表面 eclipseOcc 同数据（b.ecl）同公式 → 大气与表面阴影真正融合 */
+float eclipseShadow(vec3 p, vec3 sdir, vec4 ec, vec3 ep) {
+  if (ec.w <= 0.0) return 1.0;
+  vec3 dv = ec.xyz - p;
+  float t = dot(dv, sdir);
+  if (t <= 0.0) return 1.0;
+  float miss = length(dv - t * sdir);
+  float rc = ep.x * t / max(ep.y, 1e-6);
+  return 1.0 - circleOverlap(miss, rc, ec.w);
+}
+/* 单天体单次散射主循环（文章一双循环逐式 + 三处必要扩展：
+ * ①形变空间共形壳层 ②前景天体解析遮挡 ③多天体食影/多恒星求和） */
+void main() {
+  vec4 orig = texture2D(tDiffuse, vUv);
+  vec3 col = orig.rgb;
+  /* v46：输出抖动提前算好（早退与尾部共用同一表达式，数值不变） */
+  float dith = (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) * 0.002 * uDithK;
+  if (uAN <= 0) { gl_FragColor = orig; return; }
+  /* 视线重建（场景坐标 = 视点系：透视 ro=原点；正交 = 视点面平行光线） */
+  vec2 ndc = vUv * 2.0 - 1.0;
+  vec3 rd;
+  vec3 ro;
+  if (uOrtho > 0.5) {
+    ro = uCamR * (ndc.x * uOrthoHalf.x) + uCamU * (ndc.y * uOrthoHalf.y);
+    rd = uCamF;
+  } else {
+    ro = vec3(0.0);
+    rd = normalize(uCamR * (ndc.x * uAspect * uTanH) + uCamU * (ndc.y * uTanH) + uCamF);
+  }
+  /* 远 → 近逐层应用（外层大气透射含内层大气散射结果） */
+  for (int i = 0; i < ${ATMO_MAX}; i++) {
+    if (i >= uAN) break;
+    vec3 relC = uABody[i].xyz;
+    float rP = uABody[i].w;
+    /* 屏外粗剔除（世界系包围球，球半径 = rP·层顶比） */
+    float rA0 = rP * uAPar[i].x;
+    vec3 rel0 = relC - ro;
+    float along0 = dot(rel0, rd);
+    if (along0 < -rA0) continue;
+    if (dot(rel0, rel0) - along0 * along0 > rA0 * rA0) continue;
+    /* 射线 → 天体本系（行星半径=1，共形空间） */
+    mat3 AInv = uAInv[i];
+    vec3 roL = AInv * (ro - relC);
+    vec3 rdL = AInv * rd;
+    float rdS = length(rdL);
+    if (rdS < 1e-12) continue;
+    rdL /= rdS;
+    float atmTop = uAPar[i].x;
+    float hrR = uAPar[i].y;
+    float hrM = uAPar[i].z;
+    float mieG = uAPar[i].w;
+    vec3 coefR = uACoef[i].rgb;
+    float coefM = uACoef[i].a;
+    vec3 coefA = uAAbs[i];
+    /* 文章一/二：rayIntersect 求视线与大气壳交点（含后方剔除） */
+    float tA, tB;
+    if (!atmoRayIntersect(roL, rdL, vec3(0.0), atmTop, tA, tB)) continue;
+    if (tA < 0.0) tA = 0.0;                       /* 文章二：相机在壳内 → 自相机起算 */
+    /* 场景最近距离（本系解析）：自身实体面 + 前景天体遮挡（既有机制） */
+    float dstSurf = raySphere(vec3(0.0), 1.0, roL, rdL).x;
+    float sceneD = dstSurf;
+    for (int k = 0; k < 4; k++) {
+      vec4 oc = k == 0 ? uAOC0[i] : (k == 1 ? uAOC1[i] : (k == 2 ? uAOC2[i] : uAOC3[i]));
+      if (oc.w > 0.0) sceneD = min(sceneD, raySphere(oc.xyz, oc.w, roL, rdL).x);
+    }
+    /* 文章二：视线前方命中行星 → 积分止于表面（tB = pA 语义） */
+    float through = min(tB, sceneD) - tA;
+    if (through <= 0.0) continue;
+    bool surfPix = dstSurf < 1.0e29 && sceneD <= dstSurf * (1.0 + 1e-4) + 1e-4;
+    /* v46 硬件利用率修根：视线命中本天体实面的像素（dstSurf 有限 → surfPix
+     * 恒真，含被前景遮挡的情形），本 pass 的重积分结果必然走不进 if(!surfPix)
+     * 合成支 —— 相机→表面段已由 PLANET_FS/SHELL_FS 以同一积分器算出并合成进
+     * 场景色。旧代码对这类像素仍跑满 16×4 双循环后整段丢弃（星球圆面像素 =
+     * 双倍积分、一半纯废弃，是大气开启后帧率骤降的主因）。此处直接跳过本
+     * 天体迭代（col 不动 = 与旧式丢弃逐位同值），后续更近天体的临边晕仍正常
+     * 合成；环带临边（未命中实面，surfPix=false）像素路径不变。 */
+    if (surfPix) continue;
+    /* 光源方向/食影几何一次变换（本系几何用；相位 μ 用世界系方向保持物理正确） */
+    vec3 ldir0L = normalize(AInv * uALD0[i]);
+    vec3 ldir1L = normalize(AInv * uALD1[i]);
+    vec3 ldir2L = normalize(AInv * uALD2[i]);
+    vec3 ldir3L = normalize(AInv * uALD3[i]);
+    vec4 es0 = uAES0[i], es1 = uAES1[i], es2 = uAES2[i], es3 = uAES3[i];
+    vec3 ep0 = uAEP0[i], ep1 = uAEP1[i], ep2 = uAEP2[i], ep3 = uAEP3[i];
+    /* 文章一双循环：视线中点采样 × 逐光源 lightSampling。
+     * D(PA) 视线前缀累计；D(CP) 由 lightSampling；
+     * T(CPA) = exp(−(β_R+β_A)(D_R,CP+D_R,PA) − β_M(D_M,CP+D_M,PA))；
+     * Σ_l += T·ρ·ds·shadow（ρ 已含 ds）。 */
+    float ds = through / float(${ATMO_VIEW_PTS});
+    float odPAR = 0.0, odPAM = 0.0;
+    vec3 tR0 = vec3(0.0), tR1 = vec3(0.0), tR2 = vec3(0.0), tR3 = vec3(0.0);
+    vec3 tM0 = vec3(0.0), tM1 = vec3(0.0), tM2 = vec3(0.0), tM3 = vec3(0.0);
+    float t = tA;                                 /* 文章确定性中点采样（抖动只用于日路查询点） */
+    for (int k = 0; k < ${ATMO_VIEW_PTS}; k++) {
+      /* v43b：逐段光学深度 = atmoSegOd2 解析积分（大气临边/夜侧条纹同源根因消除） */
+      vec3 p0 = roL + rdL * t;
+      vec2 odRM = atmoSegOd2(p0, rdL, ds, hrR, hrM);
+      float dR = odRM.x, dM = odRM.y;
+      odPAR += dR; odPAM += dM;
+      vec3 p = p0 + rdL * (ds * 0.5);
+      float h = length(p) - 1.0;
+      if (h >= 0.0) {
+        for (int L = 0; L < ${ATMO_LIGHTS}; L++) {
+          if (float(L) >= uALN[i]) break;
+          vec3 ldirL = L == 0 ? ldir0L : (L == 1 ? ldir1L : (L == 2 ? ldir2L : ldir3L));
+          vec3 ldirW = L == 0 ? uALD0[i] : (L == 1 ? uALD1[i] : (L == 2 ? uALD2[i] : uALD3[i]));
+          vec3 lcol = L == 0 ? uALC0[i] : (L == 1 ? uALC1[i] : (L == 2 ? uALC2[i] : uALC3[i]));
+          /* 既有机制：多天体食影软半影（文章的行星自遮挡已由 lightSampling
+           * 的射线-球精确判定承担）
+           * v46：食影先判（纯几何，廉价）—— 全影样本（eclS=0）贡献恒零，
+           * 免去 8 段 lightSampling 积分；部分影/无影样本路径与旧式逐位同值 */
+          float eclS = (L == 0 ? eclipseShadow(p, ldirL, es0, ep0)
+                     : (L == 1 ? eclipseShadow(p, ldirL, es1, ep1)
+                     : (L == 2 ? eclipseShadow(p, ldirL, es2, ep2) : eclipseShadow(p, ldirL, es3, ep3))));
+          if (eclS > 0.0) {
+            float odCR, odCM;
+            bool over = atmoLightSampling(p, ldirL, atmTop, hrR, hrM, odCR, odCM);
+            if (over) {
+              vec3 T = exp(-(coefR + coefA) * (odCR + odPAR) - vec3(coefM * (odCM + odPAM)));
+              vec3 acc = T * (dR * eclS);
+              vec3 accM = T * (dM * eclS);
+              if (L == 0) { tR0 += acc; tM0 += accM; }
+              else if (L == 1) { tR1 += acc; tM1 += accM; }
+              else if (L == 2) { tR2 += acc; tM2 += accM; }
+              else { tR3 += acc; tM3 += accM; }
+            }
+          }
+        }
+      }
+      t += ds;
+    }
+    /* 文章一最终组合（逐光源）：I = lightColor·(β_R·P_R(μ)·ΣR + β_M·P_M(μ)·ΣM)。
+     * 未启用光源槽位 uALC=0 → 自动零贡献。 */
+    vec3 scat = vec3(0.0);
+    float mu0 = dot(rd, normalize(uALD0[i]));
+    float mu1 = dot(rd, normalize(uALD1[i]));
+    float mu2 = dot(rd, normalize(uALD2[i]));
+    float mu3 = dot(rd, normalize(uALD3[i]));
+    scat += uALC0[i] * (coefR * (atmoPhaseR(mu0) * tR0) + vec3(coefM * atmoPhaseM(mieG, mu0)) * tM0);
+    scat += uALC1[i] * (coefR * (atmoPhaseR(mu1) * tR1) + vec3(coefM * atmoPhaseM(mieG, mu1)) * tM1);
+    scat += uALC2[i] * (coefR * (atmoPhaseR(mu2) * tR2) + vec3(coefM * atmoPhaseM(mieG, mu2)) * tM2);
+    scat += uALC3[i] * (coefR * (atmoPhaseR(mu3) * tR3) + vec3(coefM * atmoPhaseM(mieG, mu3)) * tM3);
+    /* 文章二大气雾式合成：背景 = 原场景 × 全程透射 + in-scatter。
+     * 表面像元例外 —— 表面着色器已按同一积分器计 T+in-scatter（不双重扣光）。 */
+    if (!surfPix) {
+      vec3 Tbg = exp(-(coefR + coefA) * odPAR - vec3(coefM * odPAM));
+      col = col * Tbg + scat;
+    }
+  }
+  /* ±1e-3 输出抖动（v40-v42 同款）—— v44：幅度乘 uDithK（= 1/曝光，钳 1）随曝光缩放，
+   * 与表面/云层抖动同口径，最终输出恒 ≈±0.5 LSB（v46：表达式前移至 main 开头共用） */
+  col += vec3(dith);
+  gl_FragColor = vec4(col, orig.a);
+}`;
+class AtmospherePass extends Pass {
+  constructor() {
+    super();
+    this.needsSwap = true;
+    this.enabled = false;
+    const v3s = () => new THREE.Vector3();
+    this.uniforms = {
+      tDiffuse: { value: null },
+      uOrthoHalf: { value: new THREE.Vector2(1, 1) },
+      uOrtho: { value: 0 },
+      uTanH: { value: 0.649 }, uAspect: { value: 1.6 },
+      uCamR: { value: v3s() }, uCamU: { value: v3s() }, uCamF: { value: v3s() },
+      uAN: { value: 0 },
+      uABody: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAPar: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uACoef: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAAbs: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector3()) },
+      uAInv: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Matrix3()) },
+      uALN: { value: new Float32Array(ATMO_MAX) },
+      uDithK: { value: 1 },
+      uALD0: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALD1: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALD2: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALD3: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALC0: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALC1: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALC2: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uALC3: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uAES0: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAES1: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAES2: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAES3: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAEP0: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uAEP1: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uAEP2: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uAEP3: { value: Array.from({ length: ATMO_MAX }, v3s) },
+      uAOC0: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAOC1: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAOC2: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
+      uAOC3: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) }
+    };
+    this.material = new THREE.ShaderMaterial({
+      uniforms: this.uniforms, vertexShader: PASS_VS, fragmentShader: ATMO_FS,
+      depthTest: false, depthWrite: false
+    });
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms.tDiffuse.value = readBuffer.texture;
+    const _oc = this.camera;
+    if (_oc) {
+      this.uniforms.uOrtho.value = _oc.isOrthographicCamera ? 1 : 0;
+      /* 正交半宽/半高（世界单位）= (right−left)/2、(top−bottom)/2 */
+      this.uniforms.uOrthoHalf.value.set(
+        _oc.isOrthographicCamera ? (_oc.right - _oc.left) / 2 : 0,
+        _oc.isOrthographicCamera ? (_oc.top - _oc.bottom) / 2 : 0);
+    }
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    if (!this.renderToScreen && this.clear) renderer.clear();
+    this.fsQuad.render(renderer);
+  }
+}
+/* 每帧填充大气 uniforms（renderFrame 在天体变换循环之后调用 —— uAInv 必须
+ * 取自本帧 def/spin 四元数与缩放，与网格渲染严格同帧同形，无旋转/缩放滞后） */
+const _atM4a = new THREE.Matrix4(), _atM4b = new THREE.Matrix4(), _atM4c = new THREE.Matrix4();
+const _atU3 = new THREE.Matrix3();
+const _atV = new THREE.Vector3(), _atV2 = new THREE.Vector3(), _atV3 = new THREE.Vector3();
+function updateAtmosphereUniforms(fr, env) {
+  if (!atmoPass) return;
+  const U = atmoPass.uniforms;
+  /* v44：输出抖动的曝光缩放（线性抖动被输出曝光等比放大，此处折算回 ±0.5 LSB） */
+  U.uDithK.value = Math.min(1, 1 / Math.max(ren.exposure, 1e-9));
+  let list = [];
+  /* 先复位所有天体表面/云层的大气透射开关（uAOn=0）—— 逐帧全量重置防残留 */
+  for (const b of fr.bodies) {
+    const rec = bodies[b.i];
+    if (!rec) continue;
+    rec.planetMat.uniforms.uAOn.value = 0;
+    rec.shellMat.uniforms.uAOn.value = 0;
+    /* v43：本系变换复位为 (1/radM)·I（非单位阵！）—— 食影 ecL = uAInv·(ec·uARad)
+     * 与 ldirL = uAInv·uLD 的量纲一致化依赖 uAInv 携带 1/radM 尺度；复位成单位阵
+     * 会让无大气天体的遮挡体数据从半径单位膨胀成米（本影消失）。radM≤0 时无
+     * 圆面，单位阵即可。 */
+    const invS = b.radM > 0 ? 1 / b.radM : 1;
+    _atU3.set(invS, 0, 0, 0, invS, 0, 0, 0, invS);
+    rec.planetMat.uniforms.uAInv.value.copy(_atU3);
+    rec.shellMat.uniforms.uAInv.value.copy(_atU3);
+  }
+  /* v42：渲染层大气总开关（与宜居带/辅助网格同组的渲染开关）；关闭时 pass
+   * 不启用，表面/云层 uAOn 已复位 → 表面着色同步回退无大气口径 */
+  if (!env.atmoOn) {
+    atmoPass.enabled = false;
+    U.uAN.value = 0;
+    return;
+  }
+  if (env.projMode === 'persp' || env.projMode === 'ortho') {
+    for (const b of fr.bodies) {
+      if (!b.atmo || b.mode !== 1 || b.isBH) continue;
+      if (!b.phys || !(b.radM > 0)) continue;
+      if (!(b.mag > 0)) continue;
+      list.push(b);   /* v46：先全量收集，视锥粗筛 + 远→近排序后再截断 ATMO_MAX */
+    }
+  }
+  if (!list.length) { atmoPass.enabled = false; U.uAN.value = 0; return; }
+  /* 屏序：按沿光线距离远 → 近排序（反射衰减逐层套用）；本帧相机基已知 */
+  const eW = activeCam.matrixWorld.elements;
+  const F = { x: -eW[8], y: -eW[9], z: -eW[10] };
+  const eye = env.eye;
+  for (const b of list) {
+    const c = { x: b.wx - eye[0], y: b.wy - eye[1], z: b.wz - eye[2] };
+    b.__atmoD = c.x * F.x + c.y * F.y + c.z * F.z;
+  }
+  list.sort((a, b) => b.__atmoD - a.__atmoD);
+  /* v46 视锥粗筛（硬件利用率）：大气壳包围球与视锥不相交的天体不进 pass 列表
+   * —— 这些天体的像素本就会被逐像素包围球测试剔除（贡献恒零），此处只省下
+   * 整帧全屏 pass 的调度与无效像素开销。判定保守，绝不误剔屏内天体：
+   * 透视 = 四侧面内法线违反量（任一超过包络球角半径正弦 → 必不可见，
+   * 角距(ĉ,半空间交集) ≥ max 角距(ĉ,各半空间) 的集合包含下界）；
+   * 正交 = 轴对齐 slab（精确）。相机在包络球内一律视为可见。 */
+  {
+    const Rx = eW[0], Ry = eW[1], Rz = eW[2], Ux = eW[4], Uy = eW[5], Uz = eW[6];
+    const tanHc = Math.tan(fovDeg * Math.PI / 360), aspectC = env.viewW / env.viewH;
+    const isOrtho = activeCam.isOrthographicCamera;
+    const ohx = isOrtho ? (activeCam.right - activeCam.left) / 2 : 0;
+    const ohy = isOrtho ? (activeCam.top - activeCam.bottom) / 2 : 0;
+    list = list.filter(b => {
+      const rx = b.wx - eye[0], ry = b.wy - eye[1], rz = b.wz - eye[2];
+      const rA = b.radM * (1 + b.atmo.scale / 100);      /* 层顶包围半径（与 atmoOpticsOf.topL 同式） */
+      const along = rx * F.x + ry * F.y + rz * F.z;
+      if (along < -rA) return false;                     /* 整球在眼平面后（与着色器剔除同式） */
+      const dx = rx * Rx + ry * Ry + rz * Rz, dy = rx * Ux + ry * Uy + rz * Uz;
+      if (isOrtho) return Math.abs(dx) <= ohx + rA && Math.abs(dy) <= ohy + rA;
+      const dist = Math.sqrt(rx * rx + ry * ry + rz * rz);
+      if (dist <= rA) return true;                       /* 相机在包络球内 */
+      const cf = (rx * F.x + ry * F.y + rz * F.z) / dist;
+      if (cf <= 0) return true;                          /* 中心在眼平面后：交叠可能，不剔 */
+      const cR = (rx * Rx + ry * Ry + rz * Rz) / dist, cU = (rx * Ux + ry * Uy + rz * Uz) / dist;
+      const rd = rA / dist;                              /* 包络球角半径正弦 */
+      const kX = Math.sqrt(1 + tanHc * tanHc * aspectC * aspectC), kY = Math.sqrt(1 + tanHc * tanHc);
+      const tX = tanHc * aspectC;
+      const s1 = (cR + cf * tX) / kX;                    /* 左侧内法线 (R + F·tanX)/kX */
+      const s2 = (cf * tX - cR) / kX;                    /* 右侧内法线 (F·tanX − R)/kX */
+      const s3 = (cU + cf * tanHc) / kY;                 /* 下侧内法线 (U + F·tanY)/kY */
+      const s4 = (cf * tanHc - cU) / kY;                 /* 上侧内法线 (F·tanY − U)/kY */
+      const worst = Math.min(s1, s2, s3, s4, 0);
+      return worst >= -rd;                               /* 违反量均未超过角半径 → 保留 */
+    });
+  }
+  if (list.length > ATMO_MAX) list.length = ATMO_MAX;
+  atmoPass.enabled = list.length > 0;
+  U.uAN.value = list.length;
+  if (!list.length) return;
+  /* 前景遮挡体候选：沿视线方向且投影距 < 大气球半径 + 自身半径的其它天体，
+   * 取沿轴最近 4 个（着色器内逐像素精确判定；CPU 只做粗选控 uniform 预算） */
+  const cands = [];
+  for (const o of fr.bodies) {
+    if (o.isBH || !(o.radM > 0)) continue;
+    if (o.mode !== 1 && o.mode !== 2) continue;
+    cands.push(o);
+  }
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i], a = b.atmo;
+    const relX = b.wx - eye[0], relY = b.wy - eye[1], relZ = b.wz - eye[2];
+    const radW = b.radM;                       /* phys 圆面渲染半径 = radM（与网格同源） */
+    U.uABody.value[i].set(relX, relY, relZ, radW);
+    /* v43 文章一参数折算（本系单位 = 行星半径）：
+     * 层顶 top = 1 + scale/100；H_R = 壳厚/falloff（密度衰减 = 壳内 e 折叠数，
+     * ρ(层顶) = exp(−falloff)）；H_M = H_R·mieHR（文章 _MieScaleHeight，
+     * 地球 1200m/8330m ≈ 0.144）。 */
+    /* v43：atmoOpticsOf 统一计算（与 normK 标定/计量同一实现） */
+    const O = atmoOpticsOf(a, radW);
+    U.uAPar.value[i].set(O.topL, O.hrR, O.hrM, a.mieG);
+    U.uACoef.value[i].set(O.cR[0], O.cR[1], O.cR[2], O.cM);
+    U.uAAbs.value[i].set(O.cA[0], O.cA[1], O.cA[2]);
+    /* 本系变换：L = R_tide·S_tide·R_spin·S_f·rad（网格线性部分），AInv = L⁻¹
+     * （世界 m → 本系行星半径=1）。取自本帧 rec.def/rec.spin —— 与网格同帧。 */
+    const rec = bodies[b.i];
+    _atM4a.compose(_atV.set(0, 0, 0), rec.def.quaternion, rec.def.scale);
+    _atM4b.compose(_atV.set(0, 0, 0), rec.spin.quaternion, rec.spin.scale);
+    _atM4a.multiply(_atM4b);
+    _atM4c.makeScale(radW, radW, radW);
+    _atM4a.multiply(_atM4c);
+    _atM4a.invert();
+    U.uAInv.value[i].setFromMatrix4(_atM4a);
+    /* 光源 + 食影（与表面 eclipseOcc 同源同式；中心变换到本系）。v42：4 光源 */
+    const nl = Math.min(ATMO_LIGHTS, (b.lights || []).length);
+    U.uALN.value[i] = nl;
+    for (let k = 0; k < ATMO_LIGHTS; k++) {
+      const L = k < nl ? b.lights[k] : null;
+      const UD = (k === 0 ? U.uALD0 : k === 1 ? U.uALD1 : k === 2 ? U.uALD2 : U.uALD3).value[i];
+      const UC = (k === 0 ? U.uALC0 : k === 1 ? U.uALC1 : k === 2 ? U.uALC2 : U.uALC3).value[i];
+      if (L) {
+        UD.set(L.d[0], L.d[1], L.d[2]);
+        UC.set(L.c[0], L.c[1], L.c[2]);
+      } else {
+        UD.set(0, 0, 1);
+        UC.set(0, 0, 0);
+      }
+      const E = (b.ecl && k < nl) ? b.ecl[k] : null;
+      const ES = (k === 0 ? U.uAES0 : k === 1 ? U.uAES1 : k === 2 ? U.uAES2 : U.uAES3).value[i];
+      const EP = (k === 0 ? U.uAEP0 : k === 1 ? U.uAEP1 : k === 2 ? U.uAEP2 : U.uAEP3).value[i];
+      if (E) {
+        _atV2.set(E.p[0] * radW, E.p[1] * radW, E.p[2] * radW).applyMatrix3(U.uAInv.value[i]);
+        ES.set(_atV2.x, _atV2.y, _atV2.z, E.r);
+        EP.set(E.srcR, E.dsrc, 0);
+      } else { ES.set(0, 0, 0, -1); EP.set(0, 1, 1); }
+    }
+    /* 前景遮挡体（本系）：中心 = AInv·(Cj−Ci)，半径比 rj/radW */
+    _atV3.set(relX, relY, relZ);
+    const ciLen = _atV3.length();
+    const rTop = radW * O.topL;
+    const occ = [];
+    for (const o of cands) {
+      if (o.i === b.i) continue;
+      const ox = o.wx - eye[0], oy = o.wy - eye[1], oz = o.wz - eye[2];
+      const along = (ox * relX + oy * relY + oz * relZ) / (ciLen || 1);
+      if (along <= 0 || along > ciLen + rTop + o.radM) continue;   /* 在身后/远超大气后方 */
+      const px2 = ox * ox + oy * oy + oz * oz - along * along;
+      const rr = Math.sqrt(Math.max(px2, 0));
+      if (rr > rTop + o.radM) continue;
+      occ.push({ o, along });
+    }
+    occ.sort((p, q) => p.along - q.along);
+    for (let k = 0; k < 4; k++) {
+      const T = (k === 0 ? U.uAOC0 : k === 1 ? U.uAOC1 : k === 2 ? U.uAOC2 : U.uAOC3).value[i];
+      if (k < occ.length) {
+        const o = occ[k].o;
+        _atV2.set(o.wx - relX, o.wy - relY, o.wz - relZ).applyMatrix3(U.uAInv.value[i]);
+        T.set(_atV2.x, _atV2.y, _atV2.z, o.radM / radW);
+      } else T.set(0, 0, 0, -1);
+    }
+    /* v43 表面/云层着色（文章一/二）：与 pass 完全同一套系数/标高 ——
+     * T_sun + T_view + in-scatter 同积分器同口径，晨昏线/临边天然无缝 */
+    for (const m of [rec.planetMat, rec.shellMat]) {
+      const MU = m.uniforms;
+      MU.uAOn.value = 1;
+      MU.uATop.value = O.topL;
+      MU.uAHR.value = O.hrR;
+      MU.uAHM.value = O.hrM;
+      MU.uAExtR.value.set(O.cR[0], O.cR[1], O.cR[2]);
+      MU.uAExtA.value.set(O.cA[0], O.cA[1], O.cA[2]);
+      MU.uAExtM.value = O.cM;
+      MU.uAMieG.value = a.mieG;
+      MU.uWC.value.set(relX, relY, relZ);
+      MU.uARad.value = radW;
+      MU.uAInv.value.copy(U.uAInv.value[i]);
+      /* v44：相机基逐帧同步（NDC 射线重建 —— 表面/云层 march 与网格解耦） */
+      const eWc = activeCam ? activeCam.matrixWorld.elements : null;
+      if (eWc) {
+        MU.uCamR.value.set(eWc[0], eWc[1], eWc[2]);
+        MU.uCamU.value.set(eWc[4], eWc[5], eWc[6]);
+        MU.uCamF.value.set(-eWc[8], -eWc[9], -eWc[10]);
+        MU.uTanH.value = Math.tan(fovDeg * Math.PI / 360);
+        MU.uAspect.value = env.viewW / env.viewH;
+        MU.uOrtho.value = activeCam.isOrthographicCamera ? 1 : 0;
+        MU.uOrthoHalf.value.set(activeCam.isOrthographicCamera ? (activeCam.right - activeCam.left) / 2 : 0,
+                                activeCam.isOrthographicCamera ? (activeCam.top - activeCam.bottom) / 2 : 0);
+      }
+    }
+  }
+}
+/* v43：调试/测试钩子 —— 文章一公式 CPU 直算自检 + pass 状态。
+ * selfTest 校验四类锚点：
+ *  1) β_R 公式（8π³(n²−1)²/(3Nλ⁴)）@550/440nm vs 文章地球常数（≤1.5%）；
+ *  2) lightSampling JS 孪生：垂直柱光学深度 vs 解析 H(1−e^(−top/H))（≤2%）；
+ *  3) Cornette-Shanks / Rayleigh 相位锚值；
+ *  4) 视线积分（文章一双循环 JS 孪生）在 16 采样 vs 2000 采样的收敛性（≤5%）。 */
+window.__ATMO_DEBUG__ = {
+  status() {
+    if (!atmoPass) return { active: false };
+    return { active: atmoPass.enabled, n: atmoPass.uniforms.uAN.value,
+      exposure: renderer ? renderer.toneMappingExposure : null };
+  },
+  setOn(v) { if (atmoPass) atmoPass.enabled = !!v; },
+  /* v43：强制改写天体 i 的 uEcl[0].w（本影链路验证用） */
+  forceEcl(i, w) {
+    const rec = bodies[i];
+    if (rec && rec.planetMat) rec.planetMat.uniforms.uEcl.value[0].w = w;
+  },
+  forceLAux(i, y, z) {
+    const rec = bodies[i];
+    if (rec && rec.planetMat) { rec.planetMat.uniforms.uLAux.value[0].y = y; rec.planetMat.uniforms.uLAux.value[0].z = z; }
+  },
+  /* v43：天体 i 的大气 uniforms dump（测试/校验用） */
+  dump(i) {
+    const rec = bodies[i];
+    if (!rec || !rec.planetMat) return null;
+    const u = rec.planetMat.uniforms;
+    const v3 = x => (x && x.toArray ? x.toArray().map(v => +v.toPrecision(6)) : x);
+    return {
+      uAOn: u.uAOn.value, uATop: u.uATop.value, uAHR: u.uAHR.value, uAHM: u.uAHM.value,
+      uAExtR: v3(u.uAExtR.value), uAExtA: v3(u.uAExtA.value), uAExtM: u.uAExtM.value, uAMieG: u.uAMieG.value,
+      uNL: u.uNL.value, uLD0: v3(u.uLD.value[0]), uLC0: v3(u.uLC.value[0]),
+      uLAux0: v3(u.uLAux.value[0]), uEcl0full: v3(u.uEcl.value[0]), uARad: u.uARad.value,
+      uCapV: u.uCap.value,
+      uAmb: u.uAmb.value, uCap: u.uCap.value,
+      uEcl0: u.uEcl ? Array.from(u.uEcl.value[0].toArray ? u.uEcl.value[0].toArray() : []).map(x => +x.toPrecision(6)) : null,
+      pass: atmoPass ? { n: atmoPass.uniforms.uAN.value,
+        par0: Array.from(atmoPass.uniforms.uAPar.value[0].toArray ? atmoPass.uniforms.uAPar.value[0].toArray() : []).map(x => +x.toPrecision(6)),
+        coef0: Array.from(atmoPass.uniforms.uACoef.value[0].toArray ? atmoPass.uniforms.uACoef.value[0].toArray() : []).map(x => +x.toPrecision(6)),
+        ln0: atmoPass.uniforms.uALN.value[0],
+        lc0: v3(atmoPass.uniforms.uALC0.value[0]) } : null
+    };
+  },
+  /* JS 孪生（与 GLSL ATMO_CORE_GLSL 逐式同构）：文章一 lightSampling */
+  lightSamplingJS(P, S, top, hrR, hrM, nPts) {
+    const L = [0 - P[0], 0 - P[1], 0 - P[2]];
+    const DT = L[0] * S[0] + L[1] * S[1] + L[2] * S[2];
+    const R2 = top * top;
+    const CT2 = L[0] * L[0] + L[1] * L[1] + L[2] * L[2] - DT * DT;
+    if (CT2 > R2) return null;
+    const AT = Math.sqrt(Math.max(R2 - CT2, 0));
+    const BO = DT + AT;
+    if (BO < 0) return null;
+    const ds = BO / nPts;
+    let odR = 0, odM = 0;
+    for (let i = 0; i < nPts; i++) {
+      const q = [P[0] + S[0] * (ds * (i + 0.5)), P[1] + S[1] * (ds * (i + 0.5)), P[2] + S[2] * (ds * (i + 0.5))];
+      const h = Math.hypot(q[0], q[1], q[2]) - 1;
+      if (h < 0) return null;
+      odR += Math.exp(-h / hrR) * ds;
+      odM += Math.exp(-h / hrM) * ds;
+    }
+    return [odR, odM];
+  },
+  selfTest() {
+    const PI = Math.PI;
+    let ok = true;
+    const rows = [];
+    const N_E = 2.504e25, N_AIR = 1.00029;
+    const beta = (nm, N) => 8 * PI ** 3 * Math.pow(N_AIR * N_AIR - 1, 2) / (3 * N * Math.pow(nm * 1e-9, 4));
+    /* 1) 文章一 β 公式 vs 文章地球常数（12.14e-6 @550nm；29.653e-6 @440nm） */
+    for (const [nm, ref] of [[550, 12.14e-6], [440, 29.653e-6]]) {
+      const v = beta(nm, N_E);
+      const rel = Math.abs(v - ref) / ref;
+      ok = ok && rel < 0.015;
+      rows.push(['betaR@' + nm + 'nm', +v.toExponential(4), +ref.toExponential(4), +rel.toFixed(4), rel < 0.015]);
+    }
+    /* 2) 垂直柱光学深度：march vs 解析 H(1−e^(−(top−1)/H))（地表 h=0 起，
+     *    方向取真实外法向 (0,0,1)——旧用例 (0,1,0) 为切向几何病态） */
+    const top = 1.016, hrR = (top - 1) / 12;
+    const ana = hrR * (1 - Math.exp(-(top - 1) / hrR));
+    const ls = this.lightSamplingJS([0, 0, 1.0], [0, 0, 1.0], top, hrR, hrR * 0.144, 16);
+    const rel2 = ls ? Math.abs(ls[0] - ana) / ana : 1;
+    ok = ok && rel2 < 0.04;   /* 16 段中点求积 exp 的离散化误差 ~2.3%（(ds/H)²/24），阈值放宽到 4% */
+    rows.push(['vertOD', ls ? +ls[0].toFixed(6) : NaN, +ana.toFixed(6), +rel2.toFixed(4), rel2 < 0.04]);
+    /* 3) 相位锚值：Rayleigh 3/(16π)·2 @μ=1；Cornette-Shanks(0.76, μ=1) ≈ 2.8305 */
+    const pR = 3 / (16 * PI) * 2;
+    ok = ok && Math.abs(pR - 0.1193662) < 1e-6;
+    rows.push(['phaseR(mu=1)', +pR.toFixed(7), 0.1193662, 0, true]);
+    const g = 0.76, a = 1 + g * g - 2 * g;
+    const pM = 3 * (1 - g * g) * 2 / (8 * PI * (2 + g * g) * a * Math.sqrt(a));
+    const rel3 = Math.abs(pM - 2.83054) / 2.83054;
+    ok = ok && rel3 < 0.005;
+    rows.push(['phaseM(g=.76,mu=1)', +pM.toFixed(5), 2.83054, +rel3.toFixed(4), rel3 < 0.005]);
+    /* 4) 视线积分收敛性：掠射弦 D(PA) 终值 16 采样 vs 2000 采样（≤5%）
+     *    几何：相机贴于 h≈0.01 处、近拱点 ≈1.0044（密度 e^0~e^−7 有意义区间） */
+    const marchD = (nPts) => {
+      const ro = [0, 0, 1.01], rd = [0, -0.995, -0.1047];
+      let tA = null;
+      { /* atmoRayIntersect JS 孪生 */
+        const L = [-ro[0], -ro[1], -ro[2]];
+        const DT = L[0] * rd[0] + L[1] * rd[1] + L[2] * rd[2];
+        const CT2 = L[0] * L[0] + L[1] * L[1] + L[2] * L[2] - DT * DT;
+        if (CT2 > top * top) return 0;
+        const AT = Math.sqrt(Math.max(top * top - CT2, 0));
+        tA = Math.max(DT - AT, 0);
+        const BO = DT + AT;
+        if (BO < 0) return 0;
+        var tB = BO;
+      }
+      const ds = (tB - tA) / nPts;
+      let od = 0;
+      for (let k = 0; k < nPts; k++) {
+        const p = [ro[0] + rd[0] * (tA + ds * (k + 0.5)), ro[1] + rd[1] * (tA + ds * (k + 0.5)), ro[2] + rd[2] * (tA + ds * (k + 0.5))];
+        const h = Math.hypot(p[0], p[1], p[2]) - 1;
+        if (h >= 0) od += Math.exp(-h / hrR) * ds;
+      }
+      return od;
+    };
+    const coarse = marchD(16), fine = marchD(2000);
+    const rel4 = fine > 1e-12 ? Math.abs(coarse - fine) / fine : 0;
+    ok = ok && rel4 < 0.05;
+    rows.push(['viewOD 16v2000', +coarse.toFixed(5), +fine.toFixed(5), +rel4.toFixed(4), rel4 < 0.05]);
+    return { ok, rows };
+  }
+};
+
 window.__bhLensTest = () => {
   const rhoOfB = lensRhoOfB;
   let mono = true, prev = Infinity;
@@ -10427,6 +11975,28 @@ function setBodyTextures(i, img1, img2) {
   if (img1) rec.rt1 = buildCubeFromPano(img1, cubeFaceSizeFor(img1), true);
   if (img2) rec.rt2 = buildCubeFromPano(img2, cubeFaceSizeFor(img2), true);
 }
+/* v40：星环贴图（径向条带 Image/URL → 纹理；i<0 时对全部天体清除）。
+ * v41 亮度归一（贴图均值锚定冰环反照率 0.72）→ v45 退役：用户口径
+ * 「反射忠实还原贴图」—— 贴图原值直出（与行星贴图同待遇），见 setBodyRing */
+function setBodyRing(i, img) {
+  if (i < 0 || i >= bodies.length) return;
+  const rec = bodies[i];
+  if (rec.ringTex) { rec.ringTex.dispose(); rec.ringTex = null; }
+  if (!img) { rec.ringMat.uniforms.uTex.value = null; rec.ringAlbBoost = 1; return; }
+  const t = new THREE.Texture(img);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+  t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  rec.ringTex = t;
+  rec.ringMat.uniforms.uTex.value = t;
+  /* v41 反照率归一（贴图均值锚定 0.72）→ v45 退役：用户口径「反射忠实还原
+   * 贴图」—— 反射支直接用贴图原值（与行星贴图同待遇）；本土星贴图旧归一
+   * 系数 ≈7.35（B 环被抬到 ≈1.8 白色反照率 = 观感失真根因之一）。
+   * 保留 1 值供 ringDbg/旧探针读数兼容 */
+  rec.ringAlbBoost = 1;
+}
 
 /* ---------------- 天体对象同步 ---------------- */
 function makeStarMat() {
@@ -10451,7 +12021,21 @@ function makePlanetMat() {
       uHasTex: { value: 0 }, uOp1: { value: 1 }, uTm1: { value: 0 },
       uAmb: { value: AMBIENT_UNLIT }, uAlb: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
       uEmis: { value: new THREE.Vector3(0, 0, 0) },   /* v20：高温黑体发光 */
-      uCap: { value: 12000 }
+      uCap: { value: 12000 },
+      /* v40：环影（uRingOn=0 恒 1 零开销；贴图/轴/中心逐帧同步） */
+      uRingOn: { value: 0 }, uRingOp: { value: 1 }, uWR: { value: 1 },
+      uWC: { value: new THREE.Vector3() }, uRingAx: { value: new THREE.Vector3(0, 1, 0) },
+      uRingTex: { value: null },
+      /* v43：大气透射 + in-scatter（文章一/二；uAOn=0 时零开销直通） */
+      uARad: { value: 1 },
+      /* v44：NDC 射线重建（大气视线几何与网格解耦，根除网格频条纹） */
+      uCamR: { value: new THREE.Vector3() }, uCamU: { value: new THREE.Vector3() },
+      uCamF: { value: new THREE.Vector3() }, uTanH: { value: 0.577 },
+      uAspect: { value: 1.0 }, uOrtho: { value: 0 }, uOrthoHalf: { value: new THREE.Vector2() },
+      uAOn: { value: 0 }, uATop: { value: 1.016 }, uAHR: { value: 0.00133 }, uAHM: { value: 1.9e-4 },
+      uAExtR: { value: new THREE.Vector3(0, 0, 0) }, uAExtA: { value: new THREE.Vector3(0, 0, 0) },
+      uAExtM: { value: 0 }, uAMieG: { value: 0.76 },
+      uAInv: { value: new THREE.Matrix3() }
     }),
     vertexShader: BODY_VS, fragmentShader: PLANET_FS
   });
@@ -10460,10 +12044,36 @@ function makeShellMat() {
   return new THREE.ShaderMaterial({
     uniforms: Object.assign(makeLitUniforms(), {
       uOp2: { value: 1 }, uTm2: { value: 0 }, uAmb: { value: AMBIENT_UNLIT },
-      uCap: { value: 12000 }
+      uCap: { value: 12000 },
+      /* v43：大气透射 + in-scatter（同 PLANET_FS 口径，文章一/二） */
+      uWC: { value: new THREE.Vector3() }, uARad: { value: 1 },
+      uAOn: { value: 0 }, uATop: { value: 1.016 }, uAHR: { value: 0.00133 }, uAHM: { value: 1.9e-4 },
+      uAExtR: { value: new THREE.Vector3(0, 0, 0) }, uAExtA: { value: new THREE.Vector3(0, 0, 0) },
+      uAExtM: { value: 0 }, uAMieG: { value: 0.76 },
+      uAInv: { value: new THREE.Matrix3() },
+      /* v44：NDC 射线重建（同 PLANET_FS，云壳 march 与网格解耦） */
+      uCamR: { value: new THREE.Vector3() }, uCamU: { value: new THREE.Vector3() },
+      uCamF: { value: new THREE.Vector3() }, uTanH: { value: 0.577 },
+      uAspect: { value: 1.0 }, uOrtho: { value: 0 }, uOrthoHalf: { value: new THREE.Vector2() }
     }),
     vertexShader: BODY_VS, fragmentShader: SHELL_FS,
     transparent: true, depthWrite: false
+  });
+}
+/* v40：星环材质（双面半透明，径向条带采样；uWC/uWR 供行星投影遮挡）。
+ * v45：预乘 alpha 自定义混合（src=One / dst=1−srcAlpha）—— RING_FS 输出预乘
+ * 辐射 (C = a·I, α = a)，合成 out = I·a + bg·(1−a)，与标准混合逐位同口径。
+ * v46：背光透射支退役后输出恒为反射预乘形式，混合式保持不变 */
+function makeRingMat() {
+  return new THREE.ShaderMaterial({
+    uniforms: Object.assign(makeLitUniforms(), {
+      uTex: { value: null }, uOp: { value: 1 }, uCap: { value: 12000 }, uAmb: { value: AMBIENT_UNLIT },
+      uWC: { value: new THREE.Vector3() }, uWR: { value: 1 }
+    }),
+    vertexShader: RING_VS, fragmentShader: RING_FS,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+    blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor
   });
 }
 function syncBodies(n) {
@@ -10479,14 +12089,16 @@ function syncBodies(n) {
     const starMat = makeStarMat(), planetMat = makePlanetMat(), shellMat = makeShellMat();
     const mesh = new THREE.Mesh(sphereGeo, starMat);
     const shell = new THREE.Mesh(sphereGeo, shellMat);
-    const spin = new THREE.Group(); spin.add(mesh); spin.add(shell);
+    const ring = new THREE.Mesh(ringGeo, makeRingMat());   /* v40：星环（默认隐藏） */
+    ring.visible = false;
+    const spin = new THREE.Group(); spin.add(mesh); spin.add(shell); spin.add(ring);
     const def = new THREE.Group(); def.add(spin);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: gaussTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
     }));
     sprite.frustumCulled = false;
     scene.add(def); scene.add(sprite);
-    bodies.push({ mesh, shell, spin, def, sprite, starMat, planetMat, shellMat, rt1: null, rt2: null });
+    bodies.push({ mesh, shell, ring, spin, def, sprite, starMat, planetMat, shellMat, ringMat: ring.material, rt1: null, rt2: null, ringTex: null });
   }
 }
 
@@ -10678,6 +12290,10 @@ function updateCamera(env) {
     cameraO.updateProjectionMatrix();
     activeCam = cameraO;
   }
+  /* v41：本帧立即刷新矩阵世界 —— 大气 pass 的相机基（uCamR/U/F）取自
+   * matrixWorld；旧实现依赖上一帧 composer.render 内的更新 = 相机基恒滞后
+   * 一帧（「大气旋转/缩放跟随延迟」根因之一） */
+  activeCam.updateMatrixWorld(true);
   renderPass.camera = activeCam;
 }
 
@@ -10691,7 +12307,9 @@ function copyLights(U, b) {
     else { U.uLD.value[k].set(0, 0, 1); U.uLC.value[k].set(0, 0, 0); }
     const E = (b.ecl && k < nl) ? b.ecl[k] : null;
     if (E) { U.uEcl.value[k].set(E.p[0], E.p[1], E.p[2], E.r); U.uLAux.value[k].set(E.t0, E.srcR, E.dsrc); }
-    else { U.uEcl.value[k].set(0, 0, 0, 0); U.uLAux.value[k].set(0, 1, 1); }
+    /* v45：无食遮挡时回退光源真值（ecl 循环 stash 的 srcR/dsrc）—— 旧 (0,1,1)
+     * 等效 1rad 假想光源盘，环行星自影半影虚宽 ≈ 行星半径量级 */
+    else { U.uEcl.value[k].set(0, 0, 0, 0); U.uLAux.value[k].set(0, (L && L.srcR) || 1, (L && L.dsrc) || 1); }
   }
 }
 /* v24：透镜/天空 uniforms 复用临时对象（消除逐帧分配的 GC 抖动 —— 渲染优化，
@@ -10719,6 +12337,19 @@ function renderFrame(fr, env) {
    * shader 逐透镜判定遮挡（前后关系/多黑洞遮挡正确，见 LENS_FS 头注）。 */
   const lensList = env.lens || [];
   lensPass.enabled = lensList.length > 0;
+  /* v40：大气 pass 相机口径（uCamR/U/F 同 GravLensPass 口径）；
+   * v41：updateAtmosphereUniforms 移至天体变换循环之后（uAInv 须取本帧
+   * def/spin 变换，见函数头注），此处仅设置相机相关 uniform */
+  if (atmoPass) {
+    atmoPass.camera = activeCam;
+    const A = atmoPass.uniforms;
+    const eWa = activeCam.matrixWorld.elements;
+    A.uCamR.value.set(eWa[0], eWa[1], eWa[2]);
+    A.uCamU.value.set(eWa[4], eWa[5], eWa[6]);
+    A.uCamF.value.set(-eWa[8], -eWa[9], -eWa[10]);
+    A.uTanH.value = Math.tan(fovDeg * Math.PI / 360);
+    A.uAspect.value = env.viewW / env.viewH;
+  }
   if (lensPass.enabled) {
     const U = lensPass.uniforms;
     const glH = env.viewH * env.resFactor;
@@ -10915,6 +12546,49 @@ function renderFrame(fr, env) {
       U.uCap.value = uCapVal;
       copyLights(U, b);
     }
+    /* v40：星环逐帧同步（贴图由 setBodyRing 预载；此处仅几何/光照/投影参数）。
+     * v41：uWC/uARad 无条件填充 —— PLANET_FS/SHELL_FS 的新食影几何
+     * eclipseOcc(P) 需要天体中心与渲染半径（含无大气天体） */
+    {
+      const ringMesh = rec.ring;
+      const PU = rec.planetMat.uniforms;
+      PU.uWC.value.set(relX, relY, relZ);
+      PU.uARad.value = radWorld;
+      rec.shellMat.uniforms.uWC.value.set(relX, relY, relZ);
+      rec.shellMat.uniforms.uARad.value = radWorld;
+      if (b.ring && b.ring.tex && rec.ringMat.uniforms.uTex.value && b.mode === 1 && mesh.visible && !b.isBH) {
+        ringMesh.visible = true;
+        ringMesh.scale.setScalar(radWorld);
+        /* v42：环独立姿态 = R_z(node)·R_x(tilt)·R_z(ringAng)（spin 组本地系）。
+         * tilt/node 来自表单（相对星体赤道），ringAng = 2π·simTime/环自转周期
+         * （留空 = 0，随星体几何）。径向条带贴图绕 Z 旋转无畸变。 */
+        const tiltR = ((b.ring.tilt !== undefined ? +b.ring.tilt : 0) || 0) * Math.PI / 180;
+        const nodeR = ((b.ring.node !== undefined ? +b.ring.node : 0) || 0) * Math.PI / 180;
+        _qR1.setFromAxisAngle(Z_AXIS, nodeR);
+        _qR2.setFromAxisAngle(X_AXIS, tiltR);
+        _qR3.setFromAxisAngle(Z_AXIS, b.ringAng || 0);
+        ringMesh.quaternion.copy(_qR1).multiply(_qR2).multiply(_qR3);
+        const RU = rec.ringMat.uniforms;
+        RU.uOp.value = b.ring.op !== undefined ? b.ring.op : 1;
+        RU.uAmb.value = amb;
+        RU.uWC.value.set(relX, relY, relZ);
+        RU.uWR.value = radWorld;
+        RU.uCap.value = uCapVal;
+        copyLights(RU, b);
+        PU.uRingOn.value = 1;
+        PU.uRingOp.value = RU.uOp.value;
+        PU.uWR.value = radWorld;
+        PU.uWC.value.set(relX, relY, relZ);
+        PU.uRingTex.value = rec.ringMat.uniforms.uTex.value;
+        /* 环平面法线（世界系）= spin 四元数 · R_z(node)·R_x(tilt) 作用本系 Z
+         * （R_z 不动 Z；环影 uRingAx 与环影投射同轴） */
+        _v1.set(0, 0, 1).applyQuaternion(_qR1).applyQuaternion(_qR2).applyQuaternion(rec.spin.quaternion);
+        PU.uRingAx.value.copy(_v1);
+      } else {
+        ringMesh.visible = false;
+        PU.uRingOn.value = 0;
+      }
+    }
     /* 点源精灵（亚像素/交叉渐变）：HDR 加性，缩小的行星同样进入 bloom 辉光 */
     const sp = rec.sprite;
     const pk = (b.isBH) ? [0, 0, 0] : capRadiance(b.mode === 0 ? b.peak : (b.psfPeak || [0, 0, 0]));
@@ -10937,6 +12611,9 @@ function renderFrame(fr, env) {
     rec.def.visible = fresh;
     if (!fresh) rec.sprite.visible = false;
   }
+  /* v41：大气 uniforms 在天体变换定稿后填充（uAInv 与网格同帧同形；
+   * 内部同时填充表面/云层的大气透射 uniforms 与前景遮挡/食影数据） */
+  if (atmoPass) updateAtmosphereUniforms(fr, env);
   /* 曝光 + 泛光：阈值 = 1/曝光（等价 v16 的「曝光后阈值 1.0」语义） */
   renderer.toneMappingExposure = env.exposure;
   bloomPass.enabled = !!env.bloomOn;
@@ -10990,6 +12667,12 @@ function init(canvasId, fov) {
     overlayScene = new THREE.Scene();
     /* v30：v29 叠层换挂组 overlayGroup 随物体式退役删除 —— 叠层直接挂 overlayScene */
     composer.addPass(renderPass);
+    /* v40：大气散射 pass（SebLague/Solar-System 移植）—— 场景 → 大气 → 泛光 …
+     * 在 bloom 前注入：临边辉光少量进入泛光，ACES 统一色调映射；
+     * 亮度与表面照明同链（恒星辐照度 uLC），自动曝光/恒星 uCap 饱和
+     * 从结构上保证大气不可能比恒星亮。 */
+    atmoPass = new AtmospherePass();
+    composer.addPass(atmoPass);
     /* v23：透镜移到 bloom 之后 —— bloom 大 mip 会把明亮环带/天空的辉光滑入
      * 捕获区（实测 L=10 影心 0.22 灰 vs 关 bloom 0.02 黑，v22 因环带破碎
      * 未暴露）；透镜全屏替换帧语义下其后置不改变扭曲前景（tDiffuse 已含
@@ -11002,6 +12685,7 @@ function init(canvasId, fov) {
     overlayPass = new OverlayPass(overlayScene, cameraP);
     composer.addPass(overlayPass);
     gaussTex = makeGaussianTex();
+    ringGeo = new THREE.RingGeometry(1.11, 2.27, 180, 1);   /* v40：星环几何（土星主环 1.11–2.27 Rs） */
     sphereGeo = new THREE.SphereGeometry(1, 48, 28);
     /* v19b：远距低模 20×14 —— r≤7px 圆面轮廓弦差 0.086px（Python 预验证），不可辨 */
     sphereGeoLo = new THREE.SphereGeometry(1, 20, 14);
@@ -11103,7 +12787,8 @@ window.__TJS__ = {
   setSkyRot: (rx, ry, rz) => { if (scene) { scene.backgroundRotation.set(rx || 0, ry || 0, rz || 0); } },
   getSkyRot: () => scene ? [scene.backgroundRotation.x, scene.backgroundRotation.y, scene.backgroundRotation.z] : [0, 0, 0],
   bodyCount: () => bodies.length,
-  setSkyPano, setBodyTextures,
+  ringDbg: () => bodies.map(r => ({ boost: r.ringAlbBoost || 0, vis: r.ring.visible, tex: !!r.ringMat.uniforms.uTex.value })),   /* v45：反照率归一退役，随删调试读数 */
+  setSkyPano, setBodyTextures, setBodyRing,
   bloom: (k, v) => { if (k === 'strength') bloomPass.strength = v; else if (k === 'radius') bloomPass.radius = v; else if (k === 'threshold') bloomPass.threshold = v; else if (k === 'on') bloomPass.enabled = !!v; else if (k === 'factors') { const u = bloomPass.compositeMaterial.uniforms.bloomFactors.value; if (Array.isArray(v)) for (let i = 0; i < 5; i++) u[i] = v[i]; else return u.slice(); } else return { strength: bloomPass.strength, radius: bloomPass.radius, threshold: bloomPass.threshold, resolution: bloomPass.resolution ? [bloomPass.resolution.x, bloomPass.resolution.y] : null, enabled: bloomPass.enabled }; },
   info: () => ({ w: renderer.domElement.width, h: renderer.domElement.height, dpr: renderer.getPixelRatio(), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, rtSize: composer.renderTarget1.width + 'x' + composer.renderTarget1.height, bloomRes: bloomPass.resolution.x + 'x' + bloomPass.resolution.y }),
   dbgDirect: (v) => { if (v) { activeCam.updateMatrixWorld(); renderer.render(scene, activeCam); } else composer.render(); },
