@@ -570,8 +570,8 @@ body.free-touch .pad{display:grid}
   </div>
 </div>
 
-<button id="expoDn" title="自动曝光基准偏置 −0.25 EV（暗档最低 −8 EV）">−</button>
-<button id="expoUp" title="自动曝光基准偏置 +0.25 EV（亮档最高 +16 EV，深空长曝）">＋</button>
+<button id="expoDn" title="自动曝光基准偏置 −0.25 EV">−</button>
+<button id="expoUp" title="自动曝光基准偏置 +0.25 EV">＋</button>
 <button id="bodyOverlayToggle" title="天体信息叠加层开关">ⓘ</button>
 <div id="bodyOverlay" style="display:none">
   <div class="ovh"><span id="bodyOvName">—</span><button class="ovx" id="bodyOvClose" title="关闭（ⓘ 重新打开）">×</button></div>
@@ -604,6 +604,16 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v50 两项修复（用户反馈；物理内核/引擎/worker/着色器零改动，详见 worklog）：
+ *      ① 「自定义/空白预设下，从星球库『填入表单』添加内置行星时大气参数丢失，
+ *         且再填一次模板会把手填的大气覆写掉」：builtinLib() 内置条目漏带
+ *         atmosphere 字段（用户模板 libSanitize 自 v40 起就携带）→ 填入走
+ *         fillAtmoForm(undefined) → 大气勾选关闭 + 全字段回默认。修复：内置
+ *         条目与用户模板同 schema，预设自带大气的天体随条目携带
+ *         （atmoSanitize 深拷贝解别名；无大气天体填入即关，语义不变）。
+ *      ② 同原理排查：fillAtmoForm(null) 兜底散射色仍是 v40 旧默认 [700,530,460]，
+ *         与 v43 文章标定/预设/HTML 初始值/atmoSanitize 默认 (660/550/440) 不一致 ——
+ *         添加新天体开大气、未手动改色时 wl 被过时默认覆写。已统一为 660/550/440。
  * v49 一项修复（用户反馈）：只保留曝光修复，回退 v48 全部渲染改动 ——
  *      PLANET_FS/SHELL_FS/ATMO_FS 的【厚云甲多次散射填充】整支退役
  *      （相关门控/合成辅助函数、ISO 常量与填充累加器全部删除），
@@ -1165,7 +1175,7 @@ const SKY_EXP_REF = 1.0667, SKY_COMP_MIN = 0.2, SKY_COMP_MAX = 2.5;
  * 否则计量与点源峰值同随辐照度 F 增长，曝光相消，极亮点源（致密双星）的辉光
  * 无法被自动曝光压低 —— v4 致密双星白屏根因。K=8 时太阳系场景（F≈1 < 封顶）完全不变。 */
 const EXP_TAME_K = 8;
-const EXP_KEY = 0.18, EXP_MIN = 1e-16, EXP_MAX = 6.0, EXP_TAU = 0.3;   /* v20：EXP_MAX 1.2→6.0（主体点测光下地球昼面正常曝光需 ~3.4，标定见 scripts/exposure_test.py；恒星/致密天体仍由 uCap 饱和纯白） */
+const EXP_KEY = 0.18, EXP_MIN = 1e-16, EXP_MAX = 6.3, EXP_TAU = 0.3;   /* v20：EXP_MAX 1.2→6.0（主体点测光下地球昼面正常曝光需 ~3.4，标定见 scripts/exposure_test.py；恒星/致密天体仍由 uCap 饱和纯白） */
 /* v19f：自动曝光基准偏置（EV，摄影档位 2^EV 倍率），± 按钮步进 0.25。
  * v28（用户需求）：暗档扩到 −8 EV、亮档扩到 +16 EV（旧 ±3）——
  * 深空/极暗场景可长时间曝光提亮，亮档覆盖高动态场景压暗。
@@ -1954,7 +1964,29 @@ function matSelectCell(k) {
  * 又清除」—— 保存→setSystem→afterSystemReplaced→matAutoApply 链路会把刚清除的
  * 贴图立刻重贴。此处按天体名记录显式清除的层，自动应用时跳过；用户重新上传
  * 同层贴图时解除。 */
-const matCleared = new Map();   // name -> { l1: bool, l2: bool }
+const matCleared = new Map();   // name -> { l1: bool, l2: bool, l3: bool }
+/* v51：清除记忆序列化/恢复 —— 用户质询「手动清除后会不会又被自动应用」：v40 的
+ * matCleared 仅存内存，刷新页面即失忆 → matAutoApply 把刚清除的贴图/星环按名
+ * 重新贴回。现随偏好落盘（PREFS_KEY），启动时恢复；语义与会话内一致：
+ * 按天体名记层（l1 底层 / l2 上层 / l3 星环），重新上传/设置同层即解除。 */
+function matClearedToObject() {
+  const o = {};
+  for (const [k, e] of matCleared) {
+    const a = []; if (e.l1) a.push(1); if (e.l2) a.push(2); if (e.l3) a.push(3);
+    if (a.length) o[k] = a;
+  }
+  return o;
+}
+function matClearedLoad() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
+    if (!p || !p.matCleared || typeof p.matCleared !== 'object') return;
+    for (const k of Object.keys(p.matCleared)) {
+      const a = Array.isArray(p.matCleared[k]) ? p.matCleared[k].map(Number) : [];
+      if (a.some(x => x === 1 || x === 2 || x === 3)) matCleared.set(k, { l1: a.includes(1), l2: a.includes(2), l3: a.includes(3) });
+    }
+  } catch (e) { /* 存储不可用/损坏静默 */ }
+}
 function matMarkCleared(name, layer) {
   const e = matCleared.get(name) || { l1: false, l2: false, l3: false };
   if (layer === 2) e.l2 = true; else if (layer === 3) e.l3 = true; else e.l1 = true;
@@ -1962,11 +1994,13 @@ function matMarkCleared(name, layer) {
   /* 同步删 v37 贴图记忆，防后续 setSystem 重附路径把清除的贴图带回来 */
   const mem = bodyTexMemory.get(name);
   if (mem) { if (layer === 2) mem.texture2 = null; else if (layer !== 3) mem.texture = null; }
+  savePrefs();   /* v51：清除记忆落盘（刷新后自动应用不再重贴） */
 }
 function matUnmarkCleared(name, layer) {
   const e = matCleared.get(name);
   if (!e) return;
   if (layer === 2) e.l2 = false; else if (layer === 3) e.l3 = false; else e.l1 = false;
+  savePrefs();   /* v51：解除同步落盘 */
 }
 function matAutoApply() {
   /* v19b 天体按名自动应用（仅在用户未手动设置对应层贴图时生效）：
@@ -2985,9 +3019,17 @@ function atmoOpticsOf(a, radM) {
   const Tatm = clampNum(0.2126 * T[0] + 0.7152 * T[1] + 0.0722 * T[2], 0.02, 1);
   return { topL, hrR, hrM, cR, cM, cA, odR, odM, T, Tatm };
 }
+/* v51：环贴图源校验 —— 材质库扫描/自动应用给出的环贴图是相对路径
+ * （textures/saturn_ring.png），旧实现只认 data:image/ → 自动应用的环在
+ * 「存档刷新 / 导出 JSON 再导入」时被静默丢弃（随后 matAutoApply 又按名补回，
+ * 表现为清除/导入行为不一致）。相对路径仅接受本应用扫描器产生的 textures/
+ * 单层文件路径（无协议、无目录上跳、仅图片后缀），与底层/上层贴图的导入
+ * 语义（任意字符串）对齐；跨机器部署缺文件时 bodyRingEnsure 走 onerror 警告。 */
+const RING_TEX_REL_RE = /^textures\/[^\s\/\\?#]+\.(?:jpe?g|png|webp|avif|gif)$/i;
 /* v40：星环参数（任务⑤：星球_任意.jpg 任意=ring 自动应用） */
 function ringSanitize(r) {
-  if (!r || typeof r !== 'object' || typeof r.tex !== 'string' || !r.tex.startsWith('data:image/')) return null;
+  if (!r || typeof r !== 'object' || typeof r.tex !== 'string' ||
+      (!r.tex.startsWith('data:image/') && !RING_TEX_REL_RE.test(r.tex))) return null;
   const op = (typeof r.op === 'number' && isFinite(r.op)) ? Math.min(1, Math.max(0, r.op)) : 1;
   const tilt = (typeof r.tilt === 'number' && isFinite(r.tilt)) ? r.tilt : (parseFloat(r.tilt) || 0);
   const node = (typeof r.node === 'number' && isFinite(r.node)) ? r.node : (parseFloat(r.node) || 0);
@@ -3669,7 +3711,7 @@ const PRESETS = {
          * 气巨    H₂/He 深厚大气（瑞利弱、高层霾），甲烷型吸收给天王星/海王星色。 */
         const ATMO_PRESETS = {
           Earth:   { on: 1, scale: 4.6,  strength: 30,   falloff: 13,  absorb: 0.2, mie: 0.2,    mieG: 0.57, wl: [660, 550, 440] },
-          Venus:   { on: 1, scale: 3.0,  strength: 50,   falloff: 13,  absorb: 0.3,  mie: 0.5,  mieG: 0.9,  wl: [660, 550, 440], mieHR: 1.5 },
+          Venus:   { on: 1, scale: 2.0,  strength: 50,   falloff: 13,  absorb: 0.3,  mie: 0.5,  mieG: 0.9,  wl: [660, 550, 440], mieHR: 1.5 },
           Mars:    { on: 1, scale: 3.9,  strength: 50, falloff: 12,  absorb: 0.15, mie: 0.4,  mieG: 0.7, wl: [660, 550, 440], mieHR: 0.9 },
           Jupiter: { on: 1, scale: 1.5,  strength: 60.0,  falloff: 14,  absorb: 0.12, mie: 0.07, mieG: 0.7, wl: [690, 565, 470], mieHR: 0.5 },
           Saturn:  { on: 1, scale: 1.4,  strength: 60.0,  falloff: 14,  absorb: 0.1,  mie: 0.09, mieG: 0.7, wl: [700, 580, 480], mieHR: 0.5 },
@@ -6727,13 +6769,16 @@ function fillAtmoForm(a) {
   const v = a || {};
   formAtmoMieHR = (v.mieHR !== undefined && v.mieHR !== null && isFinite(parseFloat(v.mieHR))) ? parseFloat(v.mieHR) : null;   /* v47 */
   if (ui.bodyAtmoOn) ui.bodyAtmoOn.checked = !!v.on;
-  if (ui.atmoScale) ui.atmoScale.value = v.scale !== undefined ? v.scale : 1.6;
-  if (ui.atmoStrength) ui.atmoStrength.value = v.strength !== undefined ? v.strength : 10;
-  if (ui.atmoFalloff) ui.atmoFalloff.value = v.falloff !== undefined ? v.falloff : 12;
+  if (ui.atmoScale) ui.atmoScale.value = v.scale !== undefined ? v.scale : 0;
+  if (ui.atmoStrength) ui.atmoStrength.value = v.strength !== undefined ? v.strength : 0;
+  if (ui.atmoFalloff) ui.atmoFalloff.value = v.falloff !== undefined ? v.falloff : 0;
   if (ui.atmoAbsorb) ui.atmoAbsorb.value = v.absorb !== undefined ? v.absorb : 0;
   if (ui.atmoMie) ui.atmoMie.value = v.mie !== undefined ? v.mie : 0;
-  if (ui.atmoMieG) ui.atmoMieG.value = v.mieG !== undefined ? v.mieG : 0.76;
-  const wl = Array.isArray(v.wl) ? v.wl : [700, 530, 460];
+  if (ui.atmoMieG) ui.atmoMieG.value = v.mieG !== undefined ? v.mieG : 0;
+  /* v50：兜底散射色与 v43 文章标定/预设/atmoSanitize 默认统一为 660/550/440 ——
+   * 旧值 [700,530,460] 是 v40（SebLague 资产）遗留，v43 重标定时漏改：添加新
+   * 天体开大气、未手动改色时保存的 wl 被过时默认覆写（与 HTML 初始值不一致）。 */
+  const wl = Array.isArray(v.wl) ? v.wl : [660, 550, 440];
   if (ui.atmoWLr) ui.atmoWLr.value = wl[0];
   if (ui.atmoWLn) ui.atmoWLn.value = wl[1];
   if (ui.atmoWLb) ui.atmoWLb.value = wl[2];
@@ -6852,6 +6897,29 @@ function libStore() {
     } catch (e2) { showToast('星球库保存失败（浏览器存储不可用）', 'error', 3800); return false; }
   }
 }
+/* v51：星环贴图按名解析（用户定版：模板/星球库不携带贴图数据 base64 ——
+ * 贴图在「填入表单」时解析：① 内置环 → HTML 内嵌常量（当前仅土星）；
+ * ② 材质库 → 与 matAutoApply 同规则（星球名_ring/星环/环/rings）。 */
+function builtinRingTexForName(name) {
+  if (typeof SATURN_RING_PNG === 'string' && /^saturn$|^土星$/i.test(String(name || '').trim())) return SATURN_RING_PNG;
+  return null;
+}
+function matFindRingFor(name) {
+  const stem = matStem(name);
+  if (!stem) return null;
+  const key = matFindMatch(stem) || stem;
+  for (const it of matItems) {
+    const s = matStem(it.name);
+    if (!s) continue;
+    const cand = matSplitSuffix(s) || matRawSplit(s);
+    if (!cand) continue;
+    const sfx = (cand.suffix || '').toLowerCase();
+    /* 与 matAutoApply 同规则：先按别名键（key）查，再按本体名主干（stem）查 */
+    const owner = cand.key || cand.prefix;
+    if ((owner === key || owner === stem) && (sfx === 'ring' || sfx === '星环' || sfx === '环' || sfx === 'rings')) return it.url;
+  }
+  return null;
+}
 /* 内置场景星球只读提取（缓存一次；PRESETS make() 为纯函数，重复调用安全） */
 function builtinLib() {
   if (_builtinLib) return _builtinLib;
@@ -6870,7 +6938,24 @@ function builtinLib() {
         pressure: b.pressure > 0 ? String(b.pressure) : '',
         color: b.color || '#FFFFFF',
         spin_tilt_deg: orig.spin_tilt_deg ?? '0', spin_period: orig.spin_period ?? '',
-        tide_k2: orig.tide_k2 ?? '', tide_lag: orig.tide_lag ?? ''
+        tide_k2: orig.tide_k2 ?? '', tide_lag: orig.tide_lag ?? '',
+        /* v50 修复（用户报告：自定义/空白预设下从星球库添加行星大气参数丢失/无效，
+         * 且再填一次模板会把已填的大气覆写掉）：v40 起预设行星带大气散射参数，
+         * 用户模板（libSanitize）也随存随取，唯独本内置提取漏带 atmosphere ——
+         * 「填入表单」走 fillAtmoForm(undefined) → 大气勾选关闭 + 全字段回默认，
+         * 用户在表单先手填的大气参数一并被覆写。现与用户模板同 schema：预设
+         * 自带 atmosphere 的天体（类地/气巨 7 颗）随条目携带（atmoSanitize 深拷贝，
+         * 与 meta 存储对象解别名）；无大气天体（Sun/Mercury/Moon 等）不带字段，
+         * 填入即关 —— 语义正确。 */
+        ...(b.atmosphere ? { atmosphere: atmoSanitize(b.atmosphere) } : {}),
+        /* v51：星环参数随内置条目携带（与 v50 大气修复同原理同链路）——此前内置
+         * 条目漏带 ring，土星模板「填入表单」后环参数（不透明度/倾角/方位角/转速）
+         * 全部丢失。仅携带参数不带贴图数据（用户定版：不需要 base64，贴图在应用时
+         * 由 builtinRingTexForName / 材质库自动应用按名解析）。 */
+        ...(b.ring ? { ring: { op: (typeof b.ring.op === 'number' && isFinite(b.ring.op)) ? b.ring.op : 1,
+          tilt: (typeof b.ring.tilt === 'number' && isFinite(b.ring.tilt)) ? b.ring.tilt : (parseFloat(b.ring.tilt) || 0),
+          node: (typeof b.ring.node === 'number' && isFinite(b.ring.node)) ? b.ring.node : (parseFloat(b.ring.node) || 0),
+          spin: typeof b.ring.spin === 'string' ? b.ring.spin : '' } } : {})
       });
     }
   }
@@ -6912,8 +6997,32 @@ function libApplyToForm(it) {
   if (it.texture2 && it.texture2_op !== undefined && it.texture2_op !== '') ui.texOp2.value = String(Math.min(Math.max(parseFloat(it.texture2_op) || 1, 0), 1));
   if (ui.texDark1) ui.texDark1.checked = it.texture_mode === '1';
   if (ui.texDark2) ui.texDark2.checked = it.texture2_mode === '1';
+  /* v51：星环参数填入（模板链环参数往返；贴图按 模板自带 dataURL → 内置常量 →
+   * 材质库（星球名_ring）顺序解析，模板本身不携带贴图数据 —— 用户定版
+   * 「不需要 base64，textures 有自动应用」）。模板无环字段时与贴图/大气同
+   * 语义：填入即复位（用户显式选择无环星球）。 */
+  if (it.ring) {
+    const _rop = parseFloat(it.ring.op);
+    if (ui.texOpR) ui.texOpR.value = String(Math.min(1, Math.max(0, isFinite(_rop) ? _rop : 1)));
+    if (ui.ringTilt) ui.ringTilt.value = String(+it.ring.tilt || 0);
+    if (ui.ringNode) ui.ringNode.value = String(+it.ring.node || 0);
+    if (ui.ringSpin) ui.ringSpin.value = it.ring.spin || '';
+    if (typeof it.ring.tex === 'string' && it.ring.tex.startsWith('data:image/')) formRing = it.ring.tex;
+    else {
+      const _bt = builtinRingTexForName(it.name);
+      if (_bt) formRing = _bt;
+      else { const _mu = matFindRingFor(it.name); if (_mu) formRing = _mu; }
+    }
+  } else {
+    formRing = null;
+    if (ui.texOpR) ui.texOpR.value = '1';
+    if (ui.ringTilt) ui.ringTilt.value = '0.0';
+    if (ui.ringNode) ui.ringNode.value = '0.0';
+    if (ui.ringSpin) ui.ringSpin.value = '';
+  }
   fillAtmoForm(it.atmosphere);   /* v40：模板大气参数填入 */
   updateTexFormUI();
+  updateRingFormUI();   /* v51：环预览/读数随填入刷新（原漏刷新 → 预览残留） */
   updateRadiusPreview(); updateGhPreview(); updateSpinPreview();
   showToast('已填入「' + it.name + '」' + (it.builtin ? '（内置 · ' + it.preset + '）' : '') + '，请填写轨道与母星后保存', 'info', 4200);
 }
@@ -6936,6 +7045,15 @@ function libSaveFromForm() {
   };
   if (formTex) { t.texture = formTex; if (parseFloat(ui.texOp1.value) !== 1) t.texture_op = String(parseFloat(ui.texOp1.value)); if (ui.texDark1 && ui.texDark1.checked) t.texture_mode = '1'; }
   if (formTex2) { t.texture2 = formTex2; if (parseFloat(ui.texOp2.value) !== 1) t.texture2_op = String(parseFloat(ui.texOp2.value)); if (ui.texDark2 && ui.texDark2.checked) t.texture2_mode = '1'; }
+  { /* v51：星环参数随模板（用户定版：模板不携带贴图数据 —— 不透明度/倾角/方位角/
+     * 转速随存；贴图在「填入表单」时按 内置常量/材质库自动应用（星球名_ring）解析） */
+    const _rop = ui.texOpR ? parseFloat(ui.texOpR.value) : 1;
+    const _rtilt = ui.ringTilt ? (parseFloat(ui.ringTilt.value) || 0) : 0;
+    const _rnode = ui.ringNode ? (parseFloat(ui.ringNode.value) || 0) : 0;
+    const _rspin = ui.ringSpin ? String(ui.ringSpin.value || '').trim() : '';
+    if (formRing || _rtilt !== 0 || _rnode !== 0 || _rspin !== '' || (isFinite(_rop) && _rop !== 1))
+      t.ring = { op: isFinite(_rop) ? Math.min(1, Math.max(0, _rop)) : 1, tilt: _rtilt, node: _rnode, spin: _rspin };
+  }
   { const _at = collectAtmoForm(); if (_at) t.atmosphere = _at; }   /* v40：模板携带大气参数 */
   const i = starLib.findIndex(v => v.name === name);
   if (i >= 0) starLib[i] = t; else starLib.push(t);
@@ -6962,6 +7080,17 @@ function libSanitize(v) {
   t.texture = T(v.texture); t.texture2 = T(v.texture2);
   t.texture_op = S(v.texture_op); t.texture2_op = S(v.texture2_op);
   t.texture_mode = S(v.texture_mode); t.texture2_mode = S(v.texture2_mode);
+  /* v51：星环参数随模板往返（仅参数；tex 仅在自带 dataURL 时保留以兼容手工
+   * 编辑的 JSON —— 本应用「存为模板」写入的一律不携带贴图数据） */
+  if (v.ring && typeof v.ring === 'object') {
+    const _rop = parseFloat(v.ring.op), _rtilt = parseFloat(v.ring.tilt), _rnode = parseFloat(v.ring.node);
+    const _rspin = typeof v.ring.spin === 'string' ? v.ring.spin.trim() : '';
+    const _rtex = (typeof v.ring.tex === 'string' && v.ring.tex.startsWith('data:image/')) ? v.ring.tex : '';
+    if (_rtex || isFinite(_rtilt) || isFinite(_rnode) || _rspin !== '' || isFinite(_rop))
+      t.ring = { op: isFinite(_rop) ? Math.min(1, Math.max(0, _rop)) : 1,
+        tilt: isFinite(_rtilt) ? _rtilt : 0, node: isFinite(_rnode) ? _rnode : 0,
+        spin: _rspin, ...(_rtex ? { tex: _rtex } : {}) };
+  }
   { const s = atmoSanitize(v.atmosphere); if (s) t.atmosphere = s; }   /* v40：模板大气参数 */
   return t;
 }
@@ -7463,7 +7592,7 @@ function saveLocalStorage() {
   catch (e) {
     /* 贴图 base64 可能超出 localStorage 配额：剥离贴图后重存（导出 JSON 始终完整携带贴图） */
     try {
-      const stripped = exportBodiesRaw().map(b => { const c = { ...b }; delete c.texture; delete c.texture2; return c; });
+      const stripped = exportBodiesRaw().map(b => { const c = { ...b }; delete c.texture; delete c.texture2; delete c.ring; return c; });   /* v51：内嵌环贴图一并剥离（否则二存仍超配额 → 整个存档失败）；导出 JSON 始终完整携带 */
       localStorage.setItem(LS_KEY, JSON.stringify(stripped));
       console.warn('localStorage 超出配额，已剥离天体贴图保存（导出 JSON 仍完整含贴图）:', e);
     } catch (e2) { console.error('localStorage 保存失败:', e2); showToast('浏览器存储保存失败', 'error'); }
@@ -7503,7 +7632,8 @@ function savePrefs() {
       frameRef: ui.frameSelect.value, view: viewMode, includeInfo: ui.includeInfoOnShot.checked,
       bodyOv: ui.bodyOverlayToggle.checked,
       hz: ui.hzToggle.checked, helpers: ui.helperGridToggle.checked, atmo: ui.atmoToggle ? ui.atmoToggle.checked : true,   /* v42：大气渲染开关偏好 */
-      expoBias: expoBiasEv   /* v30：occlMode 不再落盘（物体式退役，叠层恒绝对） */
+      expoBias: expoBiasEv,   /* v30：occlMode 不再落盘（物体式退役，叠层恒绝对） */
+      matCleared: matClearedToObject()   /* v51：贴图/星环显式清除记忆落盘（刷新后自动应用不重贴） */
     }));
   } catch (e) { /* 存储不可用时静默 */ }
 }
@@ -7511,6 +7641,7 @@ function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
     if (!p) return;
+    matClearedLoad();   /* v51：恢复贴图/星环显式清除记忆（须在 loadSystem/auto-apply 之前） */
     /* v22 默认值一次性迁移：旧存档把「真实尺寸/碰撞合并」以旧默认 false 落盘，
      * 若无迁移标志则强制改为 v22 默认（开），此后尊重用户显式设置 */
     const v22First = !p.v22mig;
@@ -9418,8 +9549,8 @@ function wireEvents() {
     /* v40：星环表单（上传/清除/不透明度；文件名后缀 _ring 自动识别走材质库） */
     ui.texUploadBtnR.addEventListener('click', () => { texFileLayer = 3; ui.texFileInputR.click(); });
     ui.texFileInputR.addEventListener('change', e => importTexFile(e, texFileLayer));
-    ui.texClearBtnR.addEventListener('click', () => { formRing = null; updateTexFormUI(); });
-    ui.texOpR.addEventListener('input', updateTexFormUI);
+    ui.texClearBtnR.addEventListener('click', () => { formRing = null; updateTexFormUI(); updateRingFormUI(); });   /* v51：环预览/读数随清除同步刷新（原漏刷新 → 清除后「已设置星环」+预览残留，看似清除未生效/又被自动应用） */
+    ui.texOpR.addEventListener('input', updateRingFormUI);   /* v51：原误绑 updateTexFormUI（不更新环读数）→ 拖动环不透明度时 % 标签不动 */
     ui.matScanBtn.addEventListener('click', () => {
     /* v20：手动重扫清空负缓存，全量重新探测 */
     matMissCache = {}; matMissDirty = true; matMissSave();
