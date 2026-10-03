@@ -662,6 +662,62 @@ body.free-touch .pad{display:grid}
  * 物理内核：牛顿引力 + 1PN(EIH, 调和规范) + 2.5PN 瞬时辐射反作用力(Iyer-Will 调和规范)
  *          + 潮汐相互作用（平衡潮 CTL 恒定时滞模型，Mignard/Hut 1981，含自转演化）
  * 积分器：Yoshida 4阶辛组合（默认）/ IAS15 15阶 Gauss-Radau（v21 替换 2 阶 Verlet）
+ * v56 三项（DEM 真实隆起+自然遮挡 / 阴影 LOD 修正 / 水面反射与大气等价优化；物理内核/引擎/worker 零改动）：
+ *      ① 视差+阴影自然化（DEM 真实隆起）：PLANET_FS 新增球面方向空间 POM
+ *         （demParallaxHit：视线与高程场 r(dir)=1+h(dir)·demL 求，交 16 步 march
+ *         + 6 步二分；Tatarchuk 2006 POM / Blinn 1978 位移语义）—— 可见表面点
+ *         真实移到隆起面上：贴图/镜面遮罩/法线/自阴影/大气段端点/视线向量 V
+ *         全部跟随位移点，山体对谷地自然遮挡、晨昏线随地起伏；DEM 含海底
+ *         测深时以海平面为高度基准（uDemSea：海岸线陆地说估计海面高程，
+ *         海域钳到海面，地球海平面 0.613≈9.7km 的基准错位随 POM 会显形，
+ *         一并根修）；无水天体基准不变。
+ *      ② 地形自阴影根修（v55 阴影完全失效的根因 = 单位 bug）：demShadowL 的
+ *         hMax 旧值 uDemH·demL（米制标尺二次相乘，地球 39.4，march 上界 22R、
+ *         步距 1.59R → 受光带内恒返回 1 = 阴影从未渲染过）改 demL 本义；
+ *         march 上界改按光源仰角解析界 (hMax−h0)/max(sinE,0.02)（低照角长影
+ *         自动覆盖、高照角样本密度提升），步距二次分布（近场密 ≈DEM texel），
+ *         软半影分母加入像素足迹（远景阴影按屏幕分辨率软化而非消失）。
+ *         法线差分支撑 ε 改足迹半径 0.5·footPx（旧式取直径 = 支撑宽一档，
+ *         「还没看清楚就开始减细节」的过激成分）。
+ *      ③ 水面反射与大气等价优化（输出逐位不变）：光源本系方向对 16 视线段
+ *         循环不变 → 提出（PLANET_FS/SHELL_FS，同表达式少算 16× 次）；食影/
+ *         环影查询点对 8 光源循环不变 → 提出（同上两着色器）；全食（occ=0）
+ *         时 GGX+Toksvig 整块跳过（贡献恒 +0）；ATMO_FS 未启用光源槽位
+ *         （uALC=0 恒 +0）跳过 mu/相位求值。全部为「同表达式少算」与
+ *         「恒零跳过」，不改任何运算顺序/数值。
+ * v55 四项（大气/星环遮挡关系 + 轨迹遮挡根修 + 远处反光点显示链 + 表面系统文献重构；物理内核/引擎/worker 零改动）：
+ *      ① 大气-星环遮挡关系（三处）：Ⅰ 近侧环像元的大气「修改量」经环透过率
+ *         (1-α_ring) 加权叠加（v52 旧口径整段剪断 → 环缝隙/半透明环带后的大气
+ *         临边辉光被错误抹掉 —— 用户报告「透过星环仍不见/错见大气」家族的根修；
+ *         α 剖面 = CPU 预采样环贴图 alpha 列 16 点 uniform，规避 GLSL ES 1.0
+ *         采样器数组动态下标限制）；Ⅱ 环影作用于大气 in-scatter（ATMO_FS 本系
+ *         剖面版 + PLANET_FS/SHELL_FS 世界系 ringShadow 版，采样点经 uM3 回世界
+ *         系）—— 环影楔上空大气同步变暗；Ⅲ 环材质 polygonOffset 微推远 ——
+ *         远侧环与行星 limb 深度量化带内碎片闪烁稳定化（用户要求检查的深度冲突点）。
+ *      ② 轨迹-星球遮挡根修：v24 深度遮挡的深度源改为【专属稳定纹理】—— 场景
+ *         渲染后立刻 gl_FragDepth 拷贝到永不参与 ping-pong 的独立 DepthTexture
+ *         （v24 旧口径逐帧记录场景所在 composer 缓冲的深度纹理：实测 output/atmo
+ *         pass 渲入同一 RT 时 MSAA resolve 会把清屏深度洗进 depthTexture；pass
+ *         开关组合改变 swap 奇偶使场景落点交替；samples=0 时叠加层与场景同缓冲
+ *         = 反馈回路 —— 三种失效模式统一根除）。修复「轨迹穿过星球始终可见」。
+ *      ③ 远处星球反光点（任务③「改变远处光源处理方式，非保底尺寸」）：
+ *         Ⅰ GGX 镜面 Toksvig AA（Toksvig 2004 JGT；Heitz 2014 综述同族）——
+ *         像素足迹内法线方差 σ²=¼(|∂xN|²+|∂yN|²)，有效粗糙度 α²←α²+σ²，眩光
+ *         能量守恒摊入像素 —— 小盘面眩光瓣不再被像素平均掉而消失；
+ *         Ⅱ 点源显示链（帧数据保持物理，显示层两步）：通量守恒集中（σ_eff 随
+ *         点源角半径向像素孔径收缩，峰值 (σ/σ_eff)² 等能量提升）+ 显示参考
+ *         可见性（POINT_VIS_FLOOR/曝光 = 终像 ≈3.3 LSB 量化限，随曝光自适应，
+ *         不同于 v54 去掉的绝对地板 0.01）—— 远处星球反光点「变小变暗」感知
+ *         线索保留，不再消失。
+ *      ④ 表面系统文献重构（任务④）：
+ *         Ⅰ DEM 地形自阴影 —— 沿光源方向对球面高程场逐像素 ray march（14 步，
+ *         march 上界 2.5×√(2h_max) 球面地平线距；Max 1988「Horizon Mapping」
+ *         The Visual Computer 4(2):109-117；软半影 = 隙距/(t·tanθ_sun) 最小比，
+ *         Tatarchuk 2006 ShaderX⁴ POM 近似软影口径；tanθ 与食影 uLAux 同源）——
+ *         山体阴影分辨率 = 像素级（远超任何阴影贴图）；
+ *         Ⅱ DEM 法线差分支撑 ε 与像素足迹匹配（|fwidth(d0)| 与 texel 支撑取大）
+ *         —— Toksvig 2004 / Han et al. 2007 频域法线滤波族，远景法线噪声根除，
+ *         近距逐位回归原口径。
  * v53 六项（贴图库重构 + 微表面水面 + DEM 地形光照 + 食影/多光源复验 + 渲染等价优化；物理内核/引擎/worker 零改动）：
  *      ① 材质库重构：按文件名后缀自动分类（dem/specular/normal/night/cloud/ring/
  *         atmosphere/表面/其他），类别过滤下拉（默认全部展示）；应用目标从
@@ -1226,6 +1282,11 @@ const SKY_PANO_FILE = 'eso0932a_mediumQuality.jpg';   // 与本 HTML 同目录
  * EXP_*：自动曝光计量。key 取摄影中灰 0.18，区间与时间常数按相机感度适应标定。
  * METER_STAR_W / METER_BODY_W：计量中点源辐照度与圆面通量权重。 */
 const PSF_SIGMA = 1.1, PSF_VIS_FLOOR = 0.01;
+/* v55：点源显示参考可见性阈值（任务③）—— 线性辐射亮度，使终像（曝光×ACES×sRGB）
+ * 恰好落在 ≈3.3 LSB（0.006·ACES暗部增益0.214→线性0.00128→sRGB≈0.033）。
+ * 与 v54 去掉的 PSF_VIS_FLOOR=0.01（曝光无关绝对地板）不同：本值随曝光折算、
+ * 仅作用于点源精灵显示层（b.peak 帧数据保持物理），且伴随通量守恒集中。 */
+const POINT_VIS_FLOOR = 0.006;
 /* v17 渲染辐射上限：恒星圆面/点源精灵的着色输出统一按比例饱和到此值
  *（保持色相，仅压亮度）。取物理表面辐射亮度 B 量级（太阳 B=1.47e4），
  * 自动曝光收敛后（分辨率圆面 meter ≈ B·π·θ²）圆面/点源核心纯白；
@@ -1742,7 +1803,8 @@ function tjsPushTexture(i, e) {
   /* v17：立方体贴图转换移交 three.js 渲染层；模块未就绪时挂起，就绪后统一推送 */
   if (!tjs || !ren.ok) { e.pendingGL = true; return; }
   try {
-    tjs.setBodyTextures(i, e.img || null, e.img2 || null, e.imgD || null, e.imgS || null, e.specPol || 1);   /* v53：高程/镜面随推；v54：遮罩极性 */
+    tjs.setBodyTextures(i, e.img || null, e.img2 || null, e.imgD || null, e.imgS || null, e.specPol || 1, e.dem16 || null);   /* v53：高程/镜面随推；v54：遮罩极性；v57：16-bit 高程数据 */
+    e.pushedDemScale = e.imgD ? ((meta[i] && meta[i].demScale) || 0) : 0;   /* v58：记录已推送标尺（标定晚到时触发重推） */
     e.pendingGL = false;
   } catch (err) {
     showToast(err.name === 'SecurityError'
@@ -1792,9 +1854,19 @@ function bodyTexEnsure(i) {
     return;
   }
   let e = bodyTex.cache.get(i);
-  if (e && e.src === t && e.src2 === (t2 || null) && e.srcD === (tD || null) && e.srcS === (tS || null)) return;
+  /* v58 修复：demSpanFor 标定（JSON 异步晚到，meta[i].demScale 0→span）必须触发重推
+   * —— v57 只按 URL 去重，标定完成后的 bodyTexEnsure 重推是死代码：DEM 天体永远
+   * 停留在 DEM_H_DEFAULT=8000 兜底标尺（月面真值 38737 m，地形高度差 4.84 倍 =
+   * 「WebGL 与光线追踪 GT 完全不一致」的主因之一）。源未变仅标尺变 → 用已载入
+   * 源直接重推（免重载图片）；tjsPushTexture 成功后记录 pushedDemScale。 */
+  const demScaleNow = (tD && meta[i]) ? (meta[i].demScale || 0) : 0;
+  if (e && e.src === t && e.src2 === (t2 || null) && e.srcD === (tD || null) && e.srcS === (tS || null)) {
+    if (!tD || e.pushedDemScale === demScaleNow) return;
+    tjsPushTexture(i, e);
+    return;
+  }
   e = { src: t || null, src2: t2 || null, srcD: tD || null, srcS: tS || null, specPol: (meta[i] && meta[i].specPol) || 1,
-    img: null, img2: null, imgD: null, imgS: null, avg: null, ready: false };
+    img: null, img2: null, imgD: null, imgS: null, dem16: null, avg: null, ready: false };   /* v57：dem16 随缓存 */
   bodyTex.cache.set(i, e);
   if (t) {
     const im = new Image();
@@ -1824,12 +1896,38 @@ function bodyTexEnsure(i) {
     im2.onerror = () => { console.warn('天体上层贴图解码失败:', meta[i] ? meta[i].name : i); showToast('上层贴图解码失败', 'error', 4000); };
     im2.src = t2;
   }
-  /* v53：高程图/镜面图加载（与底层/上层同构；解码后统一经 tjsPushTexture 推送） */
+  /* v53：高程图/镜面图加载（与底层/上层同构；解码后统一经 tjsPushTexture 推送）
+   * v57：高程图优先走 16-bit PNG 解码（decodePNG16 逐字节保精度）；成功后仍
+   * 加载 <img> 供 8-bit 回退/导出预览，渲染层以 dem16 为准。失败（非 16-bit
+   * PNG / file:// fetch 受限）→ 回退旧 8-bit 路径（管线同一，精度降级）。 */
   if (tD) {
-    const imD = new Image();
-    imD.onload = () => { e.imgD = imD; tjsPushTexture(i, e); draw(); };
-    imD.onerror = () => { console.warn('高程图解码失败:', meta[i] ? meta[i].name : i); showToast('高程图解码失败', 'error', 4000); };
-    imD.src = tD;
+    dem16For(tD).then(m16 => {
+      if (meta[i] && meta[i].dem !== tD) return;   /* 应用期间源已变：放弃 */
+      if (m16) { e.dem16 = m16; }
+      else if (!e._dem16Retry) {
+        /* v58：16-bit fetch 失败（boot 扫描抢连超时）→ 15s 后单次重试；
+         * 失败不缓存（dem16For 只缓存成功解码），重试命中即可恢复全精度 */
+        e._dem16Retry = true;
+        setTimeout(() => {
+          dem16For(tD).then(m16b => {
+            if (!m16b || !meta[i] || meta[i].dem !== tD) return;
+            const eNow = bodyTex.cache.get(i);
+            if (eNow && eNow.src === t) {
+              eNow.dem16 = m16b;
+              tjsPushTexture(i, eNow);
+              draw();
+            }
+          }).catch(() => { });
+        }, 15000);
+      }
+      const imD = new Image();
+      imD.onload = () => { e.imgD = imD; tjsPushTexture(i, e); draw(); };
+      imD.onerror = () => {
+        if (m16) { tjsPushTexture(i, e); draw(); return; }   /* 16bit 已就绪：<img> 失败不致命 */
+        console.warn('高程图解码失败:', meta[i] ? meta[i].name : i); showToast('高程图解码失败', 'error', 4000);
+      };
+      imD.src = tD;
+    });
   }
   if (tS) {
     const imS = new Image();
@@ -2237,7 +2335,7 @@ function matAutoApply() {
         demSpanFor(hitD.url).then(span => {
           const j = meta.findIndex(m => m.name === nm);
           if (j < 0 || meta[j].dem !== hitD.url) return;   /* 应用期间场景/源已变：放弃 */
-          if (span > 0 && !(meta[j].demScale > 0)) { meta[j].demScale = span; saveLocalStorage(); draw(); }
+          if (span > 0 && !(meta[j].demScale > 0)) { meta[j].demScale = span; saveLocalStorage(); bodyTexEnsure(j); draw(); }   /* v57：demScale 标定后重推（法线纹理 demL 标度随 span） */
         });
         bodyTexEnsure(i);
       }
@@ -2652,6 +2750,140 @@ function matCacheSave() {
  * 结果按 URL 缓存（含负缓存），不重复请求；探测失败不阻塞应用。 */
 const DEM_H_DEFAULT = 8000;
 const demSpanCache = new Map();
+/* ================= v57：DEM 16-bit PNG 解码（任务①：修「16 位只能读出 8 位」）=================
+ * 依据：textures/*_dem.png 实测为 16-bit 灰度 PNG（IHDR bitdepth=16 colortype=0），
+ * 旧路径经 <img>/canvas 解码被浏览器截断为 8-bit（月球 38.7 km 跨度只剩 256 级 ≈
+ * 151 m/级量化）。本解码器逐字节读取 IDAT → DecompressionStream('deflate') 膨胀
+ * → 逐行 unfilter（bpp=2）→ big-endian 16-bit 值，精度完整保留（Python 参照实现
+ * 逐字节互验 4/4 通过）。结果缓存于 dem16Cache（URL → {w,h,data:Uint16Array}）。
+ * 失败（非 16-bit PNG / file:// fetch 受限 / 老浏览器）→ 返回 null，调用方回退
+ * <img> 8-bit 路径（管线同一，仅精度降级）。 */
+async function decodePNG16(buf) {
+  try {
+    const u8 = new Uint8Array(buf);
+    if (u8.length < 57 || u8[0] !== 0x89 || u8[1] !== 0x50 || u8[2] !== 0x4E || u8[3] !== 0x47) return null;
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    let pos = 8, W = 0, H = 0, bitd = 0, ctype = 0, interlace = 1;
+    const idat = [];
+    while (pos + 8 <= u8.length) {
+      const ln = dv.getUint32(pos);
+      const typ = String.fromCharCode(u8[pos + 4], u8[pos + 5], u8[pos + 6], u8[pos + 7]);
+      if (typ === 'IHDR') {
+        W = dv.getUint32(pos + 8); H = dv.getUint32(pos + 12);
+        bitd = u8[pos + 16]; ctype = u8[pos + 17]; interlace = u8[pos + 20];   /* IHDR 13 字节：W4+H4+bitd+ctype+comp+filter+interlace */
+      } else if (typ === 'IDAT') idat.push(u8.subarray(pos + 8, pos + 8 + ln));
+      else if (typ === 'IEND') break;
+      pos += 12 + ln;
+    }
+    if (bitd !== 16 || ctype !== 0 || interlace !== 0 || W <= 0 || H <= 0) return null;
+    const total = idat.reduce((s, c) => s + c.length, 0);
+    const cat = new Uint8Array(total);
+    let off = 0;
+    for (const c of idat) { cat.set(c, off); off += c.length; }
+    const ds = new DecompressionStream('deflate');
+    const stream = new Blob([cat]).stream().pipeThrough(ds);
+    const raw = new Uint8Array(await new Response(stream).arrayBuffer());
+    const bpp = 2, stride = W * bpp;
+    if (raw.length < H * (stride + 1)) return null;
+    const out = new Uint16Array(W * H);
+    const prev = new Uint8Array(stride);
+    const cur = new Uint8Array(stride);
+    let p = 0;
+    for (let y = 0; y < H; y++) {
+      const f = raw[p++];
+      cur.set(raw.subarray(p, p + stride)); p += stride;
+      if (f === 1) {
+        for (let i = bpp; i < stride; i++) cur[i] = (cur[i] + cur[i - bpp]) & 0xFF;
+      } else if (f === 2) {
+        for (let i = 0; i < stride; i++) cur[i] = (cur[i] + prev[i]) & 0xFF;
+      } else if (f === 3) {
+        for (let i = 0; i < stride; i++) {
+          const a = i >= bpp ? cur[i - bpp] : 0;
+          cur[i] = (cur[i] + ((a + prev[i]) >> 1)) & 0xFF;
+        }
+      } else if (f === 4) {
+        for (let i = 0; i < stride; i++) {
+          const a = i >= bpp ? cur[i - bpp] : 0;
+          const b = prev[i];
+          const c = i >= bpp ? prev[i - bpp] : 0;
+          const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
+          const pr = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+          cur[i] = (cur[i] + pr) & 0xFF;
+        }
+      }
+      for (let x = 0; x < W; x++) out[y * W + x] = (cur[2 * x] << 8) | cur[2 * x + 1];
+      prev.set(cur);
+    }
+    return { w: W, h: H, data: out };
+  } catch (e) { return null; }
+}
+/* dem16 缓存（URL/dataURL → 解码结果；上限 12 项 LRU —— 内存有界） */
+const dem16Cache = new Map();
+if (typeof window !== 'undefined') window.decodePNG16 = decodePNG16;   /* v57：探针/调试钩子 */
+/* ===== v59：16-bit 解码 Worker 化 =====
+ * 实测（本会话取证）：moon_dem 3.4MB 解码 7.9s，mercury_dem 12.8MB ≈30s ——
+ * 全部阻塞主线程（用户报告「过分卡顿」的加载侧根因：DECODE 期间 rAF 全停，
+ * 整个应用冻结）。decodePNG16 无 DOM/three 依赖（纯 DataView + inflate），
+ * 经 Function.toString() 注入 Blob Worker 同源执行 —— 语义与主线程逐位一致
+ *（同一函数体），结果 buffer transferable 回传零拷贝。Worker 创建失败
+ *（CSP/file:// 限制）自动回退主线程解码（旧行为）。 */
+let dem16Worker = null;          /* Worker | false（创建失败） | null（未初始化） */
+const dem16Jobs = new Map();     /* id → resolve */
+let dem16JobId = 0;
+const dem16Inflight = new Map(); /* url → 在飞解码 promise（并发去重） */
+function dem16WorkerGet() {
+  if (dem16Worker !== null) return dem16Worker;
+  try {
+    const src = 'const decodePNG16 = ' + decodePNG16.toString() + ';\n' +
+      'self.onmessage = async (e) => { try { const m = await decodePNG16(e.data.buf);' +
+      ' const out = m ? { id: e.data.id, w: m.w, h: m.h, data: m.data.buffer } : { id: e.data.id, err: 1 };' +
+      ' self.postMessage(out, out.data ? [out.data] : []); } catch (err) { self.postMessage({ id: e.data.id, err: 1 }); } };';
+    dem16Worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+    dem16Worker.onmessage = (ev) => {
+      const job = dem16Jobs.get(ev.data.id);
+      if (job) { dem16Jobs.delete(ev.data.id); job(ev.data); }
+    };
+    dem16Worker.onerror = () => { /* 下次 job 超时兜底 */ };
+  } catch (e) { dem16Worker = false; }
+  return dem16Worker;
+}
+function dem16DecodeAsync(buf) {
+  /* Worker 解码（30s 主线程冻结 → 0）；失败/超时回退主线程 decodePNG16 */
+  const w = dem16WorkerGet();
+  if (w) {
+    return new Promise((res) => {
+      const id = ++dem16JobId;
+      const to = setTimeout(() => { dem16Jobs.delete(id); res(null); }, 180000);
+      dem16Jobs.set(id, (d) => { clearTimeout(to); res(d.err ? null : { w: d.w, h: d.h, data: new Uint16Array(d.data) }); });
+      try { w.postMessage({ id, buf }); } catch (e) { clearTimeout(to); dem16Jobs.delete(id); res(null); }   /* v59：不 transfer 发送侧 —— worker 失败时主线程回退 decodePNG16(buf) 需要完整 buf（transfer 会 detach） */
+    }).then(m => m || decodePNG16(buf));
+  }
+  return Promise.resolve(decodePNG16(buf));
+}
+async function dem16For(url) {
+  if (dem16Cache.has(url)) { const v = dem16Cache.get(url); dem16Cache.delete(url); dem16Cache.set(url, v); return v; }
+  if (dem16Inflight.has(url)) return dem16Inflight.get(url);   /* v59：在飞去重（rebuildDem/重推/扫描并发同 URL 时旧实现各自 fetch+decode = 重复 30s 冻结） */
+  const p = (async () => {
+    try {
+      /* v59：超时 20s→60s —— 实测 boot 扫描 12 并发大图占满浏览器每域连接，
+       * mercury_dem(12.8MB) 仅排队就 10s+（body 读取再排队 → 20s abort 引爆 →
+       * 16-bit 静默回退 8-bit = 用户报告「水星精度/黑屏」链的源头之一） */
+      const ctl = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(60000) : undefined;
+      const r = await fetch(url, { signal: ctl });
+      if (!r.ok) return null;
+      const buf = await r.arrayBuffer();
+      const m = await dem16DecodeAsync(buf);
+      if (m) {
+        dem16Cache.set(url, m);
+        if (dem16Cache.size > 12) dem16Cache.delete(dem16Cache.keys().next().value);
+      }
+      return m;
+    } catch (e) { return null; }
+    finally { dem16Inflight.delete(url); }
+  })();
+  dem16Inflight.set(url, p);
+  return p;
+}
 async function demSpanFor(url) {
   if (demSpanCache.has(url)) return demSpanCache.get(url);
   let span = 0;
@@ -7320,6 +7552,16 @@ function importTexFile(e, layer) {
   const rd = new FileReader();
   rd.onload = ev => {
     const url = String(ev.target.result);
+    /* v57：高程图上传先解 16-bit（file.arrayBuffer 直读，精度完整）；失败回退 8-bit */
+    if (layer === 4 && /png$/i.test(file.type)) {
+      file.arrayBuffer().then(buf => decodePNG16(buf)).then(m16 => {
+        if (m16) {
+          dem16Cache.set(url, m16);
+          if (dem16Cache.size > 12) dem16Cache.delete(dem16Cache.keys().next().value);
+          showToast('高程图 16-bit 精度已载入（' + m16.w + '×' + m16.h + '）', 'success', 3200);
+        }
+      }).catch(() => { });
+    }
     const im = new Image();
     im.onload = () => {
       if (layer === 2) formTex2 = url; else if (layer === 3) formRing = url;
@@ -10687,8 +10929,8 @@ const BLOOM_WHITE_K = 20;
  * CLOUD_DRIFT：云层差速自转占比（壳层相对星体自转的漂移角速率比例）。 */
 const CLOUD_SHELL = 1.0015, CLOUD_DRIFT = 0.97;
 /* 环境光强度：有光照链行星 / 无光照链天体的基底亮度（AMBIENT_LIT v42 起
- * 压低至 0.005，暗面不再被整体提亮；AMBIENT_UNLIT 给无恒星天体保底可辨） */
-const AMBIENT_LIT = 0.005, AMBIENT_UNLIT = 0.55;
+ * 压低至 0.0005，暗面不再被整体提亮；AMBIENT_UNLIT 给无恒星天体保底可辨） */
+const AMBIENT_LIT = 0.0005, AMBIENT_UNLIT = 0.25;
 
 /* ---------------- v19：SoftBloomPass —— 各向同性多级高斯泛光 ----------------
  * 结构：亮部提取（半分辨率，阈值 = 1/曝光）→ 每级「居中 2×2 盒式降采样（线性
@@ -11182,9 +11424,21 @@ uniform vec3 uCamR, uCamU, uCamF;   /* v44：相机基（与大气 pass 同源�
 uniform float uTanH, uAspect, uOrtho;   /* v44：视场半角正切 / 宽高比 / 正交开关 */
 uniform vec2 uOrthoHalf;                /* v44：正交半宽/半高（世界 m） */
 /* ===== v53：高程图地形光照（DEM bump）与镜面反射图（GGX 微表面） ===== */
-uniform samplerCube uTexD;          /* 高程图（linear 数据立方体贴图，像素值 = 归一化高程） */
+uniform sampler2D uTexD;            /* v57：高程图（等距柱状 R32F 数据纹理，像素值 = 归一化高程；
+                                    * 16-bit PNG 直读 —— 任务①修复：旧 <img> 路径被浏览器
+                                    * 截断为 8-bit，38.7km 跨度只剩 256 级） */
+uniform sampler2D uTexN;            /* v57：顶点法线场（W×H RGBA32F，NearestFilter；
+                                    * v59：接缝列由着色器 mod wrap（无需 W+1 复制列，
+                                    * 4097 宽超 maxTextureSize 的 GPU 上纹理创建失败
+                                    * = 水星黑屏根因）—— 着色器手动做三角形重心插值
+                                    * —— 与 GT 网格/Python sim 同一三角化约定：对角线
+                                    * v1-v2） */
+uniform vec2 uDemSize;              /* v57：DEM 源尺寸 (W, H) */
 uniform float uHasDEM;              /* 高程图就绪（1/0；0 时主循环零开销直通） */
 uniform float uDemH;                /* 高度标尺 m：DEM 像素 1.0 对应的高程（真实米制，JSON 标定/表单可调） */
+uniform float uDemSea;              /* v56：海平面基准（归一化高程；有水天体高度场以海面为 0，
+                                    * 海域钳到海面 —— DEM 含海底测深、最低点=0 归一化时
+                                    * 海平面 ≠ 0，如地球 0.613 ≈ 9.7 km；无水 = 0 不变） */
 uniform float uDemStep;             /* 梯度差分支撑半宽（弧度，≈1.5 源贴图像素） */
 uniform mat3 uM3;                   /* 本系 → 世界线性映射（= R_tide·S_tide·R_spin·S_f·rad，与 uAInv 互逆） */
 uniform samplerCube uTexS;          /* 镜面反射图（linear 数据立方体贴图，亮度 = 水/冰面强度遮罩） */
@@ -11194,6 +11448,11 @@ uniform float uSpecPol;             /* 遮罩极性：+1 = 白=水（specular �
 const float WATER_ROUGH = 0.3;     /* GGX 粗糙度 α：0.05≈镜面，越大高光越宽越接近朗伯（海面 0.2~0.5） */
 const float WATER_SPEC_GAIN = 1.0;  /* 镜面瓣总强度倍率（<1 压暗眩光，>1 提亮） */
 const float WATER_ATMO_K = 1.0;     /* 大气两次调制强度：1=物理（入射 Tsun×出射 Tview），0=不调制 */
+const float K_SHADOW_BOUNCE = 0.014; /* v59：影内地形互反射地板（占直射辐照比例）。
+                                     * 定标：Mitsuba path max_depth6 @1024spp 实测影内底值
+                                     * = 直射均值 1.93%（本会话，dump_low 视图）——
+                                     * K=0.014·dayGate/⟨dif⟩≈1.9% 对齐；文献区间 2~4%
+                                     *（含地球照）覆盖其上。仅日面生效（球面法线·L 门控） */
 varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
 varying vec2 vNdc;                      /* v44：像素 NDC */
 
@@ -11218,24 +11477,185 @@ vec4 cubeSample(vec3 d, samplerCube t) {
  *   · 扰动在本系（行星半径=1）计算后经 uM3（= R_tide·S_tide·R_spin·S_f·rad，
  *     与大气 pass 的 uAInv 互逆、与 vNW 的 mat3(modelMatrix) 同口径）变换回世界系，
  *     潮汐椭化/自转扁化下与网格法线严格同一条变换链。 */
-float demHeight(vec3 d) { return max(textureCube(uTexD, d).r, 0.0); }
-/* landFade ∈ [0,1]：水面遮罩量 —— 水面处地形梯度归零（海面平，海底地形不透出），
- * 陆地/无遮罩处 = 0（地形光照全额生效） */
-vec3 bumpNormalFromDEM(float landFade) {
-  vec3 d0 = normalize(vNO);
-  vec3 eO = cross(vec3(0.0, 0.0, 1.0), d0);
-  float eLen = length(eO);
-  eO = eLen > 1e-5 ? eO / eLen : vec3(1.0, 0.0, 0.0);   /* 极点退化回退 */
-  vec3 nO = cross(d0, eO);
-  float e1 = demHeight(normalize(d0 + eO * uDemStep));
-  float e2 = demHeight(normalize(d0 - eO * uDemStep));
-  float n1 = demHeight(normalize(d0 + nO * uDemStep));
-  float n2 = demHeight(normalize(d0 - nO * uDemStep));
-  /* 斜率 = Δh·uDemH / (2ε·R)：Δh_m/[米制弧长]，无量纲；R 取渲染半径 uARad */
-  float arcInv = 1.0 / (2.0 * uDemStep * max(uARad, 1.0));
-  float slopeE = (e1 - e2) * uDemH * arcInv * (1.0 - landFade);
-  float slopeN = (n1 - n2) * uDemH * arcInv * (1.0 - landFade);
-  return normalize(uM3 * normalize(d0 - slopeE * eO - slopeN * nO));
+/* v57：方向 → 等距柱状 UV（与 PANO_FS dirUV 的 u_zup=1 分支、Python
+ * dirs_to_uv 逐式同构：lon=atan(d.y,d.x), u=lon/2π+0.5, v=0.5−lat/π；
+ * 行 0 = 北极，u 方向 RepeatWrapping 硬件跨缝，v 方向 ClampToEdge 极区延伸） */
+vec2 demUV(vec3 d) {
+  float lon = atan(d.y, d.x);
+  float u = lon * 0.15915494309189535 + 0.5;
+  float lat = asin(clamp(d.z, -1.0, 1.0));
+  return vec2(u, 0.5 - lat * 0.3183098861837907);
+}
+float demHeight(vec3 d) { return max(texture2D(uTexD, demUV(d)).r, 0.0); }
+/* ===== v55：DEM 地形自阴影（任务④核心 —— 阴影分辨率到像素级）=====
+ * 文献：Max 1988「Horizon Mapping: Shadows for Bump-Mapped Surfaces」
+ *（The Visual Computer 4(2):109-117）—— 高程场沿光线方向的地平线遮蔽原理；
+ * 软半影口径 = Tatarchuk 2006「Dynamic Parallax Occlusion Mapping with
+ * Approximate Soft Shadows」（ShaderX⁴）—— 逐采样「隙距/半影宽」最小比；
+ * 恒星角半径 tanθ = uLAux.y/uLAux.z（与食影/环影同源，无遮挡体时回退真值）。
+ * 与通用高度场实现的差异：本实现在【球面方向空间】march —— 射线点方向
+ * dj = normalize(P0 + L·t)，地形高度 hj = demHeight(dj)·demL（本系），
+ * 射线离面高度 rh = |P0 + L·t| − 1；march 上界 = 2.5×√(2·hMax)
+ *（球面地平线距 √(2Rh) 的 2.5 倍覆盖），固定 14 步（GLSL ES 常数界）。
+ * 复杂度 O(14) 次 cube 采样/像素，仅 uHasDEM 天体承担。 */
+/* v56：海面基准高度场（半径单位）—— 海域（demHeight < uDemSea，含海底测深）
+ * 钳到 0 = 海面贴合理想球；陆高以海面为基准。法线梯度用原 demHeight
+ *（差分对常数基准不变，两式自动一致）。 */
+float demHRel(vec3 d, float demL) { return max(demHeight(d) - uDemSea, 0.0) * demL; }
+
+/* ===== v59：地形自阴影（demShadowL 第三代重构）=====
+ * 用户实机报告（v58 交付后）：①环形山阴影内密密麻麻小黑点（噪点）；
+ * ②阴影与贴图叠加突兀（纯黑像「扔上去的黑点」）。
+ * 根因（本会话取证 + 机理分析）：
+ *   a) 自阴影痤疮：二次步距首步 t1 = tEnd/2304 亚 texel，射线贴着双线性
+ *      高度场爬行 —— 高度场 C0 非 C1（相邻 texel 斜率不连续），爬行中每遇
+ *      texel 边界都可能 gap<0；min() 累积 + 分母 t·penW 极小 → 单样本清零
+ *      = 逐 texel 黑点（月面 texel ≈5.4km，全屏近距 1 texel ≈ 数像素 →
+ *      密密麻麻黑点带）。
+ *   b) 影内纯黑：occ=0 直接项归零，仅 uAmb≈5e-4 残留 —— 真实影内有地形
+ *      互反射（直射的 2~4%），纯黑与贴图暗部叠加 = 「扔上去的黑点」观感。
+ * 文献修复（逐条对照原论文）：
+ *   ① Normal-offset 起点（Isidoro 2006「Shadow Mapping: GPU-based Tips and
+ *      Tricks」normal-offset shadows；Petrov & Zhou 2010 同族）：射线原点
+ *      沿接收点法线抬升半 texel 坡度缩放高度 —— 接收点自身平面不再参与
+ *      遮挡判定，k=1 贴行痤疮消失；对真实遮挡体影响 ≤ 半 texel 高度。
+ *   ② （v59b 撤销首 texel 淡入 —— 实测 GT 发散风险大于收益；痤疮由 ①
+ *      覆盖。Tatarchuk 2006 的 artifact 处理结论保留在注释供追溯。）
+ *   ③ 步数随 tEnd 自适应（Tatarchuk 2006 dynamic loop：采样密度匹配 texel
+ *      分辨率即可）：N = clamp(2·tEnd/texelAng, 8, 48)，二次分布
+ *      t_k = tEnd·(k/N)² —— 远端间距恒 ≤ 1 texel；N=64（掠射极端）时
+ *      分布与 v58 逐位一致（GT 已验证口径），近垂直日照 tEnd≪texel 时
+ *      64→12 步（原 64 步全为亚 texel 冗余采样）= 性能修复主项。
+ *   ④ 影内互反射地板在调用点实现（本函数保持纯几何），见主循环注释。
+ * 半影口径不变（v58 GT 背书）：shade = min_j clamp(gap/(t·(tanSun+footPx)))。
+ * march 上界【精确包络出界】继承 v58（tEnd 解析包络，GT 验证口径）。 */
+float demShadowL(vec3 d0, vec3 ldirL, float demL, float tanSun, float footPx, vec3 nRcv) {
+  float hMax = (1.0 - uDemSea) * demL;
+  if (hMax <= 0.0) return 1.0;
+  float h0 = demHRel(d0, demL);
+  /* ① normal-offset：接收法线与径向夹角 → 局部坡度 → 0.1 texel 径向抬升
+   * （v59b 实测定标：0.5 texel 抬升 ≈2.7km 高度，15° 掠射下吞掉 99% 真实
+   * 阴影 —— 过强；0.1 texel ≈540m·slope 恰覆盖双线性插值误差量级
+   * （Δslope·texel/2），且对真实遮挡体的阴影缩短 < 0.1 texel） */
+  float nd0 = clamp(dot(nRcv, d0), 0.2, 1.0);
+  float slopeLoc = sqrt(max(1.0 - nd0 * nd0, 0.0)) / nd0;
+  float hOff = 0.1 * uDemStep * min(slopeLoc, 1.0);
+  vec3 P0 = d0 * (1.0 + h0 + hOff);
+  float b = dot(P0, ldirL);
+  float tEnd = -b + sqrt(max(b * b - dot(P0, P0) + (1.0 + hMax) * (1.0 + hMax), 0.0));
+  tEnd = min(tEnd, 0.5);
+  float penW = tanSun + footPx;
+  /* ③ 自适应步数：远端采样间距 ≤ 1 texel 即可（下限 8 保底，上限 48 = v58 GT 口径） */
+  int N = int(clamp(2.0 * tEnd / max(uDemStep, 1e-7), 12.0, 64.0));
+  float shade = 1.0;
+  for (int k = 1; k <= 48; k++) {
+    if (k > N) break;
+    float t = tEnd * float(k * k) / float(N * N);
+    vec3 Q = P0 + ldirL * t;
+    float rh = length(Q) - 1.0;
+    if (rh > hMax && dot(Q, ldirL) > 0.0) break;   /* 射线已升出地形包络且远离 */
+    float hj = demHRel(normalize(Q), demL);
+    float gap = rh - hj;
+    shade = min(shade, clamp(gap / max(t * penW, 1e-7), 0.0, 1.0));
+    if (shade <= 0.0) return 0.0;
+  }
+  return shade;
+}
+/* ===== v56：DEM 视差遮挡（POM，任务A核心 —— 表面真实隆起 + 自然自遮挡）=====
+ * 文献：Blinn 1978 bump 原文的位移语义；Kaneko 1984 / Welch 1998（parallax
+ * mapping）；Tatarchuk 2006「Dynamic Parallax Occlusion Mapping」（视线-高度场
+ * 求交 + 二分精化）。与常规切线平面 POM 不同，本实现在【球面方向空间】march
+ * —— 高程场 r(dir) = 1 + demHeight(dir)·demL：
+ *   · 视线与地形包络球（1+demL）求交得 t0（相机在壳内取 0），与理想球求交
+ *     得 t1（盘内片元必有交）；在 [t0,t1] 均匀 16 步前进，命中「低于地形面」
+ *     即入体，再 6 步二分精化（总采样 ≤22 次 cube）。
+ *   · 命中点 = 可见表面真实位置：山体对后方谷地的自然遮挡、晨昏线随地形的
+ *     自遮蔽、贴图/法线/光照查询点全部跟随位移点 —— 隆起是真实的（等价于
+ *     把表面沿视线推到位），而非仅在法线上「画」出来的起伏。
+ *   · LOD 门（与任务B一致口径）：视差位移方向域上界 2·demL 折算像素数
+ *     < 0.5px（2·demL < 0.5·footPx）时位移亚像素不可辨 → 跳过 march 回退
+ *     理想球点（与旧式逐位一致）；阴影/法线细节不受此门影响（见各自实现）。
+ *   · 已知边界：网格剪影仍为理想球（山顶越出 limb 的剪影隆起需顶点位移，
+ *     球面 ray-march 位移不覆盖盘外像素；盘内全部像素覆盖）。 */
+/* ===== v57：DEM 视差遮挡（demParallaxHit 整体重构）=====
+ * 文献：Kaneko 1984 / Welch 1998（parallax mapping）；Tatarchuk 2006（POM
+ * 视线-高度场求交 + 二分精化）。在【球面方向空间】求视线与高程场
+ * r(dir) = 1 + demHRel(dir) 的首交点。相对 v56 的根修（光线追踪 GT 验证）：
+ *   步进从「[t0,t1] 均匀 t 16 步」改为【深度分层】：第 k 层边界 = 射线与
+ *   半径 r_k = 1+hTop·(1−k/16) 球的解析近交点 —— 每层半径区间被恰好穿过
+ *   一次，掠射长弦下不再漏层（v56 均匀步距在长掠射段一步跨过整条山脊）。
+ *   命中层内 8 次二分精化（总高度采样 ≤24 次，GLSL ES 常数界）。
+ * LOD 门保留：视差位移 2·demL 折算像素 < 0.5px 时跳过（与旧式逐位一致）。 */
+float demParallaxHit(vec3 camL, vec3 rdL, float demL, float footPx) {
+  if (2.0 * demL < 0.5 * footPx) return -1.0;      /* 位移亚像素：LOD 跳过 */
+  float hTop = (1.0 - uDemSea) * demL;             /* 海面以上最大高程（地形包络） */
+  if (hTop <= 0.0) return -1.0;                    /* 全水世界：海面即球面，无位移 */
+  float t0, tX;
+  if (!atmoRayIntersect(camL, rdL, vec3(0.0), 1.0 + hTop, t0, tX)) return -1.0;
+  if (t0 < 0.0) t0 = 0.0;                          /* 相机在地形包络壳内 */
+  float t1, tY;
+  bool hitS = atmoRayIntersect(camL, rdL, vec3(0.0), 1.0, t1, tY);
+  float tEnd = hitS ? max(t1, t0 + 1e-6) : t0 + 2.5 * sqrt(max(2.0 * hTop, 1e-9));
+  float b0 = dot(camL, rdL);
+  float camL2 = dot(camL, camL);
+  float tPrev = t0, tCur = t0;
+  bool hit = false;
+  for (int k = 1; k <= 16; k++) {
+    float r_k = 1.0 + hTop * (1.0 - float(k) / 16.0);
+    float disc = b0 * b0 - camL2 + r_k * r_k;   /* = b0²−(|camL|²−r_k²) */
+    float t = disc >= 0.0 ? (-b0 - sqrt(disc)) : tEnd;
+    t = clamp(max(t, tPrev + 1e-7), 0.0, tEnd);
+    vec3 Q = camL + rdL * t;
+    float rT = 1.0 + demHRel(normalize(Q), demL);
+    bool ins = dot(Q, Q) <= rT * rT && !hit;
+    if (ins) { tCur = t; hit = true; }
+    else if (!hit) tPrev = t;
+  }
+  if (!hit) return -1.0;                           /* 掠过地形未入体 → 理想球点 */
+  for (int j = 0; j < 8; j++) {                    /* 二分精化命中面 */
+    float m = 0.5 * (tPrev + tCur);
+    vec3 Q = camL + rdL * m;
+    float rT = 1.0 + demHRel(normalize(Q), demL);
+    if (dot(Q, Q) <= rT * rT) tCur = m; else tPrev = m;
+  }
+  return tCur;
+}
+/* ===== v57：DEM 法线（重心插值版 —— bumpNormalFromDEM 整体重构）=====
+ * 法线来源 = 顶点法线纹理 uTexN（CPU 按 bumpNormalFromDEM 同式预计算：
+ * ε=uDemStep 4-tap 中心差分（Blinn 1978）+ 径向修正 n ∝ ρ·d̂ − ∇_S h，
+ * 文献 Čencur-Šuler 2013 解析切线架），着色器按【GT 网格同一三角化约定】
+ * 重心插值 3 顶点法线（mitsuba/POM sim 逐位同语义，法线实现差 0.56° → 0）。
+ * 差分支撑的像素足迹 LOD（v55 Toksvig/Han 2007 口径）由 CPU 预计算与
+ * 远景 footPx 软化共同承担；水面遮罩 landFade = 法线向理想球方向混合。 */
+vec3 demNormalBary(vec3 d) {
+  vec2 t = demUV(d) * uDemSize - vec2(0.5);   /* 顶点网格坐标（列 0..W-1，接缝由 mod wrap） */
+  vec2 f = fract(t);
+  vec2 ij = floor(t);
+  /* v59：接缝列 wrap（列 W-1 右邻 = 列 0，与 GT 网格接缝顶点周期延拓同约定；
+   * 旧 W+1 复制列使纹理宽 = W+1，水星 4097 > maxTextureSize=4096 的 GPU
+   * → 纹理创建失败 → 采样恒黑 → normalize(0)=NaN → 整星黑屏） */
+  float i0 = mod(ij.x, uDemSize.x);
+  float i1 = mod(ij.x + 1.0, uDemSize.x);
+  float j0 = clamp(ij.y, 0.0, uDemSize.y - 1.0);
+  float j1 = clamp(ij.y + 1.0, 0.0, uDemSize.y - 1.0);
+  float txW = 1.0 / uDemSize.x;
+  float tyH = 1.0 / uDemSize.y;
+  vec3 n00 = texture2D(uTexN, vec2((i0 + 0.5) * txW, (j0 + 0.5) * tyH)).rgb;
+  vec3 n10 = texture2D(uTexN, vec2((i1 + 0.5) * txW, (j0 + 0.5) * tyH)).rgb;
+  vec3 n01 = texture2D(uTexN, vec2((i0 + 0.5) * txW, (j1 + 0.5) * tyH)).rgb;
+  vec3 n11 = texture2D(uTexN, vec2((i1 + 0.5) * txW, (j1 + 0.5) * tyH)).rgb;
+  /* 三角化：quad → 对角线 v1-v2（x+y=1）；下三角 (v0,v2,v1)、上三角 (v1,v2,v3)
+   * 重心权重（与 build_gt_mesh.py / verify_normal_interp.py 逐位同约定） */
+  bool lower = (f.x + f.y) <= 1.0;
+  float w0 = lower ? (1.0 - f.x - f.y) : 0.0;
+  float w1 = lower ? f.x : (1.0 - f.y);
+  float w2 = lower ? f.y : (1.0 - f.x);
+  float w3 = lower ? 0.0 : (f.x + f.y - 1.0);
+  vec3 nb = w0 * n00 + w1 * n10 + w2 * n01 + w3 * n11;
+  /* v59：退化守卫 —— 法线纹理缺失/上传失败时采样恒 (0,0,0)，normalize(0)=NaN
+   * 会把整片光照拖黑（NaN 过 clamp/uCap 不恢复，行星全黑的最后防线）。
+   * 合法顶点法线 dot(n,n)≈1，阈值 0.5 只拦真退化（NaN 比较为 false → 走回退） */
+  return dot(nb, nb) > 0.5 ? normalize(nb) : d;
 }
 /* 食阴影：表面点沿光源方向看遮挡盘与光源盘的角重叠比（弓形公式，
  * 与 CPU circleOverlap 同一几何）。P=表面点（本系行星半径单位，含形变）。 */
@@ -11272,21 +11692,59 @@ vec3 atmoInscatter(vec3 ldirW, vec3 lcol, vec3 tR, vec3 tM) {
   return lcol * (uAExtR * (atmoPhaseR(mu) * tR) + vec3(uAExtM * atmoPhaseM(uAMieG, mu)) * tM);
 }
 void main() {
+  /* ===== v56：DEM 真实隆起（POM）+ 视线重建提前 =====
+   * 射线重建（v44 逐字表达式）提到 main 顶部：DEM 视差 march 与大气视线段
+   * 共用同一重建结果（无大气 DEM 天体同样可得精确视线）；footPx 同点计算
+   * （均匀控制流），供 POM 门 / 法线 ε / 阴影软半影三处同源。
+   * dSurf = 表面查询方向：非 DEM 天体 = normalize(vNO)（旧式逐位一致）；
+   * DEM 天体 = 视差命中方向（贴图/镜面遮罩/法线/自阴影全部跟随真实隆起面）。
+   * PhitL = 位移后表面点（本系），供光照查询点与视线向量 V。 */
+  vec3 dNO = normalize(vNO);
+  float footPx = length(dFdx(dNO)) + length(dFdy(dNO));
+  float demL = (uHasDEM > 0.5 && uDemH > 0.0) ? uDemH / max(uARad, 1.0) : 0.0;
+  vec3 camL = vec3(0.0), rdL = vec3(0.0, 0.0, 1.0);
+  if (demL > 0.0 || uAOn > 0.5) {
+    vec3 roW = uOrtho > 0.5 ? (uCamR * (vNdc.x * uOrthoHalf.x) + uCamU * (vNdc.y * uOrthoHalf.y))
+                             : vec3(0.0);
+    vec3 rdW = uOrtho > 0.5 ? uCamF
+                             : normalize(uCamR * (vNdc.x * uAspect * uTanH) + uCamU * (vNdc.y * uTanH) + uCamF);
+    camL = uAInv * (roW - uWC);
+    vec3 rdLt = uAInv * rdW;
+    float rdLen = max(length(rdLt), 1e-9);
+    rdL = rdLt / rdLen;
+  }
+  float tHit = demL > 0.0 ? demParallaxHit(camL, rdL, demL, footPx) : -1.0;
+  vec3 dSurf = dNO;
+  vec3 PhitL = vec3(0.0);
+  if (tHit > 0.0) {
+    PhitL = camL + rdL * tHit;
+    dSurf = normalize(PhitL);
+  }
   /* v53：镜面遮罩（镜面图亮度）—— v54：经极性 uSpecPol 折算成「水量」：
    * specular 图（白=水）直接用；陆地遮罩图（白=陆地）取反。水面处同步抑制
-   * DEM 地形梯度（海底地形不透出水面上层，用户 v54 报告），并作镜面强度遮罩 */
+   * DEM 地形梯度（海底地形不透出水面上层，用户 v54 报告），并作镜面强度遮罩
+   * v56：查询方向改 dSurf（DEM 天体贴图随隆起面起伏；非 DEM = 旧式逐位一致） */
   float specLum = 0.0;
-  if (uHasSpec > 0.5) specLum = cubeSample(normalize(vNO), uTexS).a;
+  if (uHasSpec > 0.5) specLum = cubeSample(dSurf, uTexS).a;
   float waterM = uSpecPol >= 0.0 ? specLum : 1.0 - specLum;
   vec3 N = normalize(vNW);
   /* v53：DEM 地形光照 —— 扰动法线同时作用于漫反射/镜面/环境项（晨昏线随地形
    * 起伏变化）；无高程图或高度标尺为 0 时完全直通（与旧式逐位一致）；
-   * v54：水面处梯度按 waterM 抑制（海面平坦） */
-  if (uHasDEM > 0.5 && uDemH > 0.0) N = bumpNormalFromDEM(uHasSpec > 0.5 ? waterM : 0.0);
-  vec3 V = normalize(cameraPosition - vWP);
+   * v54：水面处梯度按 waterM 抑制（海面平坦）；v56：查询方向 dSurf */
+  vec3 NdLocal = vec3(0.0);   /* v59：DEM 扰动法线（本系）—— 阴影 normal-offset 与互反射门控用 */
+  if (demL > 0.0) {
+    /* v57：重心插值法线（本系）→ 水面遮罩向理想球混合（梯度抑制语义等价）→ uM3 回世界系 */
+    vec3 Nd = demNormalBary(dSurf);
+    NdLocal = Nd;
+    N = normalize(uM3 * normalize(mix(Nd, dNO, uHasSpec > 0.5 ? waterM : 0.0)));
+  }
+  /* v56：V 随位移点 —— 镜面高光/菲涅尔以真实隆起面为基准（非 DEM / 亚像素
+   * LOD 回退 = 旧式 vWP 逐位一致） */
+  vec3 V = tHit > 0.0 ? normalize(cameraPosition - (uWC + uM3 * PhitL))
+                      : normalize(cameraPosition - vWP);
   vec3 alb = uAlb;
   if (uHasTex > 0.5) {
-    vec4 s1 = cubeSample(normalize(vNO), uTex);
+    vec4 s1 = cubeSample(dSurf, uTex);   /* v56：dSurf（贴图随隆起面起伏） */
     float a1 = uTm1 > 0.5 ? s1.a * uOp1 : uOp1;
     alb = mix(uAlb, s1.rgb, clamp(a1, 0.0, 1.0));
   }
@@ -11302,25 +11760,27 @@ void main() {
      * 1.3e-4 行星半径，地球 ≈830 m ≈ 0.1×H_R）会被 exp(−h/H) 密度指数放大，
      * 在第一层贴图上形成网格空间频率的亮度条纹（实测 ±5 LSB，凹陷越粗越强，
      * 64 段粗网 ≈3×）。解析端点 h≡0 对像素几何连续；新旧端点差 = 网格凹陷
-     * （< 三角形内插误差），积分器与口径逐式不变 —— 数学等价，条纹结构性消失。 */
-    vec3 roW = uOrtho > 0.5 ? (uCamR * (vNdc.x * uOrthoHalf.x) + uCamU * (vNdc.y * uOrthoHalf.y))
-                             : vec3(0.0);
-    vec3 rdW = uOrtho > 0.5 ? uCamF
-                             : normalize(uCamR * (vNdc.x * uAspect * uTanH) + uCamU * (vNdc.y * uTanH) + uCamF);
-    vec3 camL = uAInv * (roW - uWC);
-    vec3 rdLt = uAInv * rdW;
-    float rdLen = max(length(rdLt), 1e-9);
-    vec3 rdL = rdLt / rdLen;
+     * （< 三角形内插误差），积分器与口径逐式不变 —— 数学等价，条纹结构性消失。
+     * v56：camL/rdL 已在 main 顶部重建（DEM 视差共用同一表达式，逐字不变）。 */
     float tA, tB;
     if (atmoRayIntersect(camL, rdL, vec3(0.0), uATop, tA, tB)) {
       if (tA < 0.0) tA = 0.0;                        /* 文章二：壳内自相机起算 */
       float tS0, tS1;
       bool hitS = atmoRayIntersect(camL, rdL, vec3(0.0), 1.0, tS0, tS1);
       float tS = (hitS && tS0 > 0.0) ? tS0 : (hitS ? tS1 : 1e30);  /* 表面命中 = 理想球近交点 */
-      Ploc = camL + rdL * min(tS, tB);               /* 光照/食影查询点同取解析点 */
-      float through = min(tB, tS) - tA;              /* B = 表面点（视线终点） */
+      float tSurf = tHit > 0.0 ? tHit : tS;          /* v56：DEM 视差命中 ≤ 理想球，优先 */
+      Ploc = camL + rdL * min(tSurf, tB);            /* 光照/食影查询点同取解析点 */
+      float through = min(tB, tSurf) - tA;           /* B = 表面点（视线终点） */
       if (through > 1e-6) {
         float ds = through / float(${ATMO_VIEW_PTS});
+        /* v56 等价优化：光源本系方向对 16 个视线段为循环不变量 —— 提出循环
+         *（同表达式同输入只算一次；旧式每段每光源重算 normalize+mat3 乘法，
+         * 共 16×uNL 次；未启用槽位 uLD=(0,0,1) 有效值，结果不被消费，安全）。
+         * 数值逐位不变：表达式与输入完全相同，仅求值次数减少。 */
+        vec3 ldirL0 = normalize(uAInv * uLD[0]);
+        vec3 ldirL1 = normalize(uAInv * uLD[1]);
+        vec3 ldirL2 = normalize(uAInv * uLD[2]);
+        vec3 ldirL3 = normalize(uAInv * uLD[3]);
         float odPAR = 0.0, odPAM = 0.0;              /* 文章 D(PA) 前缀累计 */
         vec3 tR0 = vec3(0.0), tR1 = vec3(0.0), tR2 = vec3(0.0), tR3 = vec3(0.0);
         vec3 tM0 = vec3(0.0), tM1 = vec3(0.0), tM2 = vec3(0.0), tM3 = vec3(0.0);
@@ -11337,11 +11797,14 @@ void main() {
           if (h >= 0.0) {
             for (int i = 0; i < 4; i++) {            /* 与大气 pass 同一 4 光源口径 */
               if (i >= uNL) break;
-              vec3 ldirL = normalize(uAInv * uLD[i]);
+              vec3 ldirL = i == 0 ? ldirL0 : (i == 1 ? ldirL1 : (i == 2 ? ldirL2 : ldirL3));   /* v56：循环外预计算 */
               /* v46：食影先判（纯几何，廉价）—— 全影样本（eclS=0）贡献恒零，
                * 免去 8 段 lightSampling 积分；部分影/无影样本与旧式逐位同值 */
               float eclS = eclipseOcc(p, ldirL, uEcl[i], uLAux[i]);
               if (eclS > 0.0 && uEclB[i].w > 0.0) eclS *= eclipseOcc(p, ldirL, uEclB[i], uLAux[i]);   /* v52：第二遮挡体 */
+              /* v55：环影作用于 in-scatter（世界系 ringShadow，采样点经 uM3 回世界系）
+               * —— 环影楔上空的大气同步变暗；uRingOn=0 时恒 1 零成本 */
+              if (eclS > 0.0) eclS *= ringShadow(uWC + uM3 * p, uLD[i]);
               if (eclS > 0.0) {
                 float odCR, odCM;
                 bool over = atmoLightSampling(p, ldirL, uATop, uAHR, uAHM, odCR, odCM);
@@ -11366,20 +11829,41 @@ void main() {
     }
   }
   vec3 lit = uAmb * alb * (0.55 + 0.45 * clamp(dot(N, V), 0.0, 1.0));
+  /* v56 等价优化：食影/环影查询点对光源循环为不变量（uniform/varying 组合）
+   * —— 提出循环，同表达式只算一次，数值逐位不变 */
+  vec3 Pq = uAOn > 0.5 ? Ploc : (tHit > 0.0 ? PhitL : (vWP - uWC) / max(uARad, 1e-6));
   vec3 specSum = vec3(0.0);   /* v54：水面镜面单独累加（自带大气双程调制，出循环后不再乘 Tview） */
   for (int i = 0; i < 8; i++) {
     if (i >= uNL) break;
     float ndl = dot(N, uLD[i]);
-    /* 大气存在时晨昏线由 T_sun 光学深度给出（与大气 pass 严格同线），
-     * 仅保留极窄 smoothstep 抗锯齿；无大气维持原口径 */
-    float dif = uAOn > 0.5 ? smoothstep(-0.008, 0.02, ndl) : smoothstep(-0.015, 0.05, ndl);
+    /* v57：DEM 天体改真朗伯 dif = clamp(ndl,0,1) —— 与光线追踪 GT 同式
+     *（修「受光面无变亮」：旧式 dif=smoothstep(ndl) 无余弦因子，坡度朝阳
+     * 不增亮、晨昏过渡失真；Python 管线 12 视图 ≥99% 背书）。
+     * 非 DEM 天体维持既有口径（行为零变化）。大气存在时晨昏线由 T_sun
+     * 光学深度给出（与大气 pass 严格同线）。 */
+    float dif = demL > 0.0 ? clamp(ndl, 0.0, 1.0)
+      : (uAOn > 0.5 ? smoothstep(-0.008, 0.02, ndl) : smoothstep(-0.015, 0.05, ndl));
     float occ = 1.0;
     if (dif > 0.0) {
-      vec3 P = uAOn > 0.5 ? Ploc : (vWP - uWC) / max(uARad, 1e-6);
+      vec3 P = Pq;   /* v56：循环外预计算（旧式逐光源重算） */
       vec3 ldirL = normalize(uAInv * uLD[i]);
       occ = eclipseOcc(P, ldirL, uEcl[i], uLAux[i]);
       if (occ > 0.0 && uEclB[i].w > 0.0) occ *= eclipseOcc(P, ldirL, uEclB[i], uLAux[i]);   /* v52：第二遮挡体 */
       occ *= ringShadow(vWP, uLD[i]);   /* v40：环影（uRingOn=0 时恒 1 零开销） */
+      /* v55：地形自阴影（任务④）—— 逐像素高程场光线 march（Max 1988 地平线遮蔽
+       * + Tatarchuk 2006 近似软影），阴影分辨率 = 像素级；tanSun = 恒星角半径正切
+       * （uLAux 与食影同源，钳 0.2 防退化值）；无 DEM 恒 1 零开销 */
+      /* v59：地形自阴影与食影/环影分离 —— occEcl（食+环，物理遮光）与
+       * occTer（地形，参与互反射补偿分解）分开累计；
+       * 互反射地板改为【加性项】（见 difOcc 处），不再混入 occ（occ 语义
+       * 保持「直接光遮挡比」，GGX/镜面与旧口径一致）。 */
+      float occEcl = occ;   /* = eclipseOcc × eclipseOccB × ringShadow */
+      float occTer = 1.0;
+      if (occEcl > 0.0 && demL > 0.0) {
+        occTer = demShadowL(dSurf, ldirL, demL,
+                            clamp(uLAux[i].y / max(uLAux[i].z, 1e-6), 0.0, 0.2), footPx, NdLocal);
+      }
+      occ = occEcl * occTer;
       /* v43 文章一 T(CP)：表面点→恒星 lightSampling 光学深度透射（瑞利晨昏红化）。
        * v53：Tsun 提升为统一变量（无大气 = vec3(1)，与旧 else 分支逐位同式），
        * 镜面/漫反射共用；occ=0（全食）样本贡献恒零，免 lightSampling（v46 口径） */
@@ -11405,7 +11889,10 @@ void main() {
        * 漫反射按 (1−F·waterM) 补偿（能量守恒：掠射角镜面接管漫反射）；
        * uHasSpec=0 时 kd=1、specSum=0 —— 与旧式逐位一致。 */
       float kd = 1.0;
-      if (uHasSpec > 0.5 && waterM > 0.0005) {
+      /* v56 等价优化：occ=0（全食/全环影/全地形影）时镜面项 = …×occ×Ttwo 恒 +0
+       *（各因子均有界，无 Inf/NaN 路径），漫反射项同样含 occ 因子恒 +0 ——
+       * 整块跳过与旧式逐位同值；行星凌食场景省 GGX+Toksvig 全部开销 */
+      if (uHasSpec > 0.5 && waterM > 0.0005 && occ > 0.0) {
         vec3 Hv = normalize(uLD[i] + V);
         float vdhS = clamp(dot(V, Hv), 0.0, 1.0);
         float Fs = 0.02 + 0.98 * pow(1.0 - vdhS, 5.0);   /* Schlick @ F0=0.02 */
@@ -11416,12 +11903,22 @@ void main() {
           float ndhS = clamp(dot(N, Hv), 0.0, 1.0);
           float aS = WATER_ROUGH * WATER_ROUGH;
           float aS2 = aS * aS;
-          float dnm = ndhS * ndhS * (aS2 - 1.0) + 1.0;
-          float Dggx = aS2 / (3.14159265 * dnm * dnm);   /* Walter 2007 GGX */
+          /* ===== v55 Toksvig 镜面 AA（任务③：远处星球反射亮点不再因亚像素丢失）=====
+           * 文献：Toksvig 2004「Mipmapping Normal Maps」(JGT 9(3))；Heitz 2014
+           * (JCGT) specular aliasing 综述同族。像素足迹内法线方差 σ² =
+           * ¼(|∂xN|²+|∂yN|²)（±0.5px 线性坡度方差），有效粗糙度 α² ← α²+σ²：
+           * 眩光能量守恒地摊到像素上 —— 小盘面（星球远看只有几像素）眩光瓣被
+           * 像素平均掉而「消失」的根修；近距盘面 fwidth→0 逐位回归原 GGX。
+           * 同时覆盖球面曲率项（盘面像素数 k：σ≈(π/2)/k）与 DEM 细节项。 */
+          vec3 dNx = dFdx(N), dNy = dFdy(N);
+          float sigma2 = 0.25 * (dot(dNx, dNx) + dot(dNy, dNy));
+          float aEff2 = min(aS2 + sigma2, 1.0);
+          float dnm = ndhS * ndhS * (aEff2 - 1.0) + 1.0;
+          float Dggx = aEff2 / (3.14159265 * dnm * dnm);   /* Walter 2007 GGX */
           /* Smith height-correlated 联合可见性（Karis 2013 / Moving Frostbite
-           * to PBR 2014 解析式）：Vis = G/(4·NdotL·NdotV) */
-          float lamV = ndlS * sqrt((ndvS - aS2 * ndvS) * ndvS + aS2);
-          float lamL = ndvS * sqrt((ndlS - aS2 * ndlS) * ndlS + aS2);
+           * to PBR 2014 解析式）：Vis = G/(4·NdotL·NdotV)；v55 用有效粗糙度 */
+          float lamV = ndlS * sqrt((ndvS - aEff2 * ndvS) * ndvS + aEff2);
+          float lamL = ndvS * sqrt((ndlS - aEff2 * ndlS) * ndlS + aEff2);
           float Vis = 0.5 / max(lamV + lamL, 1e-8);
           /* 镜面辐射 = BRDF·E·NdotL = D·V·F·waterM·NdotL·(π·uLC)·GAIN；
            * 食影/环影与漫反射同一链（occ）；大气入射×出射按 WATER_ATMO_K 调制 */
@@ -11429,7 +11926,37 @@ void main() {
           specSum += uLC[i] * (3.14159265 * Dggx * Vis * Fs * waterM * ndlS * WATER_SPEC_GAIN) * occ * Ttwo;
         }
       }
-      lit += alb * uLC[i] * dif * occ * Tsun * kd;
+      /* v59：漫反射 = 直接项 + 地形互反射地板（加性）。
+       * 文献锚点：月影内实测辐射 ≈ 直射的 2~4%（地形互反射+地球照，
+       * NASA LRO/地震实验反照率测量同量级）；GT（Mitsuba path max_depth 6）
+       * 自 v59 起含真实互反射 → 本近似为逐像素可对比的同阶模型。
+       * bounce = K·dayGate·(1−dif·occTer)：仅补直接项未送达的部分
+       * （地形影 occTer=0 与背阳坡 dif=0 两者 —— 后者是「阴影像扔上去的
+       * 黑点」观感的主源）；dayGate = 未扰动球面法线·L —— 晨昏线外平滑
+       * 归零（夜面无互反射来源，不假亮）；食影 occEcl 同乘（全食时互反射
+       * 一并消失，物理一致）。lit 像素（difOcc→1）加性项→0，逐位不变。 */
+      float difOcc = dif * occTer;
+      /* v59b：bounce 仅限 DEM 天体（地形互反射是高程场特有的物理项；
+       * 非 DEM 天体保持既有口径逐位不变 —— 实测 ddemL=0 时若不加门控，
+       * 气巨晨昏带会被抬亮 ~1.4%） */
+      float bounceT = demL > 0.0
+        ? K_SHADOW_BOUNCE * clamp(dot(dNO, ldirL), 0.0, 1.0) * (1.0 - difOcc)
+        : 0.0;
+      lit += alb * uLC[i] * (difOcc + bounceT) * occEcl * Tsun * kd;
+    } else if (demL > 0.0) {
+      /* v59：背阳坡（dif=0，DEM 天体）互反射 —— 用户「阴影像扔上去的黑点」
+       * 观感的主源（旧实现 dif=0 → lit 仅剩 uAmb≈5e-4 ≈ 纯黑，而真实影内
+       * 有 2~4% 地形互反射）。不 march 地形影（直接项本为 0），只做廉价的
+       * 食影/环影门控；Tsun 取 1（互反射为表面→表面路径，不经大气日路）、
+       * kd 取 1（互反射对水面镜面补偿无意义）。 */
+      vec3 ldirL0 = normalize(uAInv * uLD[i]);
+      float occEcl0 = eclipseOcc(Pq, ldirL0, uEcl[i], uLAux[i]);
+      if (occEcl0 > 0.0 && uEclB[i].w > 0.0) occEcl0 *= eclipseOcc(Pq, ldirL0, uEclB[i], uLAux[i]);
+      if (occEcl0 > 0.0) occEcl0 *= ringShadow(vWP, uLD[i]);
+      if (occEcl0 > 0.0) {
+        float bounceT0 = K_SHADOW_BOUNCE * clamp(dot(dNO, ldirL0), 0.0, 1.0);
+        lit += alb * uLC[i] * bounceT0 * occEcl0;
+      }
     }
   }
   lit += uEmis;   /* v20：自身黑体热辐射（σT⁴/π 链），光照循环后加性叠加，食阴影零影响 */
@@ -11548,12 +12075,34 @@ uniform vec3 uAExtR;                /* v43：β_R·rP（文章一公式逐通道
 uniform vec3 uAExtA;                /* v43：β_A·rP（吸收，随瑞利密度路径） */
 uniform float uAExtM, uAMieG;       /* v43：β_M·rP 与米氏前向 g */
 uniform mat3 uAInv;
+/* v55：本系 → 世界线性映射（= R_tide·S_tide·R_spin·S_f·rad，与 PLANET_FS uM3 同源）
+ * —— in-scatter 采样点环影需世界系位置（世界环轴/环贴图径向） */
+uniform mat3 uM3;
 uniform vec3 uCamR, uCamU, uCamF;   /* v44：相机基（与大气 pass 同源） */
 uniform float uTanH, uAspect, uOrtho;
 uniform vec2 uOrthoHalf;
 varying vec3 vNW; varying vec3 vNO; varying vec3 vWP;
 varying vec2 vNdc;                      /* v44：像素 NDC */
 const float CLOUD_R = ${CLOUD_SHELL};   /* 云壳本系半径 = 渲染层 shell.scale 系数（行星半径=1） */
+/* v55：云层 in-scatter 环影 —— 与 PLANET_FS 的 ringShadow 同式（世界系环轴/贴图），
+ * 但 uniforms 不含 uWC（SHELL_FS 已声明）；环块同步填充（shellMat 与 planetMat
+ * 同值），uRingOn=0 时恒 1 零成本 */
+uniform float uRingOn, uRingOp, uWR;
+uniform vec3 uRingAx;
+uniform sampler2D uRingTex;
+uniform float uRingRin, uRingRou;
+float ringShadowS(vec3 P, vec3 L) {
+  if (uRingOn < 0.5) return 1.0;
+  float dl = dot(L, uRingAx);
+  if (abs(dl) < 1e-5) return 1.0;
+  float t = dot(uWC - P, uRingAx) / dl;
+  if (t <= 0.0) return 1.0;
+  float d = length(P + L * t - uWC) / uWR;
+  float frac = (d - uRingRin) / (uRingRou - uRingRin);
+  if (frac <= 0.0 || frac >= 1.0) return 1.0;
+  float a = texture2D(uRingTex, vec2(frac, 0.5)).a;
+  return 1.0 - a * uRingOp;
+}
 ` + ATMO_CORE_GLSL + `
 vec4 cubeSample(vec3 d, samplerCube t) {
   vec3 c = max(textureCube(t, d).rgb, vec3(0.0));
@@ -11624,6 +12173,12 @@ void main() {
       float through = min(tB, tS) - tA;
       if (through > 1e-6) {
         float ds = through / float(${ATMO_VIEW_PTS});
+        /* v56 等价优化（与 PLANET_FS 同款）：光源本系方向对视线段循环不变 ——
+         * 提出循环，同表达式只算一次，数值逐位不变 */
+        vec3 ldirL0 = normalize(uAInv * uLD[0]);
+        vec3 ldirL1 = normalize(uAInv * uLD[1]);
+        vec3 ldirL2 = normalize(uAInv * uLD[2]);
+        vec3 ldirL3 = normalize(uAInv * uLD[3]);
         float odPAR = 0.0, odPAM = 0.0;
         vec3 tR0 = vec3(0.0), tR1 = vec3(0.0), tR2 = vec3(0.0), tR3 = vec3(0.0);
         vec3 tM0 = vec3(0.0), tM1 = vec3(0.0), tM2 = vec3(0.0), tM3 = vec3(0.0);
@@ -11639,11 +12194,13 @@ void main() {
           if (h >= 0.0) {
             for (int i = 0; i < 4; i++) {
               if (i >= uNL) break;
-              vec3 ldirL = normalize(uAInv * uLD[i]);
+              vec3 ldirL = i == 0 ? ldirL0 : (i == 1 ? ldirL1 : (i == 2 ? ldirL2 : ldirL3));   /* v56：循环外预计算 */
               /* v46：食影先判（纯几何，廉价）—— 全影样本（eclS=0）贡献恒零，
                * 免去 8 段 lightSampling 积分；部分影/无影样本与旧式逐位同值 */
               float eclS = eclipseOcc(p, ldirL, uEcl[i], uLAux[i]);
               if (eclS > 0.0 && uEclB[i].w > 0.0) eclS *= eclipseOcc(p, ldirL, uEclB[i], uLAux[i]);   /* v52：第二遮挡体 */
+              /* v55：环影作用于 in-scatter（与 PLANET_FS 同口径；SHELL_FS 新增 uM3） */
+              if (eclS > 0.0) eclS *= ringShadowS(uWC + uM3 * p, uLD[i]);
               if (eclS > 0.0) {
                 float odCR, odCM;
                 bool over = atmoLightSampling(p, ldirL, uATop, uAHR, uAHM, odCR, odCM);
@@ -11668,13 +12225,15 @@ void main() {
     }
   }
   vec3 lit = uAmb * s2.rgb * (0.55 + 0.45 * clamp(dot(N, V), 0.0, 1.0));
+  /* v56 等价优化：查询点对光源循环不变 —— 提出循环（同表达式只算一次） */
+  vec3 Pq = uAOn > 0.5 ? Ploc : (vWP - uWC) / max(uARad * 1.015, 1e-6);
   for (int i = 0; i < 8; i++) {
     if (i >= uNL) break;
     float ndl = dot(N, uLD[i]);
     float dif = uAOn > 0.5 ? smoothstep(-0.008, 0.02, ndl) : smoothstep(-0.015, 0.05, ndl);
     float occ = 1.0;
     if (dif > 0.0) {
-      vec3 P = uAOn > 0.5 ? Ploc : (vWP - uWC) / max(uARad * 1.015, 1e-6);
+      vec3 P = Pq;   /* v56：循环外预计算 */
       vec3 ldirL = normalize(uAInv * uLD[i]);
       occ = eclipseOcc(P, ldirL, uEcl[i], uLAux[i]);
       if (occ > 0.0 && uEclB[i].w > 0.0) occ *= eclipseOcc(P, ldirL, uEclB[i], uLAux[i]);   /* v52：第二遮挡体 */
@@ -11724,9 +12283,11 @@ const OVERLAY_OCCL_FS = `
 uniform sampler2D tDepth;
 uniform vec2 uDepthSize;
 uniform float uNear, uFar, uOrtho, uHasDepth;
+uniform float uOcclDbg;   /* v55 调试：1=红/绿二值输出遮挡判定（绿=可见 红=被遮挡）, 2=输出原始深度 */
 bool occludedByScene() {
   if (uHasDepth < 0.5) return false;
   float d = texture2D(tDepth, gl_FragCoord.xy / uDepthSize).x;
+  if (uOcclDbg > 1.5) { /* 调试：深度可视化 */ }
   if (d >= 0.999999) return false;   /* 清屏深度 = 该方向无天体 */
   float sd = uOrtho > 0.5 ? (uNear + d * (uFar - uNear))
                           : (uNear * uFar) / (uFar - d * (uFar - uNear));
@@ -11747,6 +12308,15 @@ varying float vDist;
  * 恢复 v20 LDR 直出（sRGB 色 + alpha，不受曝光影响） */
 ` + OVERLAY_OCCL_FS + `
 void main() {
+  if (uOcclDbg > 0.5) {
+    if (uOcclDbg > 1.5) {
+      float dd = texture2D(tDepth, gl_FragCoord.xy / uDepthSize).x;
+      gl_FragColor = vec4(dd, dd, dd, 1.0);   /* 调试：原始深度灰度 */
+      return;
+    }
+    gl_FragColor = occludedByScene() ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.0, 1.0, 0.0, 1.0);
+    return;
+  }
   if (occludedByScene()) discard;
   gl_FragColor = vec4(vC.rgb, vC.a);
 }`;
@@ -11756,6 +12326,7 @@ let renderer = null, scene = null, overlayScene = null, cameraP = null, cameraO 
  * 物体式退役删除 —— 叠加层恒挂 overlayScene（OutputPass 之后 LDR 叠加层，
  * v20/v24/v28b 路径），遮挡由 OVERLAY_OCCL_FS 纹理比较完成。 */
 let composer = null, renderPass = null, bloomPass = null, outputPass = null, lensPass = null, overlayPass = null;
+let captureRTF = null;   /* v58：验证管线浮点捕获 RT（captureLinear 专用） */
 let atmoPass = null;   /* v40：大气散射 pass（SebLague 移植） */
 let gaussTex = null, sphereGeo = null, sphereGeoHi = null, sphereGeoLo = null;
 let ringGeo = null;   /* v40：星环几何（行星半径单位，XY 面，法线 = 本地 Z） */
@@ -12169,6 +12740,12 @@ uniform vec4 uAESB0[${ATMO_MAX}], uAESB1[${ATMO_MAX}], uAESB2[${ATMO_MAX}], uAES
 uniform vec3 uAEP0[${ATMO_MAX}], uAEP1[${ATMO_MAX}], uAEP2[${ATMO_MAX}], uAEP3[${ATMO_MAX}];   /* 食影几何: (光源半径比, 光源距离比, 0) */
 uniform vec4 uARingAx[${ATMO_MAX}];   /* v52：星环（本系）xyz 环平面法向, w 内径（≤0 无环） */
 uniform float uARingRo[${ATMO_MAX}];  /* v52：星环外径（本系 = 行星半径单位） */
+/* v55：环径向 alpha 剖面（16 点均匀采样，CPU 由环贴图 alpha 列预采样）——
+ * 大气 pass 为全场景单一材质，采样器数组动态下标在 GLSL ES 1.0 下非法
+ *（SwiftShader 严格拒绝），故以剖面 uniform 替代贴图采样：线性插值分辨率
+ * 足够环影/透射率计算（卡西尼缝级锐边在此用途下轻微平滑，可接受）。 */
+uniform vec4 uARingProf[${ATMO_MAX * 4}];   /* 每天体 16 点 alpha（0=内缘, 1=外缘） */
+uniform float uARingOp[${ATMO_MAX}];        /* 环不透明度（与 RING_FS uOp 同源） */
 uniform vec4 uAOC0[${ATMO_MAX}], uAOC1[${ATMO_MAX}], uAOC2[${ATMO_MAX}], uAOC3[${ATMO_MAX}];
               /* 前景遮挡天体（本系）: xyz 中心, w 半径（≤0 无）—— 解析遮挡
                *（深度缓冲在行星距离全量化失效，为 v41 定论的既有机制） */
@@ -12208,6 +12785,42 @@ float eclipseShadow(vec3 p, vec3 sdir, vec4 ec, vec3 ep) {
   float miss = length(dv - t * sdir);
   float rc = ep.x * t / max(ep.y, 1e-6);
   return 1.0 - circleOverlap(miss, rc, ec.w);
+}
+/* v55：环影（本系）—— 采样点沿光源方向与环平面求交，交点半径落在环带内按
+ * 贴图 alpha 削减直射光。与表面 RING_SHADOW_GLSL 同一弓形几何的世界/本系两版
+ * （本表全部几何量已在本系：环轴 uARingAx.xyz、内径 uARingAx.w、外径 uARingRo）。
+ * 文献口径：环 = 径向条带薄板，直射光透射 = 1 − α(r)·op（与行星面上环影同式，
+ * Max 1988 高度场自遮蔽的环板特例）。无环 / 贴图未挂 / 交点在背光侧 → 恒 1。
+ *（GLSL ES 1.0 采样器数组下标须为常量索引表达式 —— 数组选取全部在调用点
+ * 用循环下标完成，函数内仅收标量/贴图参数，与 uAES0-3 既有模式一致。） */
+float atmoRingProfA(float frac, int base) {
+  float x = clamp(frac, 0.0, 1.0) * 15.0;
+  float k = floor(x);
+  float f = x - k;
+  int i0 = base + int(k);
+  int i1 = base + int(min(k + 1.0, 15.0));
+  vec4 a = uARingProf[i0];
+  vec4 b = uARingProf[i1];
+  float a0 = (i0 % 4 == 0) ? a.x : ((i0 % 4 == 1) ? a.y : ((i0 % 4 == 2) ? a.z : a.w));
+  float a1 = (i1 % 4 == 0) ? b.x : ((i1 % 4 == 1) ? b.y : ((i1 % 4 == 2) ? b.z : b.w));
+  return mix(a0, a1, f);
+}
+float atmoRingShadowL(vec3 p, vec3 ldirL, vec3 axL, float rinL, float rouL, float opL, int base) {
+  if (rinL <= 0.0 || rouL <= rinL) return 1.0;
+  float dl = dot(ldirL, axL);
+  if (abs(dl) < 1e-6) return 1.0;
+  float t = dot(-p, axL) / dl;
+  if (t <= 0.0) return 1.0;
+  float rHit = length(p + ldirL * t);
+  if (rHit < rinL || rHit > rouL) return 1.0;
+  float frac = (rHit - rinL) / (rouL - rinL);
+  float a = atmoRingProfA(frac, base) * opL;
+  return 1.0 - clamp(a, 0.0, 1.0);
+}
+/* v55：环带内贴图 alpha（半透明环的遮挡率）—— 近侧环像素的大气辉光按 (1-α) 透出 */
+float atmoRingAlphaL(float rHit, vec3 axL, float rinL, float rouL, float opL, int base) {
+  float frac = (rHit - rinL) / (rouL - rinL);
+  return clamp(atmoRingProfA(frac, base) * opL, 0.0, 1.0);
 }
 /* 单天体单次散射主循环（文章一双循环逐式 + 三处必要扩展：
  * ①形变空间共形壳层 ②前景天体解析遮挡 ③多天体食影/多恒星求和） */
@@ -12271,13 +12884,33 @@ void main() {
      * 该段透射衰减，环后临边晕不再叠加）。环贴图缝隙（C 环/卡西尼缝半透明）
      * 按几何环带全遮挡处理 —— 缝隙区漏晕的误差远小于旧式全漏。交点在壳层
      * 入口之前（近侧环整段在前）→ 截到 tA → through ≤ 0 自然跳过本天体。 */
+    /* v55：环-大气层级三分支 ——
+     * ① 近侧环（tR < tA，环在壳层入口之前）：环在【整段大气】之前，环像素的
+     *    背景合成已由环网格混合完成；大气对背景的「修改量」（in-scatter 与背景
+     *    衰减）应经环的透过率 (1-α_ring) 加权后叠加 —— v52 旧式整段剪掉 in-scatter，
+     *    环缝隙（卡西尼环缝 α≈0）后的大气临边辉光被错误抹掉（用户报告的
+     *    「大气层和星环遮挡关系错误」）。
+     * ② 环在壳层之内/之后（tR ≥ tA）：环前大气照常积分止于环平面（v52 口径，
+     *    环像素继承相机→环段的雾化与 in-scatter）。
+     * ③ 无环/未命中环带：不变。 */
+    float ringFrontA = -1.0;   /* ≥0：近侧环命中距离，此时值为 rHit（本系）；-1 = 非近侧环 */
+    float ringFrontAlpha = 0.0;
     if (uARingAx[i].w > 0.0 && uARingRo[i] > uARingAx[i].w) {
       float dnR = dot(rdL, uARingAx[i].xyz);
       if (abs(dnR) > 1e-6) {
         float tR = -dot(roL, uARingAx[i].xyz) / dnR;
         if (tR > 0.0) {
           float rHit = length(roL + rdL * tR);
-          if (rHit >= uARingAx[i].w && rHit <= uARingRo[i]) sceneD = min(sceneD, max(tR, tA));
+          if (rHit >= uARingAx[i].w && rHit <= uARingRo[i]) {
+            if (tR < tA) {
+              /* 近侧环：不剪断积分（大气整段照算），tail 按 (1-α) 加权叠加；
+               * α=1（不透明环带）→ 加权 0 = 与 v52 剪断口径一致 */
+              ringFrontA = rHit;
+              ringFrontAlpha = atmoRingAlphaL(rHit, uARingAx[i].xyz, uARingAx[i].w, uARingRo[i], uARingOp[i], i * 4);
+            } else {
+              sceneD = min(sceneD, tR);
+            }
+          }
         }
       }
     }
@@ -12336,6 +12969,10 @@ void main() {
             eclS *= (L == 0 ? eclipseShadow(p, ldirL, esB0, ep0)
                      : (L == 1 ? eclipseShadow(p, ldirL, esB1, ep1)
                      : (L == 2 ? eclipseShadow(p, ldirL, esB2, ep2) : eclipseShadow(p, ldirL, esB3, ep3))));
+          /* v55：环影作用于大气 in-scatter —— 环影内的采样点直射光被环按贴图 alpha
+           * 削减（表面 RING_SHADOW_GLSL 同式的本系版）—— 环影楔上空的大气同步变暗；
+           * 无环恒 1 零成本 */
+          if (eclS > 0.0) eclS *= atmoRingShadowL(p, ldirL, uARingAx[i].xyz, uARingAx[i].w, uARingRo[i], uARingOp[i], i * 4);
           if (eclS > 0.0) {
             float odCR, odCM;
             bool over = atmoLightSampling(p, ldirL, atmTop, hrR, hrM, odCR, odCM);
@@ -12356,17 +12993,33 @@ void main() {
     /* 文章一最终组合（逐光源）：I = lightColor·(β_R·P_R(μ)·ΣR + β_M·P_M(μ)·ΣM)。
      * 未启用光源槽位 uALC=0 → 自动零贡献。 */
     vec3 scat = vec3(0.0);
-    float mu0 = dot(rd, normalize(uALD0[i]));
-    float mu1 = dot(rd, normalize(uALD1[i]));
-    float mu2 = dot(rd, normalize(uALD2[i]));
-    float mu3 = dot(rd, normalize(uALD3[i]));
-    scat += uALC0[i] * (coefR * (atmoPhaseR(mu0) * tR0) + vec3(coefM * atmoPhaseM(mieG, mu0)) * tM0);
-    scat += uALC1[i] * (coefR * (atmoPhaseR(mu1) * tR1) + vec3(coefM * atmoPhaseM(mieG, mu1)) * tM1);
-    scat += uALC2[i] * (coefR * (atmoPhaseR(mu2) * tR2) + vec3(coefM * atmoPhaseM(mieG, mu2)) * tM2);
-    scat += uALC3[i] * (coefR * (atmoPhaseR(mu3) * tR3) + vec3(coefM * atmoPhaseM(mieG, mu3)) * tM3);
+    /* v56 等价优化：未启用槽位 CPU 恒填 uALC=(0,0,0)、uALD=(0,0,1)（copyLights/
+     * updateAtmosphereUniforms 保证）→ 该槽贡献 = 0×有限值 = +0，逐位等于不加；
+     * 按槽位门控跳过 normalize/相位函数求值（每像素省 3 组，槽位全用时同价） */
+    if (uALN[i] > 0.5) {
+      float mu0 = dot(rd, normalize(uALD0[i]));
+      scat += uALC0[i] * (coefR * (atmoPhaseR(mu0) * tR0) + vec3(coefM * atmoPhaseM(mieG, mu0)) * tM0);
+    }
+    if (uALN[i] > 1.5) {
+      float mu1 = dot(rd, normalize(uALD1[i]));
+      scat += uALC1[i] * (coefR * (atmoPhaseR(mu1) * tR1) + vec3(coefM * atmoPhaseM(mieG, mu1)) * tM1);
+    }
+    if (uALN[i] > 2.5) {
+      float mu2 = dot(rd, normalize(uALD2[i]));
+      scat += uALC2[i] * (coefR * (atmoPhaseR(mu2) * tR2) + vec3(coefM * atmoPhaseM(mieG, mu2)) * tM2);
+    }
+    if (uALN[i] > 3.5) {
+      float mu3 = dot(rd, normalize(uALD3[i]));
+      scat += uALC3[i] * (coefR * (atmoPhaseR(mu3) * tR3) + vec3(coefM * atmoPhaseM(mieG, mu3)) * tM3);
+    }
     /* 文章二大气雾式合成：背景 = 原场景 × 全程透射 + in-scatter。
-     * 表面像元例外 —— 表面着色器已按同一积分器计 T+in-scatter（不双重扣光）。 */
-    if (!surfPix) {
+     * 表面像元例外 —— 表面着色器已按同一积分器计 T+in-scatter（不双重扣光）。
+     * v55 近侧环像元例外：环后大气「修改量」经环透过率加权 ——
+     *   final = orig + (bg·T + scat − bg)·(1−α) ≈ orig + scat·(1−α)（暗天背景下
+     *   bg·(T−1) ≈ 0；α=1 退化为 v52 全剪口径）。 */
+    if (ringFrontA >= 0.0) {
+      if (!surfPix) col += scat * (1.0 - ringFrontAlpha);
+    } else if (!surfPix) {
       vec3 Tbg = exp(-(coefR + coefA) * odPAR - vec3(coefM * odPAM));
       col = col * Tbg + scat;
     }
@@ -12414,6 +13067,8 @@ class AtmospherePass extends Pass {
       uAESB3: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },
       uARingAx: { value: Array.from({ length: ATMO_MAX }, () => new THREE.Vector4()) },  /* v52：星环（本系法向+内径） */
       uARingRo: { value: new Float32Array(ATMO_MAX) },                                   /* v52：星环外径 */
+      uARingProf: { value: Array.from({ length: ATMO_MAX * 4 }, () => new THREE.Vector4(1, 1, 1, 1)) },  /* v55：环径向 alpha 剖面（默认全 1 = 不透明） */
+      uARingOp: { value: new Float32Array(ATMO_MAX) },                                   /* v55：环不透明度 */
       uAEP0: { value: Array.from({ length: ATMO_MAX }, v3s) },
       uAEP1: { value: Array.from({ length: ATMO_MAX }, v3s) },
       uAEP2: { value: Array.from({ length: ATMO_MAX }, v3s) },
@@ -12450,6 +13105,33 @@ const _atM4a = new THREE.Matrix4(), _atM4b = new THREE.Matrix4(), _atM4c = new T
 const _atU3 = new THREE.Matrix3();
 const _atM3at = new THREE.Matrix3();   /* v52：环平面法向的 (M⁻¹)ᵀ 变换暂存 */
 const _atV = new THREE.Vector3(), _atV2 = new THREE.Vector3(), _atV3 = new THREE.Vector3();
+/* v55：环贴图径向 alpha 剖面预采样（16 点）—— 大气 pass 的环影/透射率 uniform 源。
+ * 贴图 = 径向条带（水平轴 = 半径 [ri,ro]）；α 已含 uOp。按 (贴图, op) 缓存，
+ * 贴图未就绪回退全 1（不透明，v52 剪断口径的上界）。canvas 2D 采样一次性成本。 */
+const _ringProfCache = new Map();
+function ringAlphaProfile(tex, op) {
+  const key = (tex && tex.id) + '|' + op;
+  const hit = _ringProfCache.get(key);
+  if (hit) return hit;
+  const prof = new Float32Array(16).fill(1);
+  try {
+    const img = tex && tex.image;
+    if (img && img.width > 0) {
+      const cv = document.createElement('canvas');
+      cv.width = 64; cv.height = 1;
+      const cx2 = cv.getContext('2d', { willReadFrequently: true });
+      cx2.drawImage(img, 0, 0, img.width, img.height, 0, 0, 64, 1);
+      const d = cx2.getImageData(0, 0, 64, 1).data;
+      for (let q = 0; q < 16; q++) {
+        const x = Math.min(63, Math.round(q * 63 / 15));
+        prof[q] = d[x * 4 + 3] / 255 * op;
+      }
+    }
+  } catch (e) { /* 跨域/未就绪：全 1 兜底 */ }
+  if (_ringProfCache.size > 16) _ringProfCache.clear();
+  _ringProfCache.set(key, prof);
+  return prof;
+}
 function updateAtmosphereUniforms(fr, env) {
   if (!atmoPass) return;
   const U = atmoPass.uniforms;
@@ -12616,8 +13298,22 @@ function updateAtmosphereUniforms(fr, env) {
           const rro = (typeof b.ring.ro === 'number' && isFinite(b.ring.ro)) ? b.ring.ro : RING_RO_DEF;
           RAX.set(_atV2.x / axLen, _atV2.y / axLen, _atV2.z / axLen, rri);
           U.uARingRo.value[i] = rro;
-        } else { RAX.set(0, 0, 0, 0); U.uARingRo.value[i] = 0; }
-      } else { RAX.set(0, 0, 0, 0); U.uARingRo.value[i] = 0; }
+          /* v55：16 点径向 alpha 剖面（CPU 预采样环贴图 alpha 列，缓存按贴图+op） */
+          const prof = ringAlphaProfile(PUU.uRingTex.value, PUU.uRingOp.value);
+          for (let q = 0; q < 16; q++) {
+            U.uARingProf.value[i * 4 + (q >> 2)].setComponent(q & 3, prof[q]);
+          }
+          U.uARingOp.value[i] = PUU.uRingOp.value;
+        } else {
+          RAX.set(0, 0, 0, 0); U.uARingRo.value[i] = 0;
+          for (let q = 0; q < 16; q++) U.uARingProf.value[i * 4 + (q >> 2)].setComponent(q & 3, 1);
+          U.uARingOp.value[i] = 0;
+        }
+      } else {
+        RAX.set(0, 0, 0, 0); U.uARingRo.value[i] = 0;
+        for (let q = 0; q < 16; q++) U.uARingProf.value[i * 4 + (q >> 2)].setComponent(q & 3, 1);
+        U.uARingOp.value[i] = 0;
+      }
     }
     /* 前景遮挡体（本系）：中心 = AInv·(Cj−Ci)，半径比 rj/radW */
     _atV3.set(relX, relY, relZ);
@@ -12839,13 +13535,79 @@ function makeOcclUniforms() {
     tDepth: { value: null },
     uDepthSize: { value: new THREE.Vector2(1, 1) },
     uNear: { value: 0.1 }, uFar: { value: 1e15 },
-    uOrtho: { value: 0 }, uHasDepth: { value: 0 }
+    uOrtho: { value: 0 }, uHasDepth: { value: 0 },
+    uOcclDbg: { value: 0 }   /* v55 调试：遮挡二值/深度可视化（默认 0 = 正常路径） */
   };
 }
+/* v55：场景深度专用拷贝 —— 叠层遮挡的深度源改为【稳定专属纹理】。
+ * v24 旧口径 = 逐帧记录「场景所在 composer 缓冲的 depthTexture」——该关联在
+ * pass 链 ping-pong 下天然脆弱（实测证据见 worklog v55）：
+ *   ① 场景 RT 的深度纹理会被后续 pass 的 MSAA resolve 覆写（output/atmo 渲入
+ *      同一 RT 时，clear 后的 MSAA 深度 renderbuffer 经 blitFramebuffer 洗进
+ *      depthTexture —— A/B 实测 outputPass 后 d_rt 从 0.979 → 1.0）；
+ *   ② pass 开关组合（大气/透镜/泛光）改变 swap 奇偶 → 场景落点在两块 RT 间
+ *      交替，任何一处关联偏差 = 叠层全丢/全现（用户报告「轨迹穿过星球始终
+ *      可见」与其机器上的实际表现一致）；
+ *   ③ samples=0（渲染倍率≥4）时 depthTexture 直接是场景 FB 的深度附着，
+ *      OverlayPass 若渲染进同一 RT 即构成 GL 反馈回路（未定义行为）。
+ * 修复：场景渲染完成后立刻用全屏 gl_FragDepth 拷贝，把深度写入【永不参与
+ * ping-pong、永不被其它 pass 触碰】的专属 DepthTexture；OverlayPass 及所有
+ * 叠层材质统一采样该副本 —— 关联恒定、无回路、与 pass 开关组合无关。 */
+const DEPTH_COPY_FS = `
+precision highp float;
+uniform sampler2D tSrcDepth;
+uniform vec2 uSrcSize;
+varying vec2 vUv;
+void main() {
+  float d = texture2D(tSrcDepth, gl_FragCoord.xy / uSrcSize).x;
+  gl_FragDepthEXT = d;
+  gl_FragColor = vec4(0.0);
+}`;
 class SceneRenderPass extends RenderPass {
+  constructor(scene, camera) {
+    super(scene, camera);
+    this.depthCopyRT = null;       /* 专属深度副本（尺寸随场景 RT） */
+    this.depthCopyMat = null;
+    this.depthCopyQuad = null;
+  }
+  _ensureCopyTarget(renderer) {
+    const W = composer.renderTarget1.width, H = composer.renderTarget1.height;
+    if (!this.depthCopyRT) {
+      this.depthCopyRT = new THREE.WebGLRenderTarget(W, H, {
+        type: THREE.UnsignedByteType, format: THREE.RGBAFormat, samples: 0, depthBuffer: true,
+        depthTexture: new THREE.DepthTexture(W, H, THREE.UnsignedIntType)
+      });
+      this.depthCopyMat = new THREE.ShaderMaterial({
+        uniforms: { tSrcDepth: { value: null }, uSrcSize: { value: new THREE.Vector2(1, 1) } },
+        vertexShader: PASS_VS, fragmentShader: DEPTH_COPY_FS,
+        depthTest: true, depthWrite: true, colorWrite: false
+      });
+      this.depthCopyQuad = new FullScreenQuad(this.depthCopyMat);
+    } else if (this.depthCopyRT.width !== W || this.depthCopyRT.height !== H) {
+      this.depthCopyRT.setSize(W, H);
+    }
+  }
   render(renderer, writeBuffer, readBuffer) {
     super.render(renderer, writeBuffer, readBuffer);
-    sceneDepthInfo.tex = (readBuffer && readBuffer.depthTexture) ? readBuffer.depthTexture : null;
+    /* v55：深度拷贝（场景渲染后、其它 pass 触碰前立即执行）。
+     * WebGL2 的 gl_FragDepth 写深度；无 FloatType/无 WebGL2 依赖 —— 半浮点色
+     * 不参与（colorWrite off），仅深度通道被写入。 */
+    if (readBuffer && readBuffer.depthTexture && renderer.capabilities.isWebGL2) {
+      this._ensureCopyTarget(renderer);
+      this.depthCopyMat.uniforms.tSrcDepth.value = readBuffer.depthTexture;
+      this.depthCopyMat.uniforms.uSrcSize.value.set(readBuffer.depthTexture.image.width, readBuffer.depthTexture.image.height);
+      /* 拷贝目标 = 专属 RT（非场景缓冲！）：清副本深度 → 渲染拷贝 quad → 还原。
+       * 顺序错误（先还原再渲染）会把 quad 渲进场景缓冲并采样其附着深度纹理
+       * = GL 反馈回路（UB，实测整帧变暗）。 */
+      const prevRT = renderer.getRenderTarget();
+      renderer.setRenderTarget(this.depthCopyRT);
+      renderer.clear(true, true, false);
+      this.depthCopyQuad.render(renderer);
+      renderer.setRenderTarget(prevRT);
+      sceneDepthInfo.tex = this.depthCopyRT.depthTexture;
+    } else {
+      sceneDepthInfo.tex = (readBuffer && readBuffer.depthTexture) ? readBuffer.depthTexture : null;
+    }
   }
 }
 function ensureSceneDepthTex() {
@@ -13070,11 +13832,27 @@ function cubeFaceSizeFor(img) {
   const max2d = renderer.capabilities.maxTextureSize || 4096;
   return Math.max(8, Math.min(Math.max(64, Math.ceil(img.width / 4)), 2048, maxCube, max2d));
 }
-function setBodyTextures(i, img1, img2, imgD, imgS, specPol) {
+/* v59：8-bit <img> → 同构 Uint16 源（setBodyTextures 回退路径与 demL 守卫重建共用）。
+ * 原实现内联在 setBodyTextures；守卫重建无 _dem16 时也需要同一转换才能纠正
+ * demL（否则重推静默 no-op → 守卫每帧空转）—— 提取为函数消除双实现漂移。 */
+function dem16From8bit(imgD) {
+  try {
+    const cvD = document.createElement('canvas');
+    cvD.width = imgD.width; cvD.height = imgD.height;
+    const xd = cvD.getContext('2d', { willReadFrequently: true });
+    xd.drawImage(imgD, 0, 0);
+    const px = xd.getImageData(0, 0, imgD.width, imgD.height).data;
+    const u16 = new Uint16Array(imgD.width * imgD.height);
+    for (let p = 0; p < u16.length; p++) u16[p] = px[p * 4] * 257;   /* 8-bit → 16-bit 全幅 */
+    return { w: imgD.width, h: imgD.height, data: u16 };
+  } catch (e) { return null; }
+}
+function setBodyTextures(i, img1, img2, imgD, imgS, specPol, dem16) {
   if (i < 0 || i >= bodies.length) return;
   const rec = bodies[i];
   rec._src1 = img1 || null; rec._src2 = img2 || null;   /* v37：源 Image 留底（上下文恢复重建用） */
   rec._srcD = imgD || null; rec._srcS = imgS || null;   /* v53：高程/镜面源留底 */
+  rec._dem16 = dem16 || null;                            /* v57：16-bit 高程源留底（上下文恢复重建用） */
   rec._specPol = (specPol === -1) ? -1 : 1;             /* v54：遮罩极性（陆地遮罩图 = −1） */
   if (rec.rt1) { rec.rt1.dispose(); rec.rt1 = null; }
   if (rec.rt2) { rec.rt2.dispose(); rec.rt2 = null; }
@@ -13082,13 +13860,259 @@ function setBodyTextures(i, img1, img2, imgD, imgS, specPol) {
   if (rec.rtS) { rec.rtS.dispose(); rec.rtS = null; }
   if (img1) rec.rt1 = buildCubeFromPano(img1, cubeFaceSizeFor(img1), true);
   if (img2) rec.rt2 = buildCubeFromPano(img2, cubeFaceSizeFor(img2), true);
-  /* v53：高程/镜面为【数据图】—— linear 上传（不做 sRGB 解码，高度/遮罩 = 原始像素值）；
-   * demStep = DEM 梯度差分支撑半宽（弧度，1.0 源贴图像素对应的方向张角） */
+  /* v53：高程/镜面为【数据图】—— linear 上传。
+   * v57：高程改走【等距柱状数据纹理】管线（R32F 高度 + RGBA32F 顶点法线场，
+   * 见 buildDemGpu）：16-bit 解码数据（dem16）优先 —— 精度完整；无 dem16
+   * （非 16-bit PNG / file:// fetch 受限）→ <img> 经 canvas 读回 8-bit 合成
+   * 同构 Uint16 源（管线同一，精度降级 —— 旧 512-face 立方体重采样路径退役）。 */
   if (imgD) {
-    rec.rtD = buildCubeFromPano(imgD, cubeFaceSizeFor(imgD), true, true);
-    rec.demStep = 1.0 * 2 * Math.PI / Math.max(imgD.width, 64);
+    let d16 = dem16 || null;
+    if (!d16) d16 = dem16From8bit(imgD);   /* v59：公共转换（原内联块） */
+    if (d16) {
+      const built = buildDemGpu(i, rec, d16, (meta && meta[i] && meta[i].demScale) || 0);
+      if (built) {
+        rec.rtD = built;                                    /* {height, normal, W, H, demL} */
+        rec.demStep = 1.0 * 2 * Math.PI / Math.max(d16.w, 64);
+      }
+    }
+    if (!rec.rtD && imgD) {
+      rec.rtD = buildCubeFromPano(imgD, cubeFaceSizeFor(imgD), true, true);   /* 极端兜底（旧路径） */
+      rec.demStep = 1.0 * 2 * Math.PI / Math.max(imgD.width, 64);
+    }
   }
   if (imgS) rec.rtS = buildCubeFromPano(imgS, cubeFaceSizeFor(imgS), true, true);
+  /* v56：DEM 海平面基准（POM/自阴影高度场以海面为 0）—— DEM 以「最低点=0」
+   * 归一化且含海底测深（地球海平面在 0.613 ≈ 9.7 km 处）。有水遮罩时用
+   * 「海岸线陆地说」估计海面高程：与水相邻的陆地像素高程 ≈ 0 m 等高线。
+   * 无遮罩/无海岸 → 0（维持 DEM 原基准，月/火等无水天体不受影响）。 */
+  rec.demSea = dem16 ? computeDemSea16(dem16, imgS || null, rec._specPol)
+    : computeDemSea(imgD || null, imgS || null, rec._specPol);   /* v57：16-bit 直读优先 */
+}
+/* v56：海岸线海平面估计（降采样网格上 O(N)）。返回 DEM 归一化高程的海面值
+ *（0..1）；无水概念返回 0。全水世界（无海岸）取水域 DEM 均值 ≈ 海面。 */
+function computeDemSea(imgD, imgS, specPol) {
+  if (!imgD || !imgS) return 0;
+  try {
+    const W = 256, H = 128;
+    const cvD = document.createElement('canvas'); cvD.width = W; cvD.height = H;
+    const cvS = document.createElement('canvas'); cvS.width = W; cvS.height = H;
+    const xd = cvD.getContext('2d', { willReadFrequently: true });
+    const xs = cvS.getContext('2d', { willReadFrequently: true });
+    xd.drawImage(imgD, 0, 0, W, H);
+    xs.drawImage(imgS, 0, 0, W, H);
+    const dd = xd.getImageData(0, 0, W, H).data;
+    const ds = xs.getImageData(0, 0, W, H).data;
+    const demAt = (x, y) => dd[((y & 0x7f) * W + (x & 0xff)) * 4] / 255;   // 环形环绕采样（赤道贴图东西连续）
+    const waterAt = (x, y) => {
+      const i = (((y & 0x7f) * W) + (x & 0xff)) * 4;
+      const lum = (ds[i] + ds[i + 1] + ds[i + 2]) / 765;
+      return (specPol === -1) ? (1 - lum) >= 0.5 : lum >= 0.5;
+    };
+    let nw = 0, nLand = 0, sumCoast = 0, nCoast = 0, sumWater = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const w0 = waterAt(x, y);
+        if (w0) { nw++; sumWater += demAt(x, y); continue; }
+        nLand++;
+        let coast = false;
+        for (let k = -2; k <= 2 && !coast; k++)
+          for (let m = -2; m <= 2; m++)
+            if (waterAt(x + k, y + m)) { coast = true; break; }
+        if (coast) { sumCoast += demAt(x, y); nCoast++; }
+      }
+    }
+    if (nCoast >= 30) return sumCoast / nCoast;                 // 有海岸：海岸陆地均值 = 海平面
+    if (nw > 0.9 * W * H) return sumWater / nw;                 // 全水世界：水域均值 ≈ 海面
+    return 0;                                                   // 无水/全陆：维持原基准
+  } catch (e) { return 0; }
+}
+/* ================= v57：DEM 16-bit 数据管线（渲染层）=================
+ * 任务①（16-bit 只读出 8-bit）的渲染层实现：
+ *   · 高度纹理 = 等距柱状 R32F DataTexture（LinearFilter；值 = 16-bit/65535，
+ *     与 Python GT 管线逐字节同源）；方向采样 demUV 与 PANO_FS dirUV
+ *    （u_zup=1 分支）逐式同构 —— 取代旧 buildCubeFromPano 的 512-face 立方体
+ *     重采样（那次级重采样既有精度损失又有跨查询不一致性）。
+ *   · 法线纹理 = 顶点法线场 W×H RGBA32F（NearestFilter —— 着色器手动
+ *     做三角形重心插值，三角化约定与 GT 网格/Python sim 逐位一致：对角线
+ *     v1-v2；v59 接缝列 = 着色器 mod wrap，见 buildDemNormalField 注）。
+ *     顶点法线 = bumpNormalFromDEM 预计算版：ε=2π/W 4-tap 中心差分
+ *    （Blinn 1978）+ 径向修正 n ∝ ρ·d̂ − ∇_S h，slope 标度 demL = demScale/R。
+ *     与 build_gt_mesh.py/verify_normal_interp.py 逐式同构（12 视图 ≥99% 背书）。
+ *   · computeDemSea16：海平面基准直接读 16-bit 数组（旧 canvas 8-bit 版退役）。 */
+function demTexSampleBilinear(hgt, W, H, x, y) {
+  /* GPU LinearFilter 精确语义：texel 中心 (i+0.5)；u wrap / v clamp */
+  const i0 = Math.floor(x), j0 = Math.floor(y);
+  const fx = x - i0, fy = y - j0;
+  const i0w = ((i0 % W) + W) % W, i1w = (((i0 + 1) % W) + W) % W;
+  const j0c = Math.max(0, Math.min(H - 1, j0)), j1c = Math.max(0, Math.min(H - 1, j0 + 1));
+  const h00 = hgt[j0c * W + i0w], h10 = hgt[j0c * W + i1w];
+  const h01 = hgt[j1c * W + i0w], h11 = hgt[j1c * W + i1w];
+  return (1 - fx) * (1 - fy) * h00 + fx * (1 - fy) * h10 + (1 - fx) * fy * h01 + fx * fy * h11;
+}
+function demHeightAtDir(hgt, W, H, dx, dy, dz) {
+  const u = Math.atan2(dy, dx) / (2 * Math.PI) + 0.5;
+  const lat = Math.asin(Math.max(-1, Math.min(1, dz)));
+  const v = 0.5 - lat / Math.PI;
+  return demTexSampleBilinear(hgt, W, H, u * W - 0.5, v * H - 0.5);
+}
+function buildDemNormalField(hgt, W, H, demL) {
+  /* 顶点 (i,j)：d = dir(u=(i+0.5)/W, v=(j+0.5)/H)；
+   * ε = 2π/W；n = normalize(ρ·d̂ − slopeE·êE − slopeN·êN)，
+   * slope = Δh_norm·demL/(2ε)（每单位半径弧长；demL = demScale/R）。
+   * v59：场宽 W+1 → W —— 旧接缝复制列（u=1.0，lon=π）使纹理宽度 = W+1：
+   * 水星 DEM 4096 → 4097 > maxTextureSize=4096 的 GPU → texImage2D 失败 →
+   * 纹理不完整采样恒黑 → demNormalBary normalize(0)=NaN → 整星黑屏
+   *（用户报告「水星完全黑掉」根因；月界 W+1=2049 不触发 = 月正常水星黑的
+   * 精确一致）。改 W 列 + 着色器 mod wrap：接缝单元插值顶点 W-1 与顶点 0，
+   * 与 GT 位移网格接缝顶点（u=1+0.5/W ≡ 顶点 0 周期延拓）同一约定 ——
+   * 旧 u=1.0 接缝列与 GT 本就存在 1-texel 失配，此改顺带对齐。 */
+  const N = new Float32Array(W * H * 4);
+  const eps = 2 * Math.PI / W;
+  const arcInv = demL / (2 * eps);
+  for (let j = 0; j < H; j++) {
+    const v = (j + 0.5) / H;
+    const lat = (0.5 - v) * Math.PI;
+    const cl = Math.cos(lat), sl = Math.sin(lat);
+    for (let i = 0; i < W; i++) {
+      const u = (i + 0.5) / W;
+      const lon = (u - 0.5) * 2 * Math.PI;
+      const dx = cl * Math.cos(lon), dy = cl * Math.sin(lon), dz = sl;
+      /* east = normalize(ẑ×d)，极点退化回退 (1,0,0)；north = d×east */
+      let ex = -dy, ey = dx, ez = 0;
+      const el = Math.hypot(ex, ey);
+      if (el > 1e-5) { ex /= el; ey /= el; } else { ex = 1; ey = 0; ez = 0; }
+      const nx = dy * ez - dz * ey, ny = dz * ex - dx * ez, nz = dx * ey - dy * ex;
+      const tap = (px, py, pz) => demHeightAtDir(hgt, W, H, px, py, pz);
+      const l2 = (q) => Math.hypot(q[0], q[1], q[2]);
+      const dp = [dx + eps * ex, dy + eps * ey, dz + eps * ez];
+      const dm = [dx - eps * ex, dy - eps * ey, dz - eps * ez];
+      const np2 = [dx + eps * nx, dy + eps * ny, dz + eps * nz];
+      const nm2 = [dx - eps * nx, dy - eps * ny, dz - eps * nz];
+      l2(dp); l2(dm); l2(np2); l2(nm2);
+      const e1 = tap(dp[0] / Math.hypot(dp[0], dp[1], dp[2]), dp[1] / Math.hypot(dp[0], dp[1], dp[2]), dp[2] / Math.hypot(dp[0], dp[1], dp[2]));
+      const e2 = tap(dm[0] / Math.hypot(dm[0], dm[1], dm[2]), dm[1] / Math.hypot(dm[0], dm[1], dm[2]), dm[2] / Math.hypot(dm[0], dm[1], dm[2]));
+      const n1 = tap(np2[0] / Math.hypot(np2[0], np2[1], np2[2]), np2[1] / Math.hypot(np2[0], np2[1], np2[2]), np2[2] / Math.hypot(np2[0], np2[1], np2[2]));
+      const n2 = tap(nm2[0] / Math.hypot(nm2[0], nm2[1], nm2[2]), nm2[1] / Math.hypot(nm2[0], nm2[1], nm2[2]), nm2[2] / Math.hypot(nm2[0], nm2[1], nm2[2]));
+      const slopeE = (e1 - e2) * arcInv;
+      const slopeN = (n1 - n2) * arcInv;
+      const h0 = demHeightAtDir(hgt, W, H, dx, dy, dz);
+      const rho = 1 + h0 * demL;
+      let vx = rho * dx - slopeE * ex - slopeN * nx;
+      let vy = rho * dy - slopeE * ey - slopeN * ny;
+      let vz = rho * dz - slopeE * ez - slopeN * nz;
+      const vl = Math.hypot(vx, vy, vz) || 1;
+      const o4 = (j * W + i) * 4;
+      N[o4] = vx / vl; N[o4 + 1] = vy / vl; N[o4 + 2] = vz / vl; N[o4 + 3] = 1;
+    }
+  }
+  return N;
+}
+/* v57：海平面基准 —— 16-bit 版（替代旧 canvas 8-bit computeDemSea；
+ * 判定逻辑与 v56 逐字同构，仅高程读数来源改为 Uint16Array） */
+function computeDemSea16(d16, imgS, specPol) {
+  if (!d16 || !imgS) return 0;
+  try {
+    const W = 256, H = 128;
+    const cvS = document.createElement('canvas'); cvS.width = W; cvS.height = H;
+    const xs = cvS.getContext('2d', { willReadFrequently: true });
+    xs.drawImage(imgS, 0, 0, W, H);
+    const ds = xs.getImageData(0, 0, W, H).data;
+    const dW = d16.w, dH = d16.h;
+    const demAt = (x, y) => {
+      const uu = ((x & 0xff) + 0.5) / W, vv = ((y & 0x7f) + 0.5) / H;
+      const tx = Math.min(dW - 1, Math.max(0, Math.floor(uu * dW)));
+      const ty = Math.min(dH - 1, Math.max(0, Math.floor(vv * dH)));
+      return d16.data[ty * dW + tx] / 65535;   /* 16-bit 直读（邻域单点，256 网格本身即降采样） */
+    };
+    const waterAt = (x, y) => {
+      const i2 = (((y & 0x7f) * W) + (x & 0xff)) * 4;
+      const lum = (ds[i2] + ds[i2 + 1] + ds[i2 + 2]) / 765;
+      return (specPol === -1) ? (1 - lum) >= 0.5 : lum >= 0.5;
+    };
+    let nw = 0, nCoast = 0, sumCoast = 0, sumWater = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (waterAt(x, y)) { nw++; sumWater += demAt(x, y); continue; }
+        let coast = false;
+        for (let k = -2; k <= 2 && !coast; k++)
+          for (let m = -2; m <= 2; m++)
+            if (waterAt(x + k, y + m)) { coast = true; break; }
+        if (coast) { sumCoast += demAt(x, y); nCoast++; }
+      }
+    }
+    if (nCoast >= 30) return sumCoast / nCoast;
+    if (nw > 0.9 * W * H) return sumWater / nw;
+    return 0;
+  } catch (e) { return 0; }
+}
+function buildDemGpu(i, rec, d16, demScale) {
+  /* d16 = {w,h,data:Uint16Array} → { height(R32F DataTexture), normal(RGBA32F
+   * DataTexture), W, H, demSea }。同步计算（月球 ~1.5s / 水星 ~6s，与旧
+   * buildCubeFromPano 同步六面直绘同口径）；法线场 demL 用当前渲染半径。
+   * v58 修复：半径源 = 帧数据 b.radM（物理米制半径）—— 旧实现读
+   * rec.mesh.scale.x，而烘焙发生在首帧渲染之前时 scale 仍为几何默认 1
+   * → demL = span/1 = 38737（应为 span/1.737e6 = 0.0223，月面放大 1.7e6 倍）
+   * = 地形法线场全损（用户报告「丑陋/密密黑点」的直接根源）。 */
+  try {
+    let W = d16.w, H = d16.h, data = d16.data;
+    /* v59：纹理尺寸守卫 —— 法线场/高度纹理必须 ≤ renderer.maxTextureSize。
+     * 水星 DEM 4096 宽在 maxTextureSize=4096 的 GPU 上恰好压线，但任何
+     * 更大源或更小上限都会 texImage2D 失败 → 不完整纹理采样恒黑 →
+     * NaN 法线 → 整星黑屏。整数倍 box 降采样使源落入上限（高度场均值
+     * 降采样，地形结构保持；只在超限时才改变 DEM 内容）。 */
+    try {
+      const maxT = (typeof renderer !== 'undefined' && renderer) ? (renderer.capabilities.maxTextureSize || 4096) : 4096;
+      let k = 1;
+      while (Math.max(W, H) / k > maxT) k++;
+      if (k > 1) {
+        const W2 = Math.max(64, Math.floor(W / k)), H2 = Math.max(32, Math.floor(H / k));
+        const d2 = new Uint16Array(W2 * H2);
+        for (let y = 0; y < H2; y++) {
+          const y0 = Math.floor(y * H / H2), y1 = Math.max(y0 + 1, Math.floor((y + 1) * H / H2));
+          for (let x = 0; x < W2; x++) {
+            const x0 = Math.floor(x * W / W2), x1 = Math.max(x0 + 1, Math.floor((x + 1) * W / W2));
+            let s = 0, n = 0;
+            for (let yy = y0; yy < y1 && yy < H; yy++)
+              for (let xx = x0; xx < x1 && xx < W; xx++) { s += data[yy * W + xx]; n++; }
+            d2[y * W2 + x] = n > 0 ? Math.round(s / n) : 0;
+          }
+        }
+        W = W2; H = H2; data = d2;
+      }
+    } catch (e) { /* 守卫失败用原尺寸（旧行为） */ }
+    const hgt = new Float32Array(W * H);
+    for (let p = 0; p < W * H; p++) hgt[p] = data[p] / 65535;
+    let rad = 0, span = 0;
+    try {
+      const fb = ren && ren.lastFrame && ren.lastFrame.bodies && ren.lastFrame.bodies[i];
+      if (fb && fb.radM > 0) rad = fb.radM;
+      if (fb && fb.demScale > 0) span = fb.demScale;   /* v58：帧数据优先（setSystem 场景 meta.demScale 恒 0） */
+    } catch (e) { }
+    if (!(rad > 0) && rec.mesh && rec.mesh.scale && rec.mesh.scale.x > 1) rad = rec.mesh.scale.x;
+    rad = Math.max(rad, 1e-9);
+    if (!(span > 0)) span = (demScale > 0) ? demScale : DEM_H_DEFAULT;
+    const demL = span / rad;
+    const hTex = new THREE.DataTexture(hgt, W, H, THREE.RedFormat, THREE.FloatType);
+    hTex.wrapS = THREE.RepeatWrapping; hTex.wrapT = THREE.ClampToEdgeWrapping;
+    hTex.minFilter = THREE.LinearFilter; hTex.magFilter = THREE.LinearFilter;
+    hTex.generateMipmaps = false;
+    hTex.needsUpdate = true;
+    const nrm = buildDemNormalField(hgt, W, H, demL);
+    const nTex = new THREE.DataTexture(nrm, W, H, THREE.RGBAFormat, THREE.FloatType);
+    nTex.wrapS = THREE.RepeatWrapping; nTex.wrapT = THREE.ClampToEdgeWrapping;
+    nTex.minFilter = THREE.NearestFilter; nTex.magFilter = THREE.NearestFilter;
+    nTex.generateMipmaps = false;
+    nTex.needsUpdate = true;
+    /* v58 修复：返回对象必须自带 dispose —— v57 返回裸 {height,normal,...}，
+     * setBodyTextures/syncBodies 的 rec.rtD.dispose() 抛 TypeError
+     *（= 用户报告「贴图处理失败 rec.rtD.dispose is not a function」）：
+     * 第二次推送起整个 setBodyTextures 中断，rt1/rt2 已置 null 而新纹理未赋值
+     * → 天体丢失颜色贴图 + DEM 永远停留旧标尺。 */
+    return {
+      height: hTex, normal: nTex, W, H, demL,
+      dispose() { try { hTex.dispose(); } catch (e) { } try { nTex.dispose(); } catch (e) { } }
+    };
+  } catch (e) { return null; }
 }
 /* v40：星环贴图（径向条带 Image/URL → 纹理；i<0 时对全部天体清除）。
  * v41 亮度归一（贴图均值锚定冰环反照率 0.72）→ v45 退役：用户口径
@@ -13154,13 +14178,18 @@ function makePlanetMat() {
       uAExtR: { value: new THREE.Vector3(0, 0, 0) }, uAExtA: { value: new THREE.Vector3(0, 0, 0) },
       uAExtM: { value: 0 }, uAMieG: { value: 0.76 },
       uAInv: { value: new THREE.Matrix3() },
-      /* v53：高程图地形光照 + 镜面反射图（PLANET_FS；未启用时零开销直通） */
+      /* v53：高程图地形光照 + 镜面反射图（PLANET_FS；未启用时零开销直通）
+       * v56：uDemSea = DEM 海平面基准（归一化高程；0 = 无水概念） */
       uTexD: { value: null }, uHasDEM: { value: 0 }, uDemH: { value: 0 }, uDemStep: { value: 0.005 },
+      uDemSea: { value: 0 },
+      uTexN: { value: null }, uDemSize: { value: new THREE.Vector2(2048, 1024) },   /* v57：法线纹理 + DEM 尺寸 */
+      uDemIsCube: { value: 0 },   /* v57：兜底旧 cube 路径标记（1 = 旧 8-bit cube） */
       uM3: { value: new THREE.Matrix3() },
       uTexS: { value: null }, uHasSpec: { value: 0 },
       uSpecPol: { value: 1 }   /* v54：遮罩极性 +1=白=水 / −1=白=陆地（随 setBodyTextures 同步） */
     }),
-    vertexShader: BODY_VS, fragmentShader: PLANET_FS
+    vertexShader: BODY_VS, fragmentShader: PLANET_FS,
+    extensions: { derivatives: true }   /* v55：Toksvig AA / DEM 足迹 ε 用 fwidth（WebGL2 内建，WebGL1 声明） */
   });
 }
 function makeShellMat() {
@@ -13168,6 +14197,11 @@ function makeShellMat() {
     uniforms: Object.assign(makeLitUniforms(), {
       uOp2: { value: 1 }, uTm2: { value: 0 }, uAmb: { value: AMBIENT_UNLIT },
       uCap: { value: 12000 },
+      uM3: { value: new THREE.Matrix3() },   /* v55：in-scatter 环影采样点回世界系（与 PLANET_FS uM3 同源同填） */
+      /* v55：RING_SHADOW_GLSL 所需环 uniforms（与 planetMat 同值同填；uRingOn=0 零成本） */
+      uRingOn: { value: 0 }, uRingOp: { value: 1 }, uWR: { value: 1 },
+      uRingRin: { value: RING_RI_DEF }, uRingRou: { value: RING_RO_DEF },
+      uRingAx: { value: new THREE.Vector3(0, 1, 0) }, uRingTex: { value: null },
       /* v43：大气透射 + in-scatter（同 PLANET_FS 口径，文章一/二） */
       uWC: { value: new THREE.Vector3() }, uARad: { value: 1 },
       uAOn: { value: 0 }, uATop: { value: 1.016 }, uAHR: { value: 0.00133 }, uAHM: { value: 1.9e-4 },
@@ -13180,6 +14214,7 @@ function makeShellMat() {
       uAspect: { value: 1.0 }, uOrtho: { value: 0 }, uOrthoHalf: { value: new THREE.Vector2() }
     }),
     vertexShader: BODY_VS, fragmentShader: SHELL_FS,
+    extensions: { derivatives: true },   /* v55：同上（SHELL_FS 暂未用导数，随管线统一声明） */
     transparent: true, depthWrite: false
   });
 }
@@ -13196,6 +14231,11 @@ function makeRingMat() {
     }),
     vertexShader: RING_VS, fragmentShader: RING_FS,
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    /* v55：polygonOffset 微推远环片元深度 —— 远侧环与行星 limb 的深度量化带内
+     * （透视近平面 0.02·D 下 limb 附近 Δz 量化 ≈ 8·dzBit）碎片化闪烁（用户要求
+     * 检查的「深度冲突」点）；一致性后移使远侧环在 limb 处稳定消隐，近侧环
+     * （在行星深度之前，偏移不改变前后关系）不受影响 */
+    polygonOffset: true, polygonOffsetFactor: 1.0, polygonOffsetUnits: 1.0,
     blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
     blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor
   });
@@ -13488,6 +14528,31 @@ function renderFrame(fr, env) {
     A.uTanH.value = Math.tan(fovDeg * Math.PI / 360);
     A.uAspect.value = env.viewW / env.viewH;
   }
+  /* v58 修复：planetMat 的 v44 相机基从未被填充（只有大气/透镜 pass 填了同源
+   * uniforms）—— DEM 天体的视线重建（demParallaxHit/大气段共用 camL/rdL）
+   * 拿到 uCamR=(0,0,0) → rdW=normalize(0)=NaN → tHit 恒 −1：**v56/v57 的 POM
+   * 在真实应用中从未生效**（探针读数来自调试着色器、未覆盖「实际 uniform 链」
+   * = v55 教训「对机制输出断言」的同族漏检）。此处与大气 pass 同源补齐。 */
+  {
+    const eWp = activeCam.matrixWorld.elements;
+    const tanHp = Math.tan(fovDeg * Math.PI / 360);
+    const aspectP = env.viewW / env.viewH;
+    const orthoP = env.projMode !== 'persp';
+    const halfWP = orthoP ? 0.5 * env.viewW / env.scale : 0;
+    const halfHP = orthoP ? 0.5 * env.viewH / env.scale : 0;
+    for (const rec of bodies) {
+      if (!rec || !rec.planetMat) continue;
+      const PUc = rec.planetMat.uniforms;
+      if (!PUc.uCamR) continue;
+      PUc.uCamR.value.set(eWp[0], eWp[1], eWp[2]);
+      PUc.uCamU.value.set(eWp[4], eWp[5], eWp[6]);
+      PUc.uCamF.value.set(-eWp[8], -eWp[9], -eWp[10]);
+      PUc.uTanH.value = tanHp;
+      PUc.uAspect.value = aspectP;
+      PUc.uOrtho.value = orthoP ? 1 : 0;
+      PUc.uOrthoHalf.value.set(halfWP, halfHP);
+    }
+  }
   if (lensPass.enabled) {
     const U = lensPass.uniforms;
     const glH = env.viewH * env.resFactor;
@@ -13670,20 +14735,56 @@ function renderFrame(fr, env) {
          * uAInv = L⁻¹）—— DEM 扰动法线自本系变换回世界系与 vNW 同口径；
          * 仅在需要时构成（无高程图的天体零额外开销）。 */
         U.uHasDEM.value = rec.rtD ? 1 : 0;
-        U.uTexD.value = rec.rtD ? rec.rtD.texture : null;
+        U.uTexD.value = rec.rtD ? (rec.rtD.height || rec.rtD.texture) : null;   /* v57：R32F 等距柱状（兜底旧 cube） */
+        U.uTexN.value = rec.rtD ? (rec.rtD.normal || null) : null;   /* v57：顶点法线场（重心插值用） */
+        if (rec.rtD && rec.rtD.W) { U.uDemSize.value.set(rec.rtD.W, rec.rtD.H); U.uDemIsCube.value = 0; }
+        else U.uDemIsCube.value = rec.rtD ? 1 : 0;
         U.uDemStep.value = rec.demStep || 0.005;
         U.uDemH.value = rec.rtD ? ((b.demScale !== undefined && b.demScale > 0) ? b.demScale : DEM_H_DEFAULT) : 0;
+        U.uDemSea.value = rec.rtD ? (rec.demSea || 0) : 0;   /* v56：海平面基准随贴图链同步 */
+        /* v58：法线场 demL 一致性守卫（自愈）—— buildDemGpu 烘焙早于首帧时
+         * 半径源可能失真（mesh.scale.x=1 → demL 放大 ~R 倍）；且 demScale 标定
+         * 不变时重推机制不会触发。逐帧对照渲染半径 radM，偏差 >2% 排程一次重建。 */
+        if (rec.rtD && rec.rtD.demL > 0 && b.radM > 0 && !rec._demRebuild) {
+          const demLNow = U.uDemH.value / b.radM;
+          if (Math.abs(rec.rtD.demL - demLNow) > 0.02 * demLNow) {
+            rec._demRebuild = true;
+            /* v59 修复：IIFE 实参引用了外层不存在的 `i`（本循环是
+             * `for (const b of fr.bodies)`，无索引变量）→ 守卫触发即抛
+             * ReferenceError: i is not defined → renderFrame 中途终止 =
+             * 整帧渲染崩溃（用户实机「画面卡死/黑帧」根因之一），且
+             * _demRebuild 已置 true 而 setTimeout 从未调度 → 自愈链死锁，
+             * demL 永久停留错误标尺（水星烘焙半径失配场景必触发）。
+             * 改传 b.i —— 与 bodies[b.i] 同源索引，逐位等价于设计意图。 */
+            setTimeout(((idx, recR) => () => {
+              try {
+                let d16r = recR._dem16 || null;
+                /* v59：无 16-bit 源时用 8-bit 同构源重建 —— 旧实现直接 no-op 复位
+                 * 标志 → 守卫下帧再触发 → 每帧 setTimeout 空转且 demL 永不纠正 */
+                if (!d16r && recR._srcD) d16r = dem16From8bit(recR._srcD);
+                if (d16r) {
+                  let spanR = 0;
+                  try {
+                    const fbR = ren && ren.lastFrame && ren.lastFrame.bodies && ren.lastFrame.bodies[idx];
+                    if (fbR && fbR.demScale > 0) spanR = fbR.demScale;
+                  } catch (e) { }
+                  if (!(spanR > 0)) spanR = (meta && meta[idx] && meta[idx].demScale) || 0;
+                  const builtR = buildDemGpu(idx, recR, d16r, spanR);
+                  if (builtR) {
+                    if (recR.rtD && recR.rtD.dispose) recR.rtD.dispose();
+                    recR.rtD = builtR;
+                  }
+                }
+              } catch (e) { }
+              recR._demRebuild = false;
+            })(b.i, rec), 0);
+          }
+        }
         U.uHasSpec.value = rec.rtS ? 1 : 0;
         U.uTexS.value = rec.rtS ? rec.rtS.texture : null;
         U.uSpecPol.value = rec._specPol === -1 ? -1 : 1;   /* v54：遮罩极性（setBodyTextures 随源同步） */
-        if (rec.rtD) {
-          _atM4a.compose(_atV.set(0, 0, 0), rec.def.quaternion, rec.def.scale);
-          _atM4b.compose(_atV.set(0, 0, 0), rec.spin.quaternion, rec.spin.scale);
-          _atM4a.multiply(_atM4b);
-          _atM4c.makeScale(radWorld, radWorld, radWorld);
-          _atM4a.multiply(_atM4c);
-          U.uM3.value.setFromMatrix4(_atM4a);
-        }
+        /* v55：uM3 需求扩展 —— 原 rtD（DEM 扰动法线回世界系）之外，环开启时
+         * in-scatter 环影也需要本系→世界映射；填充移至环块之后统一进行 */
       }
     }
     /* 云层壳层：组内补偿 +（1−CLOUD_DRIFT)·ang → 总自转 = −CLOUD_DRIFT·ang */
@@ -13745,6 +14846,15 @@ function renderFrame(fr, env) {
         RU.uRou.value = ringRo;
         PU.uRingRin.value = ringRi;
         PU.uRingRou.value = ringRo;
+        /* v55：云层着色器 in-scatter 环影所需（与 planetMat 同值同源） */
+        const SU = rec.shellMat.uniforms;
+        SU.uRingOn.value = 1;
+        SU.uRingOp.value = RU.uOp.value;
+        SU.uWR.value = radWorld;
+        SU.uRingAx.value.copy(_v1);
+        SU.uRingTex.value = rec.ringMat.uniforms.uTex.value;
+        SU.uRingRin.value = ringRi;
+        SU.uRingRou.value = ringRo;
         /* 环平面法线（世界系）= spin 四元数 · R_z(node)·R_x(tilt) 作用本系 Z
          * （R_z 不动 Z；环影 uRingAx 与环影投射同轴） */
         _v1.set(0, 0, 1).applyQuaternion(_qR1).applyQuaternion(_qR2).applyQuaternion(rec.spin.quaternion);
@@ -13752,17 +14862,53 @@ function renderFrame(fr, env) {
       } else {
         ringMesh.visible = false;
         PU.uRingOn.value = 0;
+        rec.shellMat.uniforms.uRingOn.value = 0;   /* v55：云层环影同步关闭 */
+      }
+      /* v55：uM3 统一填充（DEM 扰动法线 + in-scatter 环影共用本系→世界映射） */
+      if (rec.rtD || PU.uRingOn.value > 0.5) {
+        _atM4a.compose(_atV.set(0, 0, 0), rec.def.quaternion, rec.def.scale);
+        _atM4b.compose(_atV.set(0, 0, 0), rec.spin.quaternion, rec.spin.scale);
+        _atM4a.multiply(_atM4b);
+        _atM4c.makeScale(radWorld, radWorld, radWorld);
+        _atM4a.multiply(_atM4c);
+        PU.uM3.value.setFromMatrix4(_atM4a);
+        rec.shellMat.uniforms.uM3.value.copy(PU.uM3.value);
       }
     }
-    /* 点源精灵（亚像素/交叉渐变）：HDR 加性，缩小的行星同样进入 bloom 辉光 */
+    /* 点源精灵（亚像素/交叉渐变）：HDR 加性，缩小的行星同样进入 bloom 辉光。
+     * v55 显示链重构（任务③「改变对远处光源的处理方式」）—— 帧数据 b.peak 保持
+     * 物理反射辐照度（计量/凌日/测试口径零变化），显示层两步：
+     * ① 通量守恒集中：点源角半径（rCss 渲染像素）小于显示 PSF σ=1.1px 时，显示
+     *    高斯向像素孔径收缩 σ_eff = max(0.55, min(σ, rCss))，峰值按 (σ/σ_eff)²
+     *    等通量提升（总能量不变，点更小更亮）—— 反光点不再被固定 7px 高斯摊薄
+     *    到终像 1 LSB 以下而消失（「因为太小消失」的显示学根因）；
+     * ② 显示参考可见性：最终显示峰值 = max(①结果, POINT_VIS_FLOOR/曝光) ——
+     *    「远处像素是否显示」的判据挂在显示器量化限（≈3.3 LSB 终像）而非绝对
+     *    亮度地板（v54 去掉的 PSF_VIS_FLOOR=0.01 为曝光无关常量，本值随曝光
+     *    收敛于终像阈值，且作用于显示层不污染帧数据）。点随距离「变小变暗」的
+     *    感知线索保留：集中使支撑缩小，地板仅托底量化限。 */
     const sp = rec.sprite;
     const pk = (b.isBH) ? [0, 0, 0] : capRadiance(b.mode === 0 ? b.peak : (b.psfPeak || [0, 0, 0]));
-    const pkMax = Math.max(pk[0], pk[1], pk[2]);
+    let pkMax = Math.max(pk[0], pk[1], pk[2]);
+    let sigEff = (b.aux || 1.1);   /* 显示 PSF σ（CSS 像素；mode 0 = PSF_SIGMA） */
+    if (!b.isBH && b.mode === 0 && pkMax > 1e-6) {
+      const srcPx = Math.max(0, b.rCss || 0);   /* 点源角半径（渲染像素半径） */
+      sigEff = Math.max(0.55, Math.min(sigEff, srcPx));
+      const boost = sigEff > 1e-6 ? ((b.aux || 1.1) / sigEff) * ((b.aux || 1.1) / sigEff) : 1;
+      pk[0] *= boost; pk[1] *= boost; pk[2] *= boost;
+      pkMax = Math.max(pk[0], pk[1], pk[2]);
+      const visFloor = POINT_VIS_FLOOR / Math.max(env.exposure, 1e-9);
+      if (pkMax < visFloor) {
+        const kf = visFloor / pkMax;
+        pk[0] *= kf; pk[1] *= kf; pk[2] *= kf;
+        pkMax = visFloor;
+      }
+    }
     sp.visible = pkMax > 1e-6;
     if (sp.visible) {
       const ks = Math.min(1, uCapVal / pkMax);
       sp.material.color.setRGB(pk[0] * ks, pk[1] * ks, pk[2] * ks);
-      const sigCss = (b.aux || 1.1) / env.resFactor;
+      const sigCss = (b.mode === 0 ? sigEff : (b.aux || 1.1)) / env.resFactor;
       const sw = env.projMode === 'persp' ? 2 * 3.2 * sigCss * w / fCss : 2 * 3.2 * sigCss / env.scale;
       sp.scale.set(sw, sw, 1);
       sp.position.set(relX, relY, relZ);
@@ -13890,10 +15036,30 @@ function restoreGL() {
     rec.rt1 = null; rec.rt2 = null;
     if (src1) { try { rec.rt1 = buildCubeFromPano(src1, cubeFaceSizeFor(src1), true); } catch (e) { } }
     if (src2) { try { rec.rt2 = buildCubeFromPano(src2, cubeFaceSizeFor(src2), true); } catch (e) { } }
-    /* v53：高程/镜面重建（linear 数据图，同 setBodyTextures 口径） */
+    /* v53：高程/镜面重建（linear 数据图，同 setBodyTextures 口径）
+     * v57：16-bit 源（rec._dem16）优先 —— 同一数据管线重建；无则 canvas 8-bit 回退 */
     const srcD = rec._srcD, srcS = rec._srcS;
     rec.rtD = null; rec.rtS = null;
-    if (srcD) { try { rec.rtD = buildCubeFromPano(srcD, cubeFaceSizeFor(srcD), true, true); rec.demStep = 1.0 * 2 * Math.PI / Math.max(srcD.width, 64); } catch (e) { } }
+    if (rec._dem16) {
+      try {
+        const built = buildDemGpu(i, rec, rec._dem16, (meta && meta[i] && meta[i].demScale) || 0);
+        if (built) { rec.rtD = built; rec.demStep = 1.0 * 2 * Math.PI / Math.max(rec._dem16.w, 64); }
+      } catch (e) { }
+    }
+    if (!rec.rtD && srcD) {
+      try {
+        const cvD = document.createElement('canvas');
+        cvD.width = srcD.width; cvD.height = srcD.height;
+        const xd = cvD.getContext('2d', { willReadFrequently: true });
+        xd.drawImage(srcD, 0, 0);
+        const px = xd.getImageData(0, 0, srcD.width, srcD.height).data;
+        const u16 = new Uint16Array(srcD.width * srcD.height);
+        for (let p = 0; p < u16.length; p++) u16[p] = px[p * 4] * 257;
+        const built = buildDemGpu(i, rec, { w: srcD.width, h: srcD.height, data: u16 }, (meta && meta[i] && meta[i].demScale) || 0);
+        if (built) { rec.rtD = built; rec.demStep = 1.0 * 2 * Math.PI / Math.max(srcD.width, 64); }
+      } catch (e) { }
+    }
+    if (!rec.rtD && srcD) { try { rec.rtD = buildCubeFromPano(srcD, cubeFaceSizeFor(srcD), true, true); rec.demStep = 1.0 * 2 * Math.PI / Math.max(srcD.width, 64); } catch (e) { } }
     if (srcS) { try { rec.rtS = buildCubeFromPano(srcS, cubeFaceSizeFor(srcS), true, true); } catch (e) { } }
   }
   if (composer && activeCam) {
@@ -13972,6 +15138,19 @@ window.__TJS__ = {
   getSkyRot: () => scene ? [scene.backgroundRotation.x, scene.backgroundRotation.y, scene.backgroundRotation.z] : [0, 0, 0],
   bodyCount: () => bodies.length,
   ringDbg: () => bodies.map(r => ({ boost: r.ringAlbBoost || 0, vis: r.ring.visible, tex: !!r.ringMat.uniforms.uTex.value })),   /* v45：反照率归一退役，随删调试读数 */
+  expDbg: () => ({ exposure: ren.exposure, lastExpT: ren.lastExpT,
+    frame: ren.lastFrame ? { expTarget: ren.lastFrame.expTarget, meter: ren.lastFrame.meter, meterDisk: ren.lastFrame.meterDisk, n: ren.lastFrame.bodies ? ren.lastFrame.bodies.length : -1 } : null }),
+  /* v57 诊断：DEM 数据管线 uniforms/纹理真值（机制级断言用 —— v55 教训：对机制输出断言） */
+  demDbg: () => bodies.map(r => ({
+    rtD: !!r.rtD, demL: r.rtD && r.rtD.demL ? +r.rtD.demL.toPrecision(6) : null,
+    W: r.rtD && r.rtD.W, H: r.rtD && r.rtD.H,
+    uHasDEM: r.planetMat.uniforms.uHasDEM.value, uDemH: r.planetMat.uniforms.uDemH.value,
+    uDemSea: +r.planetMat.uniforms.uDemSea.value.toPrecision(6), uDemStep: r.planetMat.uniforms.uDemStep.value,
+    texD: r.planetMat.uniforms.uTexD.value ? (r.planetMat.uniforms.uTexD.value.isDataTexture ? 'data2d' : (r.planetMat.uniforms.uTexD.value.isCubeTexture ? 'cube' : 'other')) : 'null',
+    texN: !!r.planetMat.uniforms.uTexN.value,
+    demSize: [r.planetMat.uniforms.uDemSize.value.x, r.planetMat.uniforms.uDemSize.value.y],
+    uNL: r.planetMat.uniforms.uNL.value,
+    uLC0: r.planetMat.uniforms.uLC.value[0].toArray().map(v => +v.toPrecision(4)) })),
   /* v52：环内/外径 + 大气环遮挡 uniforms 测试钩子（与 ringDbg/dump 同风格） */
   ringU: () => bodies.map(r => ({
     rin: r.ringMat.uniforms.uRin ? r.ringMat.uniforms.uRin.value : null,
@@ -13985,6 +15164,183 @@ window.__TJS__ = {
     ro: atmoPass.uniforms.uARingRo.value[i]
   })) : null,
   setSkyPano, setBodyTextures, setBodyRing,
+  /* v58：DEM 法线场强制重建（验证管线/自愈用）—— 渲染同步块内的 demL 一致性
+   * 守卫对被视锥剔除的天体不执行（剔除路径早于 uniforms 同步），此处提供
+   * 显式重建入口：烘焙半径失真时由探针/控制台直接调用。 */
+  /* v58：DEM 标尺直设（验证管线用）—— 扫描链的 demSpanFor 在探针环境可能
+   * 全部超时（12 并发大图探测占满连接）；写入与扫描链同一字段后走同族重推。 */
+  setDemScale: (i, span) => {
+    if (meta && meta[i] && span > 0) {
+      meta[i].demScale = span;
+      bodyTexEnsure(i);
+      return 'ok';
+    }
+    return 'fail';
+  },
+  rebuildDem: async (i) => {
+    const rec = bodies[i];
+    if (!rec) return 'no rec';
+    let d16 = rec._dem16 || null;
+    if (!d16) {
+      /* 源 URL：meta[i].dem（字符串）；rec._srcD 为 <img>（16-bit fetch 不可用） */
+      let url = (meta && meta[i] && meta[i].dem) || null;
+      if (!url && typeof rec._srcD === 'string') url = rec._srcD;
+      if (url) {
+        try { d16 = await dem16For(url); } catch (e) { }
+        if (d16) rec._dem16 = d16;
+      }
+    }
+    if (!d16) return 'no dem16 url=' + String((meta && meta[i] && meta[i].dem) || 'null');
+    let spanH = 0;
+    try {
+      const fbH = ren && ren.lastFrame && ren.lastFrame.bodies && ren.lastFrame.bodies[i];
+      if (fbH && fbH.demScale > 0) spanH = fbH.demScale;
+    } catch (e) { }
+    if (!(spanH > 0)) spanH = (meta && meta[i] && meta[i].demScale) || 0;
+    const built = buildDemGpu(i, rec, d16, spanH);
+    if (built) {
+      if (rec.rtD && rec.rtD.dispose) rec.rtD.dispose();
+      rec.rtD = built;
+      rec.demStep = 1.0 * 2 * Math.PI / Math.max(d16.w, 64);
+      return 'ok demL=' + built.demL;
+    }
+    return 'build failed';
+  },
+  /* v58：验证管线钩子 —— 相机/DEM 全量 uniforms dump（GT 对比用，只读）。
+   * 返回局部系相机基与全部 DEM/光照参数：sim 与 mitsuba GT 直接以本 dump
+   * 为场景真值（不再各自假设相机/辐照约定 —— 消除约定错配类假阳性）。 */
+  dumpCam: (i) => {
+    const rec = bodies[i];
+    if (!rec || !rec.planetMat) return null;
+    const u = rec.planetMat.uniforms;
+    const v3 = x => (x && x.toArray ? x.toArray().map(v => +v.toPrecision(10)) : x);
+    const m3 = x => (x && x.toArray ? Array.from(x.toArray()).map(v => +v.toPrecision(10)) : null);
+    return {
+      uCamR: v3(u.uCamR.value), uCamU: v3(u.uCamU.value), uCamF: v3(u.uCamF.value),
+      uTanH: u.uTanH.value, uAspect: u.uAspect.value, uOrtho: u.uOrtho.value,
+      uOrthoHalf: v3(u.uOrthoHalf.value),
+      uWC: v3(u.uWC.value), uARad: u.uARad.value, uAInv: m3(u.uAInv.value), uM3: m3(u.uM3.value),
+      uLD0: v3(u.uLD.value[0]), uLC0: v3(u.uLC.value[0]), uLAux0: v3(u.uLAux.value[0]),
+      uHasDEM: u.uHasDEM.value, uDemH: u.uDemH.value, uDemSea: u.uDemSea.value,
+      uDemStep: u.uDemStep.value, uDemSize: v3(u.uDemSize.value),
+      uHasTex: u.uHasTex.value, uAlb: v3(u.uAlb.value), uAmb: u.uAmb.value,
+      uNL: u.uNL.value, demStepRec: rec.demStep,
+      demL: rec.rtD ? rec.rtD.demL : null,
+      exposure: ren.exposure, toneMapping: renderer ? renderer.toneMapping : null,
+      canvasW: renderer ? renderer.domElement.width : null,
+      canvasH: renderer ? renderer.domElement.height : null,
+      camPosW: activeCam ? [activeCam.position.x, activeCam.position.y, activeCam.position.z].map(v => +v.toPrecision(10)) : null
+    };
+  },
+  /* v58：线性辐射亮度捕获（验证管线专用）。v1 经 composer 输出 —— three.js
+   * OutputPass 的色调映射着色器不随 renderer.toneMapping 切换重编译（实测
+   * NoToneMapping 下输出仍为 ACES(x·exposure) —— 原始值在 ~0.08 饱和）。
+   * v2 绕过 composer：直接 renderer.render(scene, activeCam)—— 自定义
+   * ShaderMaterial 不含 tonemapping/colorspace 块，默认帧缓冲 = 原始线性辐射。 */
+  captureLinear: () => {
+    if (!renderer) return null;
+    /* v58b：RGBA32F 浮点 RT 直读（默认帧缓冲 8-bit —— 线性小值 0.004 量化到
+     * 1/255 = 25% 相对误差 = 对比指标量化地板）。16-bit 打包 + 逐视图 gain
+     * 传输（对比端 data/65535·gain 还原线性辐射）。 */
+    const glc = document.getElementById('glcanvas');
+    const w = glc.width, h = glc.height;
+    if (!captureRTF || captureRTF.width !== w || captureRTF.height !== h) {
+      if (captureRTF) captureRTF.dispose();
+      captureRTF = new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.FloatType, format: THREE.RGBAFormat,
+        minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+        depthBuffer: true, samples: 4   /* 与交付链 rf=1 档 MSAA 一致（applyMsaa） */
+      });
+    }
+    const prevRT = renderer.getRenderTarget();
+    const prevTM = renderer.toneMapping;
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.setRenderTarget(captureRTF);
+    renderer.render(scene, activeCam);
+    const buf = new Float32Array(w * h * 4);
+    renderer.readRenderTargetPixels(captureRTF, 0, 0, w, h, buf);
+    renderer.setRenderTarget(prevRT);
+    renderer.toneMapping = prevTM;
+    let mx = 0;
+    for (let i = 0; i < w * h * 4; i++) { const v = Math.abs(buf[i]); if (v > mx) mx = v; }
+    const gain = mx > 0 ? mx : 1;
+    /* readRenderTargetPixels 行序 = 自底向上（framebuffer 原点左下）——
+     * 翻转为自顶向下（与 canvas drawImage 同序，对比管线行约定一致） */
+    const u16 = new Uint16Array(w * h * 3);
+    for (let y = 0; y < h; y++) {
+      const srcRow = (h - 1 - y) * w * 4, dstRow = y * w * 3;
+      for (let x = 0; x < w; x++) {
+        for (let c = 0; c < 3; c++) {
+          const v = buf[srcRow + x * 4 + c] / gain;
+          u16[dstRow + x * 3 + c] = Math.max(0, Math.min(65535, Math.round(v * 65535)));
+        }
+      }
+    }
+    let mx8 = 0, sum = 0, n = 0;
+    for (let p = 0; p < w * h; p += 7) { const v = (u16[p * 3] + u16[p * 3 + 1] + u16[p * 3 + 2]) / 3; if (v > mx8) mx8 = v; sum += v; n++; }
+    return { u16: u16, gain: gain, w: w, h: h,
+      stats: { maxLum: +(mx8 / 65535 * gain).toFixed(5), mean: +(sum / n / 65535 * gain).toFixed(6) } };
+  },
+
+  occlDbgOn: (v) => { overlayDepthMats.forEach(m => { if (m.uniforms.uOcclDbg) m.uniforms.uOcclDbg.value = v; }); draw(); },
+  /* v55 诊断：当前帧两个 RT 深度纹理在指定点的原始值 + 场景关联 */
+
+  trailVertsDbg: () => {
+    const pos = lineGeo.attributes.position.array, col = lineGeo.attributes.aColor.array;
+    const n = lineGeo.attributes.position.count;
+    let nan = 0, zero = 0, maxLen = 0, minLen = 1e30;
+    for (let i = 0; i < n; i++) {
+      const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+      if (!isFinite(x) || !isFinite(y) || !isFinite(z)) { nan++; continue; }
+      const L = Math.hypot(x, y, z);
+      if (L === 0) zero++;
+      if (L > maxLen) maxLen = L; if (L < minLen) minLen = L;
+    }
+    const samples = [];
+    for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 10))) {
+      samples.push([+pos[i * 3].toExponential(3), +pos[i * 3 + 1].toExponential(3), +pos[i * 3 + 2].toExponential(3)]);
+    }
+    return { lineVerts: n, nan, zero, minLen, maxLen, samples };
+  },
+  occlDbg: () => ({ read_is_RT1: composer.readBuffer === composer.renderTarget1,
+    write_is_RT1: composer.writeBuffer === composer.renderTarget1,
+    msaa: composer.renderTarget1.samples,
+    depthIsDedicatedCopy: !!(sceneDepthInfo.tex && sceneDepthInfo.tex !== composer.renderTarget1.depthTexture && sceneDepthInfo.tex !== composer.renderTarget2.depthTexture) }),
+  /* v55 测试钩子：分阶段深度诊断 —— 找出场景深度纹理被置 1 的链路阶段 */
+
+
+  /* v55 测试钩子：直接回读场景深度纹理一点 → {d(0-1 原始), sd(线性化视距 m)} —— 叠层遮挡链路诊断 */
+  depthProbe: (x, y) => {
+    if (!sceneDepthInfo.tex || !renderer) return null;
+    const dt = sceneDepthInfo.tex, W = renderer.domElement.width, H = renderer.domElement.height;
+    const rt = new THREE.WebGLRenderTarget(W, H, { type: THREE.FloatType, format: THREE.RGBAFormat, depthBuffer: false });
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { tDepth: { value: dt }, uDepthSize: { value: new THREE.Vector2(dt.image.width, dt.image.height) },
+        uNear: { value: activeCam.near }, uFar: { value: activeCam.far }, uOrtho: { value: activeCam.isOrthographicCamera ? 1 : 0 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `precision highp float;
+        uniform sampler2D tDepth; uniform vec2 uDepthSize; uniform float uNear, uFar, uOrtho; varying vec2 vUv;
+        void main() {
+          float d = texture2D(tDepth, vUv).x;
+          float sd = uOrtho > 0.5 ? (uNear + d * (uFar - uNear)) : (uNear * uFar) / (uFar - d * (uFar - uNear));
+          gl_FragColor = vec4(d, min(sd / 1e12, 15.0), 0.0, 1.0);
+        }`,
+      depthTest: false, depthWrite: false
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+    const sc = new THREE.Scene(); sc.add(quad);
+    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    renderer.setRenderTarget(rt);
+    renderer.render(sc, cam);
+    renderer.setRenderTarget(null);
+    const buf = new Float32Array(W * H * 4);
+    renderer.readRenderTargetPixels(rt, 0, 0, W, H, buf);
+    rt.dispose(); quad.geometry.dispose(); mat.dispose();
+    const xi = Math.max(0, Math.min(W - 1, Math.round(x)));
+    const yi = Math.max(0, Math.min(H - 1, Math.round(H - 1 - y)));   /* CSS 屏 y 翻转（readPixels 原点左下） */
+    const i = (yi * W + xi) * 4;
+    return { d: +buf[i].toFixed(7), sd: buf[i + 1] >= 15 ? '>=1.8e13' : +(buf[i + 1] * 1e12).toExponential(4) };
+  },
   trailDbg: () => ({ lineVerts: lineGeo && lineGeo.attributes.position ? lineGeo.attributes.position.count : -1,
     ptsVerts: ptsGeo && ptsGeo.attributes.position ? ptsGeo.attributes.position.count : -1,
     lineVis: lineObj ? lineObj.visible : null, ptsVis: ptsObj ? ptsObj.visible : null,
