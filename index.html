@@ -2834,8 +2834,20 @@ const dem16Inflight = new Map(); /* url → 在飞解码 promise（并发去重�
 function dem16WorkerGet() {
   if (dem16Worker !== null) return dem16Worker;
   try {
+    /* v60c：worker 增载 buildDemCubeFaces（高度+法线场+六面 CPU 重采样一体） */
     const src = 'const decodePNG16 = ' + decodePNG16.toString() + ';\n' +
-      'self.onmessage = async (e) => { try { const m = await decodePNG16(e.data.buf);' +
+      'const demTexSampleBilinear = ' + demTexSampleBilinear.toString() + ';\n' +
+      'const demHeightAtDir = ' + demHeightAtDir.toString() + ';\n' +
+      'const buildDemNormalField = ' + buildDemNormalField.toString() + ';\n' +
+      'const buildDemCubeFaces = ' + buildDemCubeFaces.toString() + ';\n' +
+      'self.onmessage = async (e) => { try {' +
+      ' if (e.data.kind === "dem") {' +
+      '  const r = buildDemCubeFaces(new Float32Array(e.data.hgt), e.data.w, e.data.h, e.data.demL);' +
+      '  const out = { id: e.data.id, Fh: r.Fh, Fn: r.Fn,' +
+      '    hFaces: r.hFaces.map(f => f.buffer), nFaces: r.nFaces.map(f => f.buffer) };' +
+      '  self.postMessage(out, out.hFaces.concat(out.nFaces)); return;' +
+      ' }' +
+      ' const m = await decodePNG16(e.data.buf);' +
       ' const out = m ? { id: e.data.id, w: m.w, h: m.h, data: m.data.buffer } : { id: e.data.id, err: 1 };' +
       ' self.postMessage(out, out.data ? [out.data] : []); } catch (err) { self.postMessage({ id: e.data.id, err: 1 }); } };';
     dem16Worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
@@ -2846,6 +2858,27 @@ function dem16WorkerGet() {
     dem16Worker.onerror = () => { /* 下次 job 超时兜底 */ };
   } catch (e) { dem16Worker = false; }
   return dem16Worker;
+}
+/* v60c：DEM 全量构建 Worker 化（法线场 + 六面 CPU 重采样一体）。
+ * 返回 { Fh, Fn, hFaces: [Float32Array×6], nFaces: [×6] } 或 null（worker 不可用）。 */
+function demBuildAsync(hgt, W, H, demL) {
+  const w = dem16WorkerGet();
+  if (!w) return Promise.resolve(null);
+  return new Promise((res) => {
+    const id = ++dem16JobId;
+    const to = setTimeout(() => { dem16Jobs.delete(id); res(null); }, 300000);
+    dem16Jobs.set(id, (d) => {
+      clearTimeout(to);
+      if (d.err || !d.hFaces) { res(null); return; }
+      res({ Fh: d.Fh, Fn: d.Fn,
+        hFaces: d.hFaces.map(b => new Float32Array(b)),
+        nFaces: d.nFaces.map(b => new Float32Array(b)) });
+    });
+    try {
+      const copy = hgt.slice();   /* 发送副本（主线程 hgt 仍作 equirect 上传源） */
+      w.postMessage({ id, kind: 'dem', w: W, h: H, demL, hgt: copy.buffer }, [copy.buffer]);
+    } catch (e) { clearTimeout(to); dem16Jobs.delete(id); res(null); }
+  });
 }
 function dem16DecodeAsync(buf) {
   /* Worker 解码（30s 主线程冻结 → 0）；失败/超时回退主线程 decodePNG16 */
@@ -6496,6 +6529,7 @@ function draw() {
    * 单线程路径 frameInFlight 恒 false，行为不变。 */
   if (window.__ENGINE__ && __ENGINE__.frameInFlight) { uiDrawPending++; return; }
   uiDrawPending = 0;
+  needRedraw = false;   /* v60：完成一次渲染即清脏（异步在飞早退时保留，完成回调再绘再清） */
   ren.drawCount++;
   const now = performance.now();
   const fr = buildSceneFrame();
@@ -6977,18 +7011,37 @@ function togglePlay() {
  * 现在暂停期间持续以 ~30fps 轻量重绘（跳过物理推进），播放时由 frame() 接管。
  * 相机平滑运动（飞行键/惯性）也并入本循环，camLoop 保留但不再必要调度。 */
 let idleRaf = 0, lastIdleT = 0, lastIdleDrawT = 0;
+/* v60：暂停静止零重绘的脏标记 —— 旧版暂停期恒以 ~30fps 全量重绘（相机静止、
+ * 画面恒定时也在重复渲染整个 POM/阴影管线 = 用户报告「在没有变动的时候会不会
+ * 也在重复计算」。现：重绘仅当 ①相机运动中（v36 语义）②needRedraw（任何
+ * UI/异步状态变化经捕获监听或显式调用置脏，draw() 完成后清位）③曝光 EMA
+ * 未收敛。全部安静后完全停绘（WebGL 画布保留最后呈现帧，静置画面逐位不变）。 */
+let needRedraw = true;
 function idleLoop(now) {
   idleRaf = 0;
   if (playing || headlessOn) return;
   const dt = lastIdleT ? Math.min(0.05, (now - lastIdleT) / 1000) : 0.016;
   lastIdleT = now;
   updateCameraMotion(dt);
-  /* v36：相机运动激活时逐 rAF 重绘（33ms 门控在高刷屏上帧间隔 16.7/33.4 交替
-   * 造成可察抖动 —— 用户报告「暂停转动视角时刷新不如拖拽流畅」）；静止时保持
-   * 33ms 轻量门控（省电，画面恒定无感知差异） */
-  if (camMotionActive() || now - lastIdleDrawT >= 33 || !lastIdleDrawT) { lastIdleDrawT = now; draw(); }
+  /* 曝光收敛判定：静止时 metering 恒定（场景无变动）→ EMA 目标恒定。
+   * |Δ|≤0.5% 时直接贴靠到目标值再冻结 —— 冻结帧 = 旧版无限重绘的 EMA 渐近
+   * 极限帧（逐位一致），且免去数十帧尾差重绘；0.5% < 8-bit 量化步长，
+   * 贴靠前后画面无可辨差异。 */
+  let expSettled = true;
+  {
+    const frL = ren.lastFrame;
+    const tgt = frL ? frL.expTarget : ren.exposure;
+    const dAbs = Math.abs(ren.exposure - tgt);
+    if (dAbs > 0.005 * Math.max(Math.abs(tgt), 1e-300)) expSettled = false;
+    else if (dAbs > 0) ren.exposure = tgt;   /* 贴靠：冻结帧 = 渐近极限帧 */
+  }
+  if (camMotionActive() || needRedraw || !expSettled) { needRedraw = false; draw(); }
   idleRaf = requestAnimationFrame(idleLoop);
 }
+/* v60：任何 UI 事件都可能改变渲染状态 —— 捕获阶段全局置脏（含 stopPropagation
+ * 的处理器），保证「事件改状态但漏调 draw()」的路径不再依赖 30fps 轮询兑底。 */
+['change', 'input', 'click', 'keyup', 'wheel'].forEach(ev =>
+  document.addEventListener(ev, () => { needRedraw = true; }, { capture: true, passive: true }));
 function ensureIdleLoop() {
   if (!idleRaf && !playing && !headlessOn) { lastIdleT = 0; idleRaf = requestAnimationFrame(idleLoop); }
 }
@@ -11424,9 +11477,24 @@ uniform vec3 uCamR, uCamU, uCamF;   /* v44：相机基（与大气 pass 同源�
 uniform float uTanH, uAspect, uOrtho;   /* v44：视场半角正切 / 宽高比 / 正交开关 */
 uniform vec2 uOrthoHalf;                /* v44：正交半宽/半高（世界 m） */
 /* ===== v53：高程图地形光照（DEM bump）与镜面反射图（GGX 微表面） ===== */
-uniform sampler2D uTexD;            /* v57：高程图（等距柱状 R32F 数据纹理，像素值 = 归一化高程；
+uniform sampler2D uTexD;            /* 高程源（等距柱状 R32F 数据纹理，像素值 = 归一化高程；
                                     * 16-bit PNG 直读 —— 任务①修复：旧 <img> 路径被浏览器
-                                    * 截断为 8-bit，38.7km 跨度只剩 256 级） */
+                                    * 截断为 8-bit，38.7km 跨度只剩 256 级）
+                                    * v60：仅作 cube 重采样源/兑底路径（uDemIsCube=0）——
+                                    * 主路径 = uTexDC 立方体贴图（与底层彩色贴图 buildCubeFromPano
+                                    * 同一帖法：方向采样、均匀 texel 密度，无极区畸变） */
+uniform samplerCube uTexDC;         /* v60：高程立方体贴图（R32F，六面 GPU 重采样自 uTexD；
+                                    * 与彩色贴图同一帖法 —— 用户报告「DEM 贴图使用方式有极点
+                                    * 畸变，为什么不使用和底层一样的帖法」的根修：等距柱状直接
+                                    * 采样在极区经度病态（相邻像素 u 跳变数十 texel → 高程/法线
+                                    * 花屏），cube 帖法 texel 密度均匀，极区与赤道同质） */
+uniform samplerCube uTexNC;         /* v60：顶点法线场立方体贴图（RGBA32F，六面 GPU 重采样自 uTexN，
+                                    * 面元值 = demNormalBary 同式重心插值 —— GT 网格约定保留） */
+uniform float uHasNorm;             /* v60：法线场就绪（1/0）—— 法线烘焙 Worker 化后异步就绪，
+                                    * 未就绪时 demNormalBary 回退径向（0 时零开销直通） */
+uniform float uDemIsCube;           /* v60：1 = cube 主路径（uTexDC/uTexNC 方向采样）；0 = 等距柱状兑底
+                                    *（v57 起该值仅在 JS 侧，v60 GLSL 分支首次读取 —— 补声明） */
+uniform float uDemDbgMode;          /* v60b 验证钩子：0=正常渲染 1=POM门 2=footPx 3=高度 4=命中t */
 uniform sampler2D uTexN;            /* v57：顶点法线场（W×H RGBA32F，NearestFilter；
                                     * v59：接缝列由着色器 mod wrap（无需 W+1 复制列，
                                     * 4097 宽超 maxTextureSize 的 GPU 上纹理创建失败
@@ -11479,14 +11547,28 @@ vec4 cubeSample(vec3 d, samplerCube t) {
  *     潮汐椭化/自转扁化下与网格法线严格同一条变换链。 */
 /* v57：方向 → 等距柱状 UV（与 PANO_FS dirUV 的 u_zup=1 分支、Python
  * dirs_to_uv 逐式同构：lon=atan(d.y,d.x), u=lon/2π+0.5, v=0.5−lat/π；
- * 行 0 = 北极，u 方向 RepeatWrapping 硬件跨缝，v 方向 ClampToEdge 极区延伸） */
+ * 行 0 = 北极，u 方向 RepeatWrapping 硬件跨缝，v 方向 ClampToEdge 极区延伸）
+ * v60：仅兑底路径使用（uDemIsCube=0）。主路径 = uTexDC 方向采样。 */
 vec2 demUV(vec3 d) {
   float lon = atan(d.y, d.x);
   float u = lon * 0.15915494309189535 + 0.5;
   float lat = asin(clamp(d.z, -1.0, 1.0));
   return vec2(u, 0.5 - lat * 0.3183098861837907);
 }
-float demHeight(vec3 d) { return max(texture2D(uTexD, demUV(d)).r, 0.0); }
+/* v60：高程查询 —— 主路径立方体贴图方向采样（与底层彩色贴图同一帖法：
+ * buildCubeFromPano 六面重采样 + textureCube；texel 密度均匀 → 极区无畸变，
+ * 且 cube 面元中心值 = 旧等距柱状 bilinear 在同一方向的重采样值，赤道区
+ * 逐 texel 同源）。等距柱状直接采样在极区经度病态：相邻像素 u 跳变
+ * ∝ footprint/cos(lat) → 双线性取到数十 texel 外 → 地形/法线花屏
+ *（用户报告「凑近就能看出来，就是贴合方式的问题」的根因）。 */
+float demHeight(vec3 d) {
+  /* v60b：显式 LOD0 —— textureCube 的隐式导数在 POM/阴影 march 的非均匀控制流内
+   * 未定义（相邻像素命中不同步数/分支 → 导数混乱 → mip 层级抖动 → 高程逐像素
+   * 噪声 = EQ 视图高频噪声 15× 的根因；cube 无 mip 时本应钉在 base 层，但
+   * 显式 LOD0 才是规范保证）。与天空盒 textureCubeLodEXT 同一兼容宏。 */
+  if (uDemIsCube > 0.5) return max(textureCube(uTexDC, d).r, 0.0);   /* v60c: LOD0 宏实测返回 0（下文 A/B），回退隐式采样 */
+  return max(texture2D(uTexD, demUV(d)).r, 0.0);
+}
 /* ===== v55：DEM 地形自阴影（任务④核心 —— 阴影分辨率到像素级）=====
  * 文献：Max 1988「Horizon Mapping: Shadows for Bump-Mapped Surfaces」
  *（The Visual Computer 4(2):109-117）—— 高程场沿光线方向的地平线遮蔽原理；
@@ -11628,6 +11710,15 @@ float demParallaxHit(vec3 camL, vec3 rdL, float demL, float footPx) {
  * 差分支撑的像素足迹 LOD（v55 Toksvig/Han 2007 口径）由 CPU 预计算与
  * 远景 footPx 软化共同承担；水面遮罩 landFade = 法线向理想球方向混合。 */
 vec3 demNormalBary(vec3 d) {
+  /* v60：主路径 = 法线场立方体贴图方向采样（面元值 = 下述重心插值在同一方向的
+   * GPU 重采样值 —— GT 网格三角化约定保留在重采样器里）；双线性跨面元 = 平滑
+   * 且极区无病态。uHasNorm=0（异步烘焙未就绪/缺失）回退径向。 */
+  if (uDemIsCube > 0.5) {
+    if (uHasNorm < 0.5) return d;
+    vec3 nc = textureCube(uTexNC, d).xyz;   /* v60c：同上回退隐式 */
+    return dot(nc, nc) > 0.5 ? normalize(nc) : d;
+  }
+  if (uHasNorm < 0.5) return d;   /* v60：等距柱状兑底路径同步烘焙，恒就绪；守卫仅对异步路径生效 */
   vec2 t = demUV(d) * uDemSize - vec2(0.5);   /* 顶点网格坐标（列 0..W-1，接缝由 mod wrap） */
   vec2 f = fract(t);
   vec2 ij = floor(t);
@@ -11714,6 +11805,17 @@ void main() {
     rdL = rdLt / rdLen;
   }
   float tHit = demL > 0.0 ? demParallaxHit(camL, rdL, demL, footPx) : -1.0;
+  /* v60b 验证钩子：内部状态可视化（POM 门/footPx/高度/命中 t → RGB 通道） */
+  if (uDemDbgMode > 0.5) {
+    float gate = (2.0 * demL < 0.5 * footPx) ? 0.0 : 1.0;
+    vec3 dbgC = vec3(0.0);
+    if (uDemDbgMode < 1.5) dbgC = vec3(gate);
+    else if (uDemDbgMode < 2.5) dbgC = vec3(clamp(footPx * 40.0, 0.0, 1.0));
+    else if (uDemDbgMode < 3.5) dbgC = vec3(demHeight(dNO));   /* v60b：原始归一化高程（无 demL 缩放） */
+    else dbgC = vec3(clamp(tHit * 0.5, 0.0, 1.0));
+    gl_FragColor = vec4(dbgC, 1.0);
+    return;
+  }
   vec3 dSurf = dNO;
   vec3 PhitL = vec3(0.0);
   if (tHit > 0.0) {
@@ -13871,14 +13973,13 @@ function setBodyTextures(i, img1, img2, imgD, imgS, specPol, dem16) {
     if (d16) {
       const built = buildDemGpu(i, rec, d16, (meta && meta[i] && meta[i].demScale) || 0);
       if (built) {
-        rec.rtD = built;                                    /* {height, normal, W, H, demL} */
+        rec.rtD = built;                                    /* {isCube, heightCube, normalCube, W, H, demL} */
         rec.demStep = 1.0 * 2 * Math.PI / Math.max(d16.w, 64);
       }
     }
-    if (!rec.rtD && imgD) {
-      rec.rtD = buildCubeFromPano(imgD, cubeFaceSizeFor(imgD), true, true);   /* 极端兜底（旧路径） */
-      rec.demStep = 1.0 * 2 * Math.PI / Math.max(imgD.width, 64);
-    }
+    /* v60：旧 512-face buildCubeFromPano 兑底退役 —— 它把 cube 纹理绑给 sampler2D
+     * uTexD（v57 重构后类型错配，采样即错），8-bit 精度路径已由 dem16From8bit →
+     * buildDemGpu 统一承担；buildDemGpu 失败 = 无 DEM（uHasDEM=0），不再静默错绑 */
   }
   if (imgS) rec.rtS = buildCubeFromPano(imgS, cubeFaceSizeFor(imgS), true, true);
   /* v56：DEM 海平面基准（POM/自阴影高度场以海面为 0）—— DEM 以「最低点=0」
@@ -13954,6 +14055,79 @@ function demHeightAtDir(hgt, W, H, dx, dy, dz) {
   const lat = Math.asin(Math.max(-1, Math.min(1, dz)));
   const v = 0.5 - lat / Math.PI;
   return demTexSampleBilinear(hgt, W, H, u * W - 0.5, v * H - 0.5);
+}
+/* ================= v60c：DEM 立方体面 CPU 构建（worker 内执行）=================
+ * 与底层彩色贴图同一帖法的最终实现：equirect → 六面（GL 立方体约定）→
+ * textureCube 方向采样。CPU 逐 texel 计算的原因（v60b 教训）：GPU 六面直绘
+ * （WebGLCubeRenderTarget + 全屏 quad）在 SwiftShader/驱动组合下面内容与
+ * 写入意图错位（合成斜坡自测：+Z 面内容 = ±Y 面图案），且读回取证困难；
+ * CPU 构建的面数组经 texImage2D 直传，写读约定由 GL 规范唯一确定，
+ * 与渲染状态完全解耦。数学 = 离线复现脚本（scripts/repro_resample.py）
+ * 逐式同源（该脚本已验证 +Z 面与 GPU dump 的形貌完全一致、零尖峰）。
+ *   · 面元值（高度）= max(demTexSampleBilinear(dirUV(d)), 0) —— 与旧
+ *     demHeight(d) 在同一方向的取值逐位同源；Fh = W/2（面元角步 = π/W，
+ *     比等距柱状赤道 texel 密一倍 → 两级插值合成 ≈ 直接 bilinear）。
+ *   · 面元值（法线）= demNormalBary 同式重心插值（GT 网格三角化约定保留）；
+ *     Fn = W/4（法线场本身是 4-tap 差分平滑场，赤道密度即可）。
+ *   · 行序：行 0 = t=0（面底）—— 与 texImage2D 直传约定一致。 */
+const DEM_CUBE_FACES = [   /* GL 立方体规范：面 k 的 (fc, fr, fu)；texel (i,j) 方向 = normalize(fc + fr·s + fu·t) */
+  [[1, 0, 0], [0, 0, -1], [0, -1, 0]], [[-1, 0, 0], [0, 0, 1], [0, -1, 0]],
+  [[0, 1, 0], [1, 0, 0], [0, 0, 1]], [[0, -1, 0], [1, 0, 0], [0, 0, -1]],
+  [[0, 0, 1], [1, 0, 0], [0, -1, 0]], [[0, 0, -1], [-1, 0, 0], [0, -1, 0]]
+];
+function buildDemCubeFaces(hgt, W, H, demL) {
+  const Fh = Math.max(64, Math.min(2048, Math.ceil(W / 2)));
+  const Fn = Math.max(64, Math.min(1024, Math.ceil(W / 4)));
+  const hFaces = [], nFaces = [];
+  const nrm = buildDemNormalField(hgt, W, H, demL);
+  for (let f = 0; f < 6; f++) {
+    const fc = DEM_CUBE_FACES[f][0], fr = DEM_CUBE_FACES[f][1], fu = DEM_CUBE_FACES[f][2];
+    const hF = new Float32Array(Fh * Fh);
+    const nF = new Float32Array(Fn * Fn * 4);
+    for (let j = 0; j < Fh; j++) {
+      const t = 2 * (j + 0.5) / Fh - 1;
+      for (let i = 0; i < Fh; i++) {
+        const s = 2 * (i + 0.5) / Fh - 1;
+        let dx = fc[0] + fr[0] * s + fu[0] * t, dy = fc[1] + fr[1] * s + fu[1] * t, dz = fc[2] + fr[2] * s + fu[2] * t;
+        const L = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+        dx /= L; dy /= L; dz /= L;
+        const u = Math.atan2(dy, dx) / (2 * Math.PI) + 0.5;
+        const v = 0.5 - Math.asin(Math.max(-1, Math.min(1, dz))) / Math.PI;
+        hF[j * Fh + i] = Math.max(demTexSampleBilinear(hgt, W, H, u * W - 0.5, v * H - 0.5), 0);
+      }
+    }
+    for (let j = 0; j < Fn; j++) {
+      const t = 2 * (j + 0.5) / Fn - 1;
+      for (let i = 0; i < Fn; i++) {
+        const s = 2 * (i + 0.5) / Fn - 1;
+        let dx = fc[0] + fr[0] * s + fu[0] * t, dy = fc[1] + fr[1] * s + fu[1] * t, dz = fc[2] + fr[2] * s + fu[2] * t;
+        const L = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+        dx /= L; dy /= L; dz /= L;
+        const u = Math.atan2(dy, dx) / (2 * Math.PI) + 0.5;
+        const v = 0.5 - Math.asin(Math.max(-1, Math.min(1, dz))) / Math.PI;
+        /* demNormalBary 同式重心插值（接缝 mod wrap；退化回退径向） */
+        const tx = u * W - 0.5, ty = v * H - 0.5;
+        const ijx = Math.floor(tx), ijy = Math.floor(ty);
+        const fx = tx - ijx, fy = ty - ijy;
+        const i0 = ((ijx % W) + W) % W, i1 = (((ijx + 1) % W) + W) % W;
+        const j0 = Math.max(0, Math.min(H - 1, ijy)), j1 = Math.max(0, Math.min(H - 1, ijy + 1));
+        const o00 = (j0 * W + i0) * 4, o10 = (j0 * W + i1) * 4, o01 = (j1 * W + i0) * 4, o11 = (j1 * W + i1) * 4;
+        const lower = (fx + fy) <= 1.0;
+        const w0 = lower ? (1 - fx - fy) : 0, w1 = lower ? fx : (1 - fy);
+        const w2 = lower ? fy : (1 - fx), w3 = lower ? 0 : (fx + fy - 1);
+        let nx = w0 * nrm[o00] + w1 * nrm[o10] + w2 * nrm[o01] + w3 * nrm[o11];
+        let ny = w0 * nrm[o00 + 1] + w1 * nrm[o10 + 1] + w2 * nrm[o01 + 1] + w3 * nrm[o11 + 1];
+        let nz = w0 * nrm[o00 + 2] + w1 * nrm[o10 + 2] + w2 * nrm[o01 + 2] + w3 * nrm[o11 + 2];
+        const nl = nx * nx + ny * ny + nz * nz;
+        if (nl > 0.5) { const il = 1 / Math.sqrt(nl); nx *= il; ny *= il; nz *= il; }
+        else { nx = dx; ny = dy; nz = dz; }
+        const o4 = (j * Fn + i) * 4;
+        nF[o4] = nx; nF[o4 + 1] = ny; nF[o4 + 2] = nz; nF[o4 + 3] = 1;
+      }
+    }
+    hFaces.push(hF); nFaces.push(nF);
+  }
+  return { Fh, Fn, hFaces, nFaces };
 }
 function buildDemNormalField(hgt, W, H, demL) {
   /* 顶点 (i,j)：d = dir(u=(i+0.5)/W, v=(j+0.5)/H)；
@@ -14045,14 +14219,52 @@ function computeDemSea16(d16, imgS, specPol) {
     return 0;
   } catch (e) { return 0; }
 }
+/* ================= v60：DEM 立方体重采样（与底层彩色贴图同一帖法）=================
+ * 用户报告（v59 交付后）：「dem 贴图的使用方式有极点畸变……给星球底层贴图的
+ * 方式应该没有，你为什么不使用一样的帖法？」—— 取证确认：等距柱状直接采样
+ * 在极区经度病态（相邻像素 u 跳变 ∝ footprint/cos(lat)，近极点每像素跳数十
+ * texel → 双线性取到远处 texel → 高程/法线花屏，凑近极点越明显）；底层彩色
+ * 贴图走 buildCubeFromPano（equirect → 六面 GPU 重采样 + textureCube 方向采样）
+ * texel 密度均匀，无此问题。本函数把同一帖法用于 DEM：
+ *   · height：面元值 = 旧 demHeight(faceTexelDir)（同一 R32F 源 + 硬件 bilinear
+ *     + max0 —— 逐式同源）；Fh = W/2（面元角步 = π/W，比等距柱状赤道 texel 密
+ *     一倍 → 两级插值合成 ≈ 直接 bilinear，赤道区差异亚 texel）。
+ *   · normal：面元值 = demNormalBary(faceTexelDir)（重心插值逐式移植进重采样
+ *     shader —— GT 网格三角化约定保留）；Fn = W/4（法线场本身是 4-tap 差分的
+ *     平滑场，赤道密度即可）。
+ * 浮点 cube 渲染需 EXT_color_buffer_float + 采样需 OES_texture_float_linear
+ *（uTexD R32F Linear 采样 v57 起已依赖后者）；不可用 → 返回 null，调用方走
+ * 等距柱状兑底（v59 行为）。 */
+/* v60c：GPU 六面直绘重采样（demCubeResample/DEM_RESAMPLE_FS）已退役 ——
+ * 合成斜坡自测表明其在 SwiftShader/驱动组合下面内容与写入意图错位；
+ * 现改 CPU（worker）重采样 + CubeTexture 直传，见 buildDemCubeFaces。 */
+/* v60：帧数据按天体索引查找 —— fr.bodies 是【深度排序后的数组】（透视模式
+ * buildSceneFrame 末尾 sort by mag），旧实现 ren.lastFrame.bodies[i] 直接用
+ * 天体索引取元素，多天体场景下读到别的天体的 radM/demScale（实测：日月场景
+ * rebuildDem(1) 得 demL = span/SUN_R = 5.56e-5，地形标尺静默损坏），且 demL
+ * 守卫永远不满足 → 每帧 setTimeout 重建风暴。find 按 b.i 精确匹配。 */
+function frameBody(i) {
+  try {
+    const bs = ren && ren.lastFrame && ren.lastFrame.bodies;
+    if (!bs) return null;
+    return bs.find ? bs.find(b => b && b.i === i) : bs[i];
+  } catch (e) { return null; }
+}
 function buildDemGpu(i, rec, d16, demScale) {
-  /* d16 = {w,h,data:Uint16Array} → { height(R32F DataTexture), normal(RGBA32F
-   * DataTexture), W, H, demSea }。同步计算（月球 ~1.5s / 水星 ~6s，与旧
-   * buildCubeFromPano 同步六面直绘同口径）；法线场 demL 用当前渲染半径。
-   * v58 修复：半径源 = 帧数据 b.radM（物理米制半径）—— 旧实现读
-   * rec.mesh.scale.x，而烘焙发生在首帧渲染之前时 scale 仍为几何默认 1
-   * → demL = span/1 = 38737（应为 span/1.737e6 = 0.0223，月面放大 1.7e6 倍）
-   * = 地形法线场全损（用户报告「丑陋/密密黑点」的直接根源）。 */
+  /* d16 = {w,h,data:Uint16Array} → rtD 对象。
+   * v60 重构（三项）：
+   * ① 高程/法线主路径 = 立方体贴图（buildDemCubeFaces CPU 重采样 + CubeTexture
+   *    直传，与底层彩色贴图同一帖法 —— 极区畸变根修）；等距柱状 DataTexture
+   *    在 cube 就绪前/构建失败时兜底（uDemIsCube=0 路径）。
+   * ② 法线烘焙 Worker 化：实测 mercury 4096×2048 主线程烘焙 ≈6s 全程冻结
+   *    （rAF 全停）。同步部分只做 hgt/海平面/高度纹理上传（<100ms），法线场
+   *    经 demNormalsAsync（worker 同函数体注入，逐位同语义）异步烘焙，就绪后
+   *    补建法线纹理/法线 cube 并回填同一 rtD 对象（pendingNormal → 就绪）。
+   *    未就绪期间 uHasNorm=0，demNormalBary 回退径向（球面平滑着色）。
+   *    worker 不可用 → 主线程烘焙回退（放 setTimeout 让调用方先返回）。
+   * ③ 半径源 = frameBody(i)（v58 语义保留 + v60 修复排序数组错位，见 frameBody 注）。
+   * rtD = { isCube, heightCube, normalCube, height(equirect 兑底), normal(同),
+   *         pendingNormal, W, H, demL, dispose, _srcHgt(异步烘焙用高度源) }。 */
   try {
     let W = d16.w, H = d16.h, data = d16.data;
     /* v59：纹理尺寸守卫 —— 法线场/高度纹理必须 ≤ renderer.maxTextureSize。
@@ -14083,11 +14295,11 @@ function buildDemGpu(i, rec, d16, demScale) {
     const hgt = new Float32Array(W * H);
     for (let p = 0; p < W * H; p++) hgt[p] = data[p] / 65535;
     let rad = 0, span = 0;
-    try {
-      const fb = ren && ren.lastFrame && ren.lastFrame.bodies && ren.lastFrame.bodies[i];
+    {
+      const fb = frameBody(i);
       if (fb && fb.radM > 0) rad = fb.radM;
       if (fb && fb.demScale > 0) span = fb.demScale;   /* v58：帧数据优先（setSystem 场景 meta.demScale 恒 0） */
-    } catch (e) { }
+    }
     if (!(rad > 0) && rec.mesh && rec.mesh.scale && rec.mesh.scale.x > 1) rad = rec.mesh.scale.x;
     rad = Math.max(rad, 1e-9);
     if (!(span > 0)) span = (demScale > 0) ? demScale : DEM_H_DEFAULT;
@@ -14097,21 +14309,63 @@ function buildDemGpu(i, rec, d16, demScale) {
     hTex.minFilter = THREE.LinearFilter; hTex.magFilter = THREE.LinearFilter;
     hTex.generateMipmaps = false;
     hTex.needsUpdate = true;
-    const nrm = buildDemNormalField(hgt, W, H, demL);
-    const nTex = new THREE.DataTexture(nrm, W, H, THREE.RGBAFormat, THREE.FloatType);
-    nTex.wrapS = THREE.RepeatWrapping; nTex.wrapT = THREE.ClampToEdgeWrapping;
-    nTex.minFilter = THREE.NearestFilter; nTex.magFilter = THREE.NearestFilter;
-    nTex.generateMipmaps = false;
-    nTex.needsUpdate = true;
-    /* v58 修复：返回对象必须自带 dispose —— v57 返回裸 {height,normal,...}，
-     * setBodyTextures/syncBodies 的 rec.rtD.dispose() 抛 TypeError
-     *（= 用户报告「贴图处理失败 rec.rtD.dispose is not a function」）：
-     * 第二次推送起整个 setBodyTextures 中断，rt1/rt2 已置 null 而新纹理未赋值
-     * → 天体丢失颜色贴图 + DEM 永远停留旧标尺。 */
-    return {
-      height: hTex, normal: nTex, W, H, demL,
-      dispose() { try { hTex.dispose(); } catch (e) { } try { nTex.dispose(); } catch (e) { } }
+    /* v60c：cube 主路径 = worker CPU 重采样 + CubeTexture 直传（无 GPU 中间渲染）。
+     * window.__DEM_LEGACY__ = 验证钩子：强制等距柱状兑底路径（A/B 逐像素对比用）。
+     * worker 不可用 → 主线程同步构建（setTimeout 让调用方先返回）；
+     * CPU 构建失败 → equirect 兑底（uDemIsCube=0 路径，v59 行为）。 */
+    const rtD = {
+      isCube: false,
+      heightCube: null, normalCube: null,
+      height: hTex, normal: null, normalTex: null,
+      pendingNormal: true, W, H, demL, demSea: rec.demSea || 0,
+      dispose() {
+        try { if (this.heightCube) this.heightCube.dispose(); } catch (e) { }
+        try { if (this.normalCube) this.normalCube.dispose(); } catch (e) { }
+        try { if (this.height) this.height.dispose(); } catch (e) { }
+        try { if (this.normalTex) this.normalTex.dispose(); } catch (e) { }
+      }
     };
+    const legacy = (typeof window !== 'undefined' && window.__DEM_LEGACY__);
+    const applyCubes = (built) => {
+      if (!built || rec.rtD !== rtD) return;   /* 过期（rtD 已被更新重建）丢弃 */
+      try {
+        const mkCube = (faces, F, fmt) => {
+          const imgs = faces.map(f32 => {
+            const dt = new THREE.DataTexture(f32, F, F, fmt, THREE.FloatType);
+            dt.needsUpdate = false;
+            return dt;
+          });
+          const cube = new THREE.CubeTexture(imgs);
+          cube.format = fmt; cube.type = THREE.FloatType;
+          cube.minFilter = THREE.LinearFilter; cube.magFilter = THREE.LinearFilter;
+          cube.wrapS = THREE.ClampToEdgeWrapping; cube.wrapT = THREE.ClampToEdgeWrapping;
+          cube.generateMipmaps = false;
+          cube.needsUpdate = true;
+          return cube;
+        };
+        const hCube = mkCube(built.hFaces, built.Fh, THREE.RedFormat);
+        const nCube = mkCube(built.nFaces, built.Fn, THREE.RGBAFormat);
+        rtD.heightCube = hCube; rtD.normalCube = nCube;
+        rtD.isCube = true;
+        try { if (rtD.height) { rtD.height.dispose(); rtD.height = null; } } catch (e) { }
+        rtD.pendingNormal = false;
+        needRedraw = true;   /* 异步就绪：请求重绘（暂停静止零重绘的脏标记） */
+      } catch (e) {
+        rtD.isCube = false; rtD.pendingNormal = false;
+      }
+    };
+    if (!legacy) {
+      demBuildAsync(hgt, W, H, demL).then(built => {
+        if (built) { applyCubes(built); return; }
+        /* worker 不可用/失败 → 主线程构建（setTimeout 让 buildDemGpu 先返回，UI 不再同步冻结 6s） */
+        setTimeout(() => {
+          try { applyCubes(buildDemCubeFaces(hgt, W, H, demL)); } catch (e) { rtD.pendingNormal = false; needRedraw = true; }
+        }, 0);
+      });
+    } else {
+      rtD.pendingNormal = false;
+    }
+    return rtD;
   } catch (e) { return null; }
 }
 /* v40：星环贴图（径向条带 Image/URL → 纹理；i<0 时对全部天体清除）。
@@ -14182,8 +14436,12 @@ function makePlanetMat() {
        * v56：uDemSea = DEM 海平面基准（归一化高程；0 = 无水概念） */
       uTexD: { value: null }, uHasDEM: { value: 0 }, uDemH: { value: 0 }, uDemStep: { value: 0.005 },
       uDemSea: { value: 0 },
+      uTexDC: { value: null },   /* v60：高程立方体贴图（主路径，与彩色贴图同帖法） */
+      uTexNC: { value: null },   /* v60：法线场立方体贴图 */
+      uHasNorm: { value: 0 },    /* v60：法线场就绪（worker 异步烘焙 → 回退径向） */
       uTexN: { value: null }, uDemSize: { value: new THREE.Vector2(2048, 1024) },   /* v57：法线纹理 + DEM 尺寸 */
-      uDemIsCube: { value: 0 },   /* v57：兜底旧 cube 路径标记（1 = 旧 8-bit cube） */
+      uDemIsCube: { value: 0 },   /* v60：1 = cube 主路径（与彩色贴图同帖法）；0 = 等距柱状兑底 */
+      uDemDbgMode: { value: 0 },   /* v60b 验证钩子：1=POM门 2=footPx 3=高度 4=POM命中t（取证用，0=正常渲染） */
       uM3: { value: new THREE.Matrix3() },
       uTexS: { value: null }, uHasSpec: { value: 0 },
       uSpecPol: { value: 1 }   /* v54：遮罩极性 +1=白=水 / −1=白=陆地（随 setBodyTextures 同步） */
@@ -14735,10 +14993,25 @@ function renderFrame(fr, env) {
          * uAInv = L⁻¹）—— DEM 扰动法线自本系变换回世界系与 vNW 同口径；
          * 仅在需要时构成（无高程图的天体零额外开销）。 */
         U.uHasDEM.value = rec.rtD ? 1 : 0;
-        U.uTexD.value = rec.rtD ? (rec.rtD.height || rec.rtD.texture) : null;   /* v57：R32F 等距柱状（兜底旧 cube） */
-        U.uTexN.value = rec.rtD ? (rec.rtD.normal || null) : null;   /* v57：顶点法线场（重心插值用） */
-        if (rec.rtD && rec.rtD.W) { U.uDemSize.value.set(rec.rtD.W, rec.rtD.H); U.uDemIsCube.value = 0; }
-        else U.uDemIsCube.value = rec.rtD ? 1 : 0;
+        /* v60：DEM 绑定 —— 主路径 = 立方体贴图（uTexDC/uTexNC，与彩色贴图同帖法）；
+         * isCube=false（浮点 RT 不可用）才走等距柱状兑底（uTexD/uTexN）。
+         * 法线场 worker 异步烘焙未就绪（pendingNormal）时 uHasNorm=0 → 径向回退。 */
+        if (rec.rtD && rec.rtD.isCube) {
+          /* v60c：heightCube/normalCube = CubeTexture（CPU 面数组直传，非 RenderTarget）——
+           * 直接作为 samplerCube 绑定 */
+          U.uTexDC.value = rec.rtD.heightCube;
+          U.uTexNC.value = rec.rtD.normalCube;
+          U.uTexD.value = null; U.uTexN.value = null;
+          U.uHasNorm.value = rec.rtD.normalCube ? 1 : 0;
+          U.uDemIsCube.value = 1;
+        } else {
+          U.uTexD.value = rec.rtD ? (rec.rtD.height || rec.rtD.texture) : null;
+          U.uTexN.value = rec.rtD ? (rec.rtD.normal || null) : null;
+          U.uTexDC.value = null; U.uTexNC.value = null;
+          U.uHasNorm.value = (rec.rtD && rec.rtD.normal) ? 1 : 0;
+          U.uDemIsCube.value = 0;
+        }
+        if (rec.rtD && rec.rtD.W) U.uDemSize.value.set(rec.rtD.W, rec.rtD.H);
         U.uDemStep.value = rec.demStep || 0.005;
         U.uDemH.value = rec.rtD ? ((b.demScale !== undefined && b.demScale > 0) ? b.demScale : DEM_H_DEFAULT) : 0;
         U.uDemSea.value = rec.rtD ? (rec.demSea || 0) : 0;   /* v56：海平面基准随贴图链同步 */
@@ -14765,7 +15038,9 @@ function renderFrame(fr, env) {
                 if (d16r) {
                   let spanR = 0;
                   try {
-                    const fbR = ren && ren.lastFrame && ren.lastFrame.bodies && ren.lastFrame.bodies[idx];
+                    /* v60：帧数据按 b.i 查找（fr.bodies 已按深度排序，旧下标取元
+                     * 会读到别的天体的 demScale → demL 静默损坏） */
+                    const fbR = frameBody(idx);
                     if (fbR && fbR.demScale > 0) spanR = fbR.demScale;
                   } catch (e) { }
                   if (!(spanR > 0)) spanR = (meta && meta[idx] && meta[idx].demScale) || 0;
@@ -14773,6 +15048,7 @@ function renderFrame(fr, env) {
                   if (builtR) {
                     if (recR.rtD && recR.rtD.dispose) recR.rtD.dispose();
                     recR.rtD = builtR;
+                    needRedraw = true;   /* v60：重建就绪请求重绘（暂停静止零重绘依赖显式脏标记） */
                   }
                 }
               } catch (e) { }
@@ -15059,7 +15335,7 @@ function restoreGL() {
         if (built) { rec.rtD = built; rec.demStep = 1.0 * 2 * Math.PI / Math.max(srcD.width, 64); }
       } catch (e) { }
     }
-    if (!rec.rtD && srcD) { try { rec.rtD = buildCubeFromPano(srcD, cubeFaceSizeFor(srcD), true, true); rec.demStep = 1.0 * 2 * Math.PI / Math.max(srcD.width, 64); } catch (e) { } }
+    if (!rec.rtD && srcD) { /* v60：旧 buildCubeFromPano 兑底退役（sampler2D 类型错配，见 setBodyTextures 同注）；8-bit 路径已由上方 dem16From8bit 统一 */ }
     if (srcS) { try { rec.rtS = buildCubeFromPano(srcS, cubeFaceSizeFor(srcS), true, true); } catch (e) { } }
   }
   if (composer && activeCam) {
@@ -15141,12 +15417,73 @@ window.__TJS__ = {
   expDbg: () => ({ exposure: ren.exposure, lastExpT: ren.lastExpT,
     frame: ren.lastFrame ? { expTarget: ren.lastFrame.expTarget, meter: ren.lastFrame.meter, meterDisk: ren.lastFrame.meterDisk, n: ren.lastFrame.bodies ? ren.lastFrame.bodies.length : -1 } : null }),
   /* v57 诊断：DEM 数据管线 uniforms/纹理真值（机制级断言用 —— v55 教训：对机制输出断言） */
+  /* v60b 验证钩子：调试可视化模式（1=POM门 2=footPx 3=高度 4=命中t；0=正常） */
+  demDbgMode: (m) => { for (const r of bodies) { if (r.planetMat) r.planetMat.uniforms.uDemDbgMode.value = m; } draw(); },
+  /* v60b 验证钩子：读回 DEM cube 指定面的内容（verify/ 取证用）。
+   * kind='height'|'normal'，face=0..5（+X,-X,+Y,-Y,+Z,-Z），size=采样分辨率。
+   * 返回 { w, h, rgba: Uint8Array 数组, stats } —— 面内容可视化/尖峰检测。 */
+  dbgCubeFace: (i, kind, face, size, center, patch) => {
+    try {
+      const rec = bodies[i];
+      const rtD = rec && rec.rtD;
+      const cubeRT = rtD && (kind === 'height' ? rtD.heightCube : rtD.normalCube);
+      if (!cubeRT || !renderer) return null;
+      const S = Math.min(1024, Math.max(16, size | 0 || 256));
+      const rt2 = new THREE.WebGLRenderTarget(S, S, { type: THREE.UnsignedByteType, depthBuffer: false });
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { u_t: { value: cubeRT.texture }, u_f: { value: face | 0 },
+                    u_center: { value: new THREE.Vector2((center && center[0]) || 0, (center && center[1]) || 0) },
+                    u_patch: { value: (patch && patch[0]) || 2.0 } },
+        vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        fragmentShader: `precision highp float; varying vec2 v; uniform samplerCube u_t; uniform float u_f;
+        void main(){
+          vec3 fc, fr, fu;
+          if (u_f < 0.5)      { fc = vec3(1,0,0);  fr = vec3(0,0,-1); fu = vec3(0,-1,0); }
+          else if (u_f < 1.5) { fc = vec3(-1,0,0); fr = vec3(0,0,1);  fu = vec3(0,-1,0); }
+          else if (u_f < 2.5) { fc = vec3(0,1,0);  fr = vec3(1,0,0);  fu = vec3(0,0,1); }
+          else if (u_f < 3.5) { fc = vec3(0,-1,0); fr = vec3(1,0,0);  fu = vec3(0,0,-1); }
+          else if (u_f < 4.5) { fc = vec3(0,0,1);  fr = vec3(1,0,0);  fu = vec3(0,-1,0); }
+          else                { fc = vec3(0,0,-1); fr = vec3(-1,0,0); fu = vec3(0,-1,0); }
+          vec2 st = v * 2.0 - 1.0;
+          st = st * u_patch + u_center;   /* 中心 patch 细采样（亚 texel 网格） */
+          vec3 d = normalize(fc + fr * st.x + fu * st.y);
+          vec4 c = textureCubeLodEXT(u_t, d, 0.0);
+          gl_FragColor = vec4(abs(c.rgb), 1.0);
+        }`,
+        depthTest: false, depthWrite: false
+      });
+      mat.uniforms.u_center = { value: new THREE.Vector2(0, 0) };
+      mat.uniforms.u_patch = { value: 2.0 };
+      const geo = new THREE.PlaneGeometry(2, 2);
+      const sc = new THREE.Scene();
+      sc.add(new THREE.Mesh(geo, mat));
+      const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const prevRT = renderer.getRenderTarget();
+      const prevAC = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.setRenderTarget(rt2);
+      renderer.clear(true, false, false);
+      renderer.render(sc, cam);
+      const buf = new Uint8Array(S * S * 4);
+      renderer.readRenderTargetPixels(rt2, 0, 0, S, S, buf);
+      renderer.setRenderTarget(prevRT);
+      renderer.autoClear = prevAC;
+      mat.dispose(); geo.dispose(); rt2.dispose();
+      let mn = 255, mx = 0, sum = 0;
+      for (let p = 0; p < S * S; p++) { const v = buf[p * 4]; if (v < mn) mn = v; if (v > mx) mx = v; sum += v; }
+      return { w: S, h: S, rgba: Array.from(buf), stats: { min: mn, max: mx, mean: +(sum / (S * S)).toFixed(2) } };
+    } catch (e) { return { err: e.message }; }
+  },
   demDbg: () => bodies.map(r => ({
     rtD: !!r.rtD, demL: r.rtD && r.rtD.demL ? +r.rtD.demL.toPrecision(6) : null,
     W: r.rtD && r.rtD.W, H: r.rtD && r.rtD.H,
+    isCube: !!(r.rtD && r.rtD.isCube), pendingNormal: !!(r.rtD && r.rtD.pendingNormal),   /* v60 */
     uHasDEM: r.planetMat.uniforms.uHasDEM.value, uDemH: r.planetMat.uniforms.uDemH.value,
+    uHasNorm: r.planetMat.uniforms.uHasNorm.value,   /* v60 */
     uDemSea: +r.planetMat.uniforms.uDemSea.value.toPrecision(6), uDemStep: r.planetMat.uniforms.uDemStep.value,
     texD: r.planetMat.uniforms.uTexD.value ? (r.planetMat.uniforms.uTexD.value.isDataTexture ? 'data2d' : (r.planetMat.uniforms.uTexD.value.isCubeTexture ? 'cube' : 'other')) : 'null',
+    texDC: !!(r.planetMat.uniforms.uTexDC && r.planetMat.uniforms.uTexDC.value),   /* v60 */
+    texNC: !!(r.planetMat.uniforms.uTexNC && r.planetMat.uniforms.uTexNC.value),   /* v60 */
     texN: !!r.planetMat.uniforms.uTexN.value,
     demSize: [r.planetMat.uniforms.uDemSize.value.x, r.planetMat.uniforms.uDemSize.value.y],
     uNL: r.planetMat.uniforms.uNL.value,
@@ -15193,7 +15530,8 @@ window.__TJS__ = {
     if (!d16) return 'no dem16 url=' + String((meta && meta[i] && meta[i].dem) || 'null');
     let spanH = 0;
     try {
-      const fbH = ren && ren.lastFrame && ren.lastFrame.bodies && ren.lastFrame.bodies[i];
+      /* v60：帧数据按 b.i 查找（fr.bodies 深度排序后旧下标取元读到异体 demScale） */
+      const fbH = frameBody(i);
       if (fbH && fbH.demScale > 0) spanH = fbH.demScale;
     } catch (e) { }
     if (!(spanH > 0)) spanH = (meta && meta[i] && meta[i].demScale) || 0;
