@@ -291,6 +291,37 @@ body.free-touch .pad{display:grid}
   </section>
 
   <section class="sec">
+    <div class="kicker">Materials</div>
+    <h2>材质库</h2>
+    <div class="hint">自动扫描与本文件同目录的 <b>textures/</b> 文件夹，作为<b>星球表面贴图</b>。按文件名后缀自动分类（_dem 高程 / _specular 镜面 / _clouds 云 / _ring 星环等）。</div>
+    <div class="row"><button id="matScanBtn" class="btn" style="flex:1">重新扫描 textures/ 材质文件夹</button></div>
+    <div class="row" style="margin-top:6px;gap:6px">
+      <button id="matUploadBtn" class="btn" style="flex:1">上传贴图到库</button>
+      <button id="matDelUpBtn" class="btn" style="flex:none;display:none">删除所选</button>
+    </div>
+    <input type="file" id="matUploadInput" accept="image/*" multiple class="hidden">
+    <div class="row" style="margin-top:6px;gap:6px">
+      <span class="lbl" style="width:44px;flex:none">类别</span>
+      <select id="matCatSel" style="flex:1" title="按文件名后缀分类过滤贴图列表；默认全部展示"><option value="">全部类别</option><option value="base">表面颜色</option><option value="cloud">云图</option><option value="dem">高程 DEM</option><option value="specular">镜面反射</option><option value="normal">法线</option><option value="night">夜光</option><option value="atmosphere">大气</option><option value="ring">星环</option><option value="other">其他</option></select>
+    </div>
+    <div id="matBigWrap" style="display:none;margin-top:8px;border:1px solid var(--line);padding:6px;text-align:center">
+      <img id="matBig" alt="" style="max-width:100%;max-height:150px;object-fit:contain;display:block;margin:0 auto">
+      <div id="matBigInfo" class="lbl" style="margin-top:4px;font-size:10px"></div>
+    </div>
+    <div id="matGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px"></div>
+    <div class="row" id="matPageRow" style="margin-top:6px;gap:6px;align-items:center;display:none">
+      <button id="matPagePrev" class="btn" style="flex:none;width:34px;padding:0" title="上一页">‹</button>
+      <span id="matPageInfo" class="lbl" style="flex:1;text-align:center;font-family:var(--mono)">1 / 1</span>
+      <button id="matPageNext" class="btn" style="flex:none;width:34px;padding:0" title="下一页">›</button>
+    </div>
+    <div class="row" style="margin-top:6px;gap:6px">
+      <select id="matTargetSel" style="flex:1"><option value="1">应用到底层贴图</option><option value="2">应用到上层贴图</option><option value="3">应用到星环</option><option value="4">应用到高程 DEM</option><option value="5">应用到镜面反射</option></select>
+      <button id="matBodyBtn" class="btn" style="flex:1">应用</button>
+    </div>
+    <div id="matInfo" class="lbl" style="margin-top:4px">未扫描</div>
+  </section>
+
+  <section class="sec">
     <div class="kicker">Rendering</div>
     <h2>渲染</h2>
     <div class="row"><span class="lbl" style="width:70px;flex:none">分辨率</span>
@@ -348,7 +379,6 @@ body.free-touch .pad{display:grid}
   </section>
 
   <section class="sec">
-  <section class="sec">
     <div class="kicker">Engine</div>
     <h2>计算核心</h2>
     <div class="row"><input type="checkbox" id="wasmToggle" checked><label for="wasmToggle" style="cursor:pointer" title="重计算核心（牛顿+全 PN 力核、隐式中点、Yoshida4、统计扫描）经 WASM 执行，与 JS 内核逐位等价（IEEE754、禁 FMA 收缩）；加载失败自动重试 3 次后静默回退 JS 内核">WASM 加速内核</label></div>
@@ -365,6 +395,7 @@ body.free-touch .pad{display:grid}
     </div>
     <div class="hint">WASM/多线程与原 JS 内核逐位一致，切换引擎不改变任何物理行为；多线程仅在跨域隔离环境可用。</div>
   </section>
+  <section class="sec">
     <div class="kicker">Conservation</div>
     <h2>守恒量</h2>
     <div class="row"><input type="checkbox" id="showConservation" checked><label for="showConservation" style="cursor:pointer">显示能量与动量</label></div>
@@ -383,36 +414,6 @@ body.free-touch .pad{display:grid}
     <div class="row"><button id="downloadLogBtn" class="btn" style="flex:1">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       下载守恒量日志</button></div>
-  </section>
-  <section class="sec">
-    <div class="kicker">Materials</div>
-    <h2>材质库</h2>
-    <div class="hint">自动扫描与本文件同目录的 <b>textures/</b> 文件夹，作为<b>星球表面贴图</b>。按文件名后缀自动分类（_dem 高程 / _specular 镜面 / _clouds 云 / _ring 星环等）。</div>
-    <div class="row"><button id="matScanBtn" class="btn" style="flex:1">重新扫描 textures/ 材质文件夹</button></div>
-    <div class="row" style="margin-top:6px;gap:6px">
-      <button id="matUploadBtn" class="btn" style="flex:1">上传贴图到库</button>
-      <button id="matDelUpBtn" class="btn" style="flex:none;display:none">删除所选</button>
-    </div>
-    <input type="file" id="matUploadInput" accept="image/*" multiple class="hidden">
-    <div class="row" style="margin-top:6px;gap:6px">
-      <span class="lbl" style="width:44px;flex:none">类别</span>
-      <select id="matCatSel" style="flex:1" title="按文件名后缀分类过滤贴图列表；默认全部展示"><option value="">全部类别</option><option value="base">表面颜色</option><option value="cloud">云图</option><option value="dem">高程 DEM</option><option value="specular">镜面反射</option><option value="normal">法线</option><option value="night">夜光</option><option value="atmosphere">大气</option><option value="ring">星环</option><option value="other">其他</option></select>
-    </div>
-    <div id="matBigWrap" style="display:none;margin-top:8px;border:1px solid var(--line);padding:6px;text-align:center">
-      <img id="matBig" alt="" style="max-width:100%;max-height:150px;object-fit:contain;display:block;margin:0 auto">
-      <div id="matBigInfo" class="lbl" style="margin-top:4px;font-size:10px"></div>
-    </div>
-    <div id="matGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px"></div>
-    <div class="row" id="matPageRow" style="margin-top:6px;gap:6px;align-items:center;display:none">
-      <button id="matPagePrev" class="btn" style="flex:none;width:34px;padding:0" title="上一页">‹</button>
-      <span id="matPageInfo" class="lbl" style="flex:1;text-align:center;font-family:var(--mono)">1 / 1</span>
-      <button id="matPageNext" class="btn" style="flex:none;width:34px;padding:0" title="下一页">›</button>
-    </div>
-    <div class="row" style="margin-top:6px;gap:6px">
-      <select id="matTargetSel" style="flex:1"><option value="1">应用到底层贴图</option><option value="2">应用到上层贴图</option><option value="3">应用到星环</option><option value="4">应用到高程 DEM</option><option value="5">应用到镜面反射</option></select>
-      <button id="matBodyBtn" class="btn" style="flex:1">应用</button>
-    </div>
-    <div id="matInfo" class="lbl" style="margin-top:4px">未扫描</div>
   </section>
   <section class="sec">
     <div class="kicker">Data</div>
@@ -2919,7 +2920,7 @@ async function dem16For(url) {
 }
 async function demSpanFor(url) {
   if (demSpanCache.has(url)) return demSpanCache.get(url);
-  let span = 0;
+  let span = 0, definite = false;   /* v61：definite = 明确 404（文件不存在）才负缓存 */
   const js = String(url).replace(/\.(jpe?g|png|webp|avif|gif)$/i, '') + '.json';
   /* v53：3 次重试 × 8s —— 启动扫描期间 12 并发大图探测占满浏览器每域连接，
    * 小 JSON 请求会排队超时（实测 AbortError@6s）；重试至扫描退潮后即可命中 */
@@ -2932,10 +2933,15 @@ async function demSpanFor(url) {
         if (j && typeof j.height_span === 'number' && isFinite(j.height_span) && j.height_span > 0) span = j.height_span;
         else if (j && typeof j.max_elevation === 'number' && typeof j.min_elevation === 'number' && j.max_elevation > j.min_elevation)
           span = j.max_elevation - j.min_elevation;
-      } else break;   /* 明确 404：不重试 */
+      } else { definite = true; break; }   /* 明确 404：不重试 */
     } catch (e) { /* 超时/中断：重试 */ }
   }
-  demSpanCache.set(url, span);
+  /* v61 修复：超时失败不再负缓存 —— 旧式把 0 一并 set 进缓存：扫描饱和窗口内
+   * 3 次 Abort 全部耗尽后，demSpanSyncPending 补标定恒命中缓存的 0，
+   * 「重试至扫描退潮后命中」的设计意图被缓存杀死 = DEM 标定整会话永久失效
+   * （本轮实测复现：probe_v53 B3 span=0 与基线 span=15852.54 的同环境抖动）。
+   * 404（文件确实不存在）保持负缓存防请求风暴；成功标定行为逐位不变。 */
+  if (span > 0 || definite) demSpanCache.set(url, span);
   return span;
 }
 /* v53：扫描结束后补标定 —— 扫描期间被连接占用超时的 dem，待队列退潮后重探
@@ -4111,14 +4117,14 @@ function updateBodyOverlay() {
   /* 自转（潮汐力矩下随时演化）与自转轴倾角 */
   const spinP = spinRate[idx] > 1e-12 ? 2 * Math.PI / spinRate[idx] : 0;
   const bBH = isBlackHolePhys(massA[idx], meta[idx].radius);
-  ui.ovSpin.textContent = spinP > 0 ? fmtTime(spinP) : '—';
+  setTxt(ui.ovSpin, spinP > 0 ? fmtTime(spinP) : '—');   /* v61 */
   /* v19e：轴倾角实时取自当前自转轴（潮汐力矩下轴演化；符号约定同 spinAxY=−sin(tilt)）
    * v20：精度自适应（<0.1° 三位小数、<10° 两位、其余一位） */
   {
     const tv = Math.acos(clampNum(spinAxZ[idx], -1, 1)) * 180 / Math.PI;
     const tvS = spinAxY[idx] <= 0 ? tv : -tv;
     const dec = Math.abs(tvS) < 0.1 ? 3 : (Math.abs(tvS) < 10 ? 2 : 1);
-    ui.ovTilt.textContent = tvS.toFixed(dec) + '°';
+    setTxt(ui.ovTilt, tvS.toFixed(dec) + '°');   /* v61 */
   }
   /* v20：扁率（自转扁化，流体系数与自转周期实时）与温度（平衡温度/恒星表面温度）
    * v22：黑洞视界无固体表面，扁率显示 '—'（此前把视界当流体球算出 0.625 的伪扁率） */
@@ -4134,14 +4140,12 @@ function updateBodyOverlay() {
     else if (fAbs > 0) fTxt = fRot.toExponential(2);
     else fTxt = '0';
     if (!bBH && fAbs > 1e-4 && fAbs < 0.5) fTxt += ' (1/' + Math.round(1 / fAbs) + ')';
-    ui.ovFlat.textContent = fTxt;
+    setTxt(ui.ovFlat, fTxt);   /* v61 */
     const sp = starPhysCache[idx];
     if (sp) {
-      ui.ovTemp.textContent = Math.round(sp.T) + ' K';
-      ui.ovTempGH.textContent = '—';
+      setTxt(ui.ovTemp, Math.round(sp.T) + ' K'); setTxt(ui.ovTempGH, '—');   /* v61 */
     } else if (bBH) {
-      ui.ovTemp.textContent = '—';   /* v21：视界内无地表温度 */
-      ui.ovTempGH.textContent = '—';
+      setTxt(ui.ovTemp, '—'); setTxt(ui.ovTempGH, '—');   /* v21：视界内无地表温度（v61 免写） */
     } else {
       const Ep = bodyIrradianceSum(idx);
       /* v30：Bond 反照率（内置太阳系天体观测值表 + 自定义颜色映射）—— 旧版颜色
@@ -4150,13 +4154,13 @@ function updateBodyOverlay() {
       const Teq = bodyTempOf(Ep, alb);
       if (Teq > 0) {
         const tC = Teq - 273.15;
-        ui.ovTemp.textContent = (Math.abs(tC) < 10 ? tC.toFixed(1) : Math.round(tC)) + '°C';
+        setTxt(ui.ovTemp, (Math.abs(tC) < 10 ? tC.toFixed(1) : Math.round(tC)) + '°C');   /* v61 */
         /* v21：温室因子按天体；v30b：有效表面温度 bodySurfTempOf ——
          * 气巨 T_eff⁴ = T_eq⁴ + q_int/σ（内部热源），其余 T_eq × gh（灰大气） */
         const sf = bodySurfTempOf(idx);
         const tGH = sf.T - 273.15;
-        ui.ovTempGH.textContent = (Math.abs(tGH) < 10 ? tGH.toFixed(1) : Math.round(tGH)) + '°C (×' + sf.fac.toFixed(3) + ')';
-      } else { ui.ovTemp.textContent = '—'; ui.ovTempGH.textContent = '—'; }
+        setTxt(ui.ovTempGH, (Math.abs(tGH) < 10 ? tGH.toFixed(1) : Math.round(tGH)) + '°C (×' + sf.fac.toFixed(3) + ')');   /* v61 */
+      } else { setTxt(ui.ovTemp, '—'); setTxt(ui.ovTempGH, '—'); }   /* v61 */
     }
   }
   /* 轨道（相对主星）—— v33：r/v 与 a/e/P/i 相对同一「实际束缚宿主」
@@ -4169,7 +4173,7 @@ function updateBodyOverlay() {
     const rNow = Math.sqrt(rx * rx + ry * ry + rz * rz);
     const dvx = vx[idx] - vx[p], dvy = vy[idx] - vy[p], dvz = vz[idx] - vz[p];
     const vRel = Math.sqrt(dvx * dvx + dvy * dvy + dvz * dvz);
-    ui.ovRV.textContent = fmtOvDist(rNow) + ' / ' + (vRel / 1000).toFixed(1) + 'km/s';
+    setTxt(ui.ovRV, fmtOvDist(rNow) + ' / ' + (vRel / 1000).toFixed(1) + 'km/s');   /* v61 */
     const hz = rx * dvy - ry * dvx;
     const hxv = ry * dvz - rz * dvy;
     const hyv = rz * dvx - rx * dvz;
@@ -4177,14 +4181,12 @@ function updateBodyOverlay() {
     const inc = hMag > 0 ? Math.acos(Math.min(1, Math.max(-1, hz / hMag))) * 180 / Math.PI : 0;
     if (osc && osc.bound) {
       const au = osc.a / AU;
-      ui.ovAE.textContent = (au >= 0.005 ? (au < 10 ? au.toFixed(3) : au.toFixed(1)) + 'AU' : fmtOvDist(osc.a)) + ' / ' + osc.e.toFixed(3);
-      ui.ovPI.textContent = fmtTime(osc.period) + ' / ' + inc.toFixed(1) + '°';
+      setTxt(ui.ovAE, (au >= 0.005 ? (au < 10 ? au.toFixed(3) : au.toFixed(1)) + 'AU' : fmtOvDist(osc.a)) + ' / ' + osc.e.toFixed(3)); setTxt(ui.ovPI, fmtTime(osc.period) + ' / ' + inc.toFixed(1) + '°');   /* v61 */
     } else {
-      ui.ovAE.textContent = '双曲/逃逸';
-      ui.ovPI.textContent = '— / ' + inc.toFixed(1) + '°';
+      setTxt(ui.ovAE, '双曲/逃逸'); setTxt(ui.ovPI, '— / ' + inc.toFixed(1) + '°');   /* v61 */
     }
   } else {
-    ui.ovAE.textContent = '—'; ui.ovPI.textContent = '—'; ui.ovRV.textContent = '—';
+    setTxt(ui.ovAE, '—'); setTxt(ui.ovPI, '—'); setTxt(ui.ovRV, '—');   /* v61 */
   }
 }
 function grSamplePush() {
@@ -4200,16 +4202,16 @@ function grSamplePush() {
 }
 function grUpdateReadout() {
   if (!grSamples || grSamples.length < 10) {
-    ui.grA.textContent = '—'; ui.grE.textContent = '—'; ui.grP.textContent = '—';
-    ui.grMeasured.textContent = gr1pnOn || gr25On ? '采样中…' : '—';
-    ui.grTheory.textContent = '—';
+    setTxt(ui.grA, '—'); setTxt(ui.grE, '—'); setTxt(ui.grP, '—');   /* v61 */
+    setTxt(ui.grMeasured, gr1pnOn || gr25On ? '采样中…' : '—');
+    setTxt(ui.grTheory, '—');
     return;
   }
   const s0 = grSamples[0], s1 = grSamples[grSamples.length - 1];
   const dtS = s1.t - s0.t;
-  ui.grA.textContent = (s1.a / AU).toFixed(4);
-  ui.grE.textContent = s1.e.toFixed(4);
-  ui.grP.textContent = (s1.P / DAY_SEC).toFixed(2);
+  setTxt(ui.grA, (s1.a / AU).toFixed(4));   /* v61 */
+  setTxt(ui.grE, s1.e.toFixed(4));
+  setTxt(ui.grP, (s1.P / DAY_SEC).toFixed(2));
   if (dtS > 0) {
     /* 最小二乘回归斜率，抑制周期抖动；单位 ″/世纪 */
     const nS = grSamples.length;
@@ -4222,9 +4224,9 @@ function grUpdateReadout() {
     const denom = nS * stt - st * st;
     if (denom > 0) {
       const rate = (nS * stw - st * sw) / denom * CENTURY_SEC * ARCSEC_PER_RAD;
-      ui.grMeasured.textContent = Math.abs(rate).toFixed(2);
+      setTxt(ui.grMeasured, Math.abs(rate).toFixed(2));   /* v61 */
       const theory = 6 * Math.PI * s1.GM / (s1.a * (1 - s1.e * s1.e) * C_SQ) / s1.P * CENTURY_SEC * ARCSEC_PER_RAD;
-      ui.grTheory.textContent = theory.toFixed(2);
+      setTxt(ui.grTheory, theory.toFixed(2));   /* v61 */
     }
   }
 }
@@ -4318,16 +4320,16 @@ function drawGWWave() {
 }
 function gwUpdateReadout() {
   if (!ui.gwF) return;
-  if (!gwLast) { ui.gwF.textContent = '—'; ui.gwH.textContent = '—'; ui.gwT.textContent = '—'; return; }
-  ui.gwF.textContent = gwLast.fGW > 0 ? gwLast.fGW.toFixed(1) : '—';
-  ui.gwH.textContent = gwLast.amp > 0 ? gwLast.amp.toExponential(2) : '—';
-  ui.gwT.textContent = isFinite(gwLast.tMerge) ? fmtTime(gwLast.tMerge) : '—';
+  if (!gwLast) { setTxt(ui.gwF, '—'); setTxt(ui.gwH, '—'); setTxt(ui.gwT, '—'); return; }   /* v61 */
+  setTxt(ui.gwF, gwLast.fGW > 0 ? gwLast.fGW.toFixed(1) : '—');
+  setTxt(ui.gwH, gwLast.amp > 0 ? gwLast.amp.toExponential(2) : '—');
+  setTxt(ui.gwT, isFinite(gwLast.tMerge) ? fmtTime(gwLast.tMerge) : '—');
 }
 /* 潮汐读数：耗散功率（W）与自转角动量占总角动量比（潮汐锁定的直观指标） */
 function updateTideReadout() {
   if (!ui.tideHeat) return;
-  if (!tideOn) { ui.tideHeat.textContent = '关闭'; ui.tideSpinFrac.textContent = '—'; return; }
-  ui.tideHeat.textContent = tideHeatW > 0 ? tideHeatW.toExponential(2) + ' W' : '0（无耗散天体）';
+  if (!tideOn) { setTxt(ui.tideHeat, '关闭'); setTxt(ui.tideSpinFrac, '—'); return; }   /* v61 */
+  setTxt(ui.tideHeat, tideHeatW > 0 ? tideHeatW.toExponential(2) + ' W' : '0（无耗散天体）');
   let S = 0, L = 0;
   for (let i = 0; i < N; i++) {
     S += bodyIA[i] * spinRate[i];   // 自转角动量 S = I·Ω
@@ -4338,7 +4340,7 @@ function updateTideReadout() {
       L += mu * Math.sqrt((dy * dvz - dz * dvy) ** 2 + (dz * dvx - dx * dvz) ** 2 + (dx * dvy - dy * dvx) ** 2);
     }
   }
-  ui.tideSpinFrac.textContent = (S + L) > 0 ? (S / (S + L) * 100).toFixed(2) + ' %' : '—';
+  setTxt(ui.tideSpinFrac, (S + L) > 0 ? (S / (S + L) * 100).toFixed(2) + ' %' : '—');   /* v61 */
 }
 
 /* ---------------- 预设系统 ---------------- */
@@ -5136,6 +5138,7 @@ function occlRadiusOf(i) {
   if (meta[i].radius > 0) return meta[i].radius;
   return massRadius(massA[i]);
 }
+let _occRadBuf = new Float64Array(64);   /* v61：遮挡半径逐帧缓存缓冲（复用零分配） */
 function buildSceneFrame() {
   viewDiskCss = 0;   // 屏内最大已解析圆面（拖拽灵敏度自适应用），逐帧重计
   /* v40：贴表钳制兑底（跟随切换/缩放事件竞态下高倍残留 → 逐帧收敛到表面外） */
@@ -5174,6 +5177,14 @@ function buildSceneFrame() {
    *（遮挡判定需要任意天体对的屏幕几何，单循环内拿不到未处理天体的投影） */
   const preP = new Array(N), preTz = new Float64Array(N), preRren = new Float64Array(N),
     preRad = new Float64Array(N), preRCss = new Float64Array(N);
+  /* v61：遮挡半径逐帧缓存 —— occlRadiusOf(j) 帧内纯函数（只依赖 j 的 meta/massA，
+   * buildSceneFrame 全程无 mutation），食影候选循环原按 (i,light,j) 组合重复求值
+   * O(N²·S) 次（miss 门每个候选一次，massRadius 含 log/pow/exp）→ 预计算 O(N)
+   * 次后查表，命中返回同值 → 逐位一致。Python 门禁 scripts/v61_equiv_check.py
+   * T2（纯度序列模型）+ 本轮 D1 渲染字节一致背书。缓冲跨帧复用零分配。 */
+  if (_occRadBuf.length < N) _occRadBuf = new Float64Array(Math.max(64, N * 2));
+  const occRad = _occRadBuf;
+  for (let ii = 0; ii < N; ii++) occRad[ii] = occlRadiusOf(ii);
   for (let i = 0; i < N; i++) {
     const p = fr.proj.pt(px[i], py[i], pz[i]);
     preP[i] = p;
@@ -5450,7 +5461,7 @@ function buildSceneFrame() {
           const cand = [];
           for (let j = 0; j < N; j++) {
             if (j === i || j === li.si) continue;
-            const rj = occlRadiusOf(j);
+            const rj = occRad[j];   /* v61：帧内缓存查表（原 occlRadiusOf(j) 逐候选重算） */
             if (rj <= 0) continue;
             const vx = px[j] - px[i], vy = py[j] - py[i], vz = pz[j] - pz[i];
             const t = vx * ux + vy * uy + vz * uz;
@@ -5484,7 +5495,7 @@ function buildSceneFrame() {
             const t0v = vx * li.d[0] + vy * li.d[1] + vz * li.d[2];
             return {
               p: [vx / radM, vy / radM, vz / radM],
-              r: occlRadiusOf(c.j) / radM, srcR: Rs / radM, dsrc: dps / radM, t0: t0v / radM
+              r: occRad[c.j] / radM, srcR: Rs / radM, dsrc: dps / radM, t0: t0v / radM   /* v61：查表（同上） */
             };
           };
           if (q1 >= 0) {
@@ -6415,6 +6426,14 @@ function buildTrails(fr) {
 /* 2D 图层：仅绘制天体名称标签（GL 层之上的清晰 HUD）。
  * 被更近的已解析圆面盖住的标签不显示（锚点落入其盘内即视为遮挡）——
  * bodies 已按深度远→近排序，后项可遮挡前项 */
+/* v61：HUD 同值免写 —— textContent 赋值即使内容相同也会替换文本节点并触发
+ * 渲染树失效；播放/重绘中各读数大量帧内字符串不变（缩放/守恒量/温度/轨道根数/
+ * 潮汐功率…）。按节点缓存上次写入串，同值跳过 —— DOM 有效文本序列不变
+ * （scripts/v61_equiv_check.py T3 序列模型）。仅用于逐帧热路径读数。 */
+function setTxt(el, s) {
+  if (!el) return;
+  if (el._lastTxt !== s) { el.textContent = s; el._lastTxt = s; }
+}
 function drawOverlay2D(fr, c2) {
   const g = c2 || ctx;
   g.fillStyle = 'rgba(232,230,221,.85)';
@@ -6567,8 +6586,8 @@ function draw() {
     drawTo2D(ctx, viewW, viewH);
   }
   /* HUD */
-  ui.timeDisplay.textContent = fmtTime(simTime);
-  ui.scaleDisplay.textContent = '1px ≈ ' + (1 / scale).toExponential(2) + ' m';
+  setTxt(ui.timeDisplay, fmtTime(simTime));   /* v61：同值免写 */
+  setTxt(ui.scaleDisplay, '1px ≈ ' + (1 / scale).toExponential(2) + ' m');
   updateBodyOverlay();
   ren.lastFrame = fr;
 }
@@ -6782,15 +6801,15 @@ function updateConservationUI(force, pre) {
   if ((!show && !force) || N === 0) {
     /* v20：空白系统清零显示（旧版直接 return，面板残留上一系统的陈旧数值） */
     if (N === 0) {
-      ui.totalEnergyDisplay.textContent = '0.0000e+0';
-      ui.sinkTideDisplay.textContent = '0.000e+0 J';
-      ui.sinkGWDisplay.textContent = '0.000e+0 J';
-      ui.energyLedgerDisplay.textContent = '0.0000e+0';
-      ui.totalMomentumDisplay.textContent = '[0.00e+0, 0.00e+0, 0.00e+0]';
-      ui.momentumDeltaDisplay.textContent = '0.0000e+0';
-      ui.totalAngularDisplay.textContent = '0.000e+0';
-      ui.sinkGWLDisplay.textContent = '0.000e+0';
-      ui.angularLedgerDisplay.textContent = '0.000e+0';
+      setTxt(ui.totalEnergyDisplay, '0.0000e+0');   /* v61：同值免写（下同） */
+      setTxt(ui.sinkTideDisplay, '0.000e+0 J');
+      setTxt(ui.sinkGWDisplay, '0.000e+0 J');
+      setTxt(ui.energyLedgerDisplay, '0.0000e+0');
+      setTxt(ui.totalMomentumDisplay, '[0.00e+0, 0.00e+0, 0.00e+0]');
+      setTxt(ui.momentumDeltaDisplay, '0.0000e+0');
+      setTxt(ui.totalAngularDisplay, '0.000e+0');
+      setTxt(ui.sinkGWLDisplay, '0.000e+0');
+      setTxt(ui.angularLedgerDisplay, '0.000e+0');
     }
     return null;
   }
@@ -6810,20 +6829,20 @@ function updateConservationUI(force, pre) {
       egBalance = (eg - gaugeInvE0) + sinkTideE[0] + sinkGWE[0];
     } else gaugeInvE0 = null;
   } else gaugeInvE0 = null;
-  ui.totalEnergyDisplay.textContent = E.toExponential(4);
+  setTxt(ui.totalEnergyDisplay, E.toExponential(4));   /* v61：同值免写（下同） */
   const dissipated = sinkTideE[0] + sinkGWE[0];
-  ui.sinkTideDisplay.textContent = sinkTideE[0].toExponential(3) + ' J';
-  ui.sinkGWDisplay.textContent = sinkGWE[0].toExponential(3) + ' J';
-  ui.energyLedgerDisplay.textContent = (dE + dissipated).toExponential(4) + (egBalance !== null ? ' 〔E(x)平衡 ' + egBalance.toExponential(2) + ' · 准圆近似〕' : '');
-  ui.totalMomentumDisplay.textContent = '[' + P[0].toExponential(2) + ', ' + P[1].toExponential(2) + ', ' + P[2].toExponential(2) + ']';
-  ui.momentumDeltaDisplay.textContent = dP.toExponential(4);
+  setTxt(ui.sinkTideDisplay, sinkTideE[0].toExponential(3) + ' J');
+  setTxt(ui.sinkGWDisplay, sinkGWE[0].toExponential(3) + ' J');
+  setTxt(ui.energyLedgerDisplay, (dE + dissipated).toExponential(4) + (egBalance !== null ? ' 〔E(x)平衡 ' + egBalance.toExponential(2) + ' · 准圆近似〕' : ''));
+  setTxt(ui.totalMomentumDisplay, '[' + P[0].toExponential(2) + ', ' + P[1].toExponential(2) + ', ' + P[2].toExponential(2) + ']');
+  setTxt(ui.momentumDeltaDisplay, dP.toExponential(4));
   const L = pre ? pre.L : computeTotalAngular();
   const L0 = initialTotalAngular;
   const Lrad = [sinkGWLx[0], sinkGWLv[0], sinkGWLz[0]];
   const dLx = L[0] + Lrad[0] - L0[0], dLv = L[1] + Lrad[1] - L0[1], dLz = L[2] + Lrad[2] - L0[2];
-  ui.totalAngularDisplay.textContent = Math.hypot(L[0], L[1], L[2]).toExponential(3);
-  ui.sinkGWLDisplay.textContent = Math.hypot(Lrad[0], Lrad[1], Lrad[2]).toExponential(3);
-  ui.angularLedgerDisplay.textContent = Math.hypot(dLx, dLv, dLz).toExponential(3);
+  setTxt(ui.totalAngularDisplay, Math.hypot(L[0], L[1], L[2]).toExponential(3));   /* v61 */
+  setTxt(ui.sinkGWLDisplay, Math.hypot(Lrad[0], Lrad[1], Lrad[2]).toExponential(3));
+  setTxt(ui.angularLedgerDisplay, Math.hypot(dLx, dLv, dLz).toExponential(3));
   return { E, P, L };
 }
 function logPush(dtUsed, pre) {
@@ -6914,17 +6933,7 @@ function physicsAdvance(baseDt, steps, budgetMs, subT) {
    * 帧级 mergeCollisions 保留兜底（固定步长路径行为不变）。 */
   const mergeOn = ui.collisionMerge ? !!ui.collisionMerge.checked : false;
   let contactR2 = 0;
-  if (mergeOn && N > 1) {
-    contactR2 = 0;
-    for (let i = 0; i < N; i++) {
-      const Ri = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
-      for (let j = i + 1; j < N; j++) {
-        const Rj = meta[j].radius > 0 ? meta[j].radius : massRadius(massA[j]);
-        const rr = Ri + Rj;
-        if (rr * rr > contactR2) contactR2 = rr * rr;
-      }
-    }
-  }
+  if (mergeOn && N > 1) contactR2 = __computeContactR2();   /* v61：同式扫描收敛到单一实现（逐位同值，消三处拷贝） */
   let advanced = 0;
   if (adaptiveOn && N > 1) {
     /* 目标推进 = baseDt·steps（与旧版无收紧时每帧物理时间一致，速度感知不变）；
@@ -6947,17 +6956,7 @@ function physicsAdvance(baseDt, steps, budgetMs, subT) {
         const mc = mergeCollisions(0, dtk);
         if (mc > 0) {
           markCustom();
-          if (N > 1) {
-            contactR2 = 0;
-            for (let i = 0; i < N; i++) {
-              const Ri = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
-              for (let j = i + 1; j < N; j++) {
-                const Rj = meta[j].radius > 0 ? meta[j].radius : massRadius(massA[j]);
-                const rr = Ri + Rj;
-                if (rr * rr > contactR2) contactR2 = rr * rr;
-              }
-            }
-          }
+          if (N > 1) contactR2 = __computeContactR2();   /* v61：同上收敛 */
         }
         if (N <= 1) break;
       }
@@ -7064,7 +7063,7 @@ function updatePerf(now) {
   const dtShown = lastAdaptSteps > 0 ? lastAdaptAdvanced / lastAdaptSteps : (lastSteps > 0 ? lastAdvanced / lastSteps : 0);
   const dtTxt = dtShown >= 1 ? ' · dt≈' + dtShown.toFixed(1) + 's'
     : dtShown > 0 ? ' · dt≈' + dtShown.toExponential(1) + 's' : '';
-  ui.perfDisplay.textContent = fpsEma.toFixed(0) + ' fps · ' + (daysPerSec >= 1 ? daysPerSec.toFixed(1) + ' 天/秒' : (lastAdvanced * fpsEma).toFixed(0) + ' 秒/秒') + dtTxt;
+  setTxt(ui.perfDisplay, fpsEma.toFixed(0) + ' fps · ' + (daysPerSec >= 1 ? daysPerSec.toFixed(1) + ' 天/秒' : (lastAdvanced * fpsEma).toFixed(0) + ' 秒/秒') + dtTxt);   /* v61 */
 }
 function frame() {
   if (!playing) return;
@@ -7201,16 +7200,20 @@ function frame() {
 }
 /* ===== v34: 最大接触半径²（帧级并合预检辅助；与 physicsAdvance 内联块同式） ===== */
 function __computeContactR2() {
-  let contactR2 = 0;
+  /* v61：O(N²) 全对扫描 → O(N) 前 2 大半径。等价性：半径非负 + IEEE754 加法
+   * 单调 ⇒ max_pairs(Ri+Rj)² = (R_(1)+R_(2))²，且对取到的那一对操作数执行的
+   * 是同一次加法/乘法 → 逐位一致。NaN 半径在旧扫描中恒被忽略（NaN+x=NaN →
+   * 比较恒假），新扫描同样不入选（r>b 恒假）；有效（非 NaN）值 <2 个时无有效
+   * 对 → 0，与旧扫描一致。Python 门禁 scripts/v61_equiv_check.py T1：
+   * 21000 用例（含 NaN/Inf/0/上溢/并列）位一致。原实现内层循环重复调用
+   * massRadius（log/pow/exp，physics_core.js）N²/2 次 → 现 N 次。 */
+  let b1 = 0, b2 = 0, cnt = 0;
   for (let i = 0; i < N; i++) {
-    const Ri = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
-    for (let j = i + 1; j < N; j++) {
-      const Rj = meta[j].radius > 0 ? meta[j].radius : massRadius(massA[j]);
-      const rr = Ri + Rj;
-      if (rr * rr > contactR2) contactR2 = rr * rr;
-    }
+    const r = meta[i].radius > 0 ? meta[i].radius : massRadius(massA[i]);
+    if (r > b1) { b2 = b1; b1 = r; } else if (r > b2) b2 = r;
+    if (r === r) cnt++;
   }
-  return contactR2;
+  return cnt >= 2 ? (b1 + b2) * (b1 + b2) : 0;
 }
 
 /* ---------------- 无头模式：仅计算 + 关键点快照 ----------------
